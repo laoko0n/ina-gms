@@ -10,13 +10,13 @@
     import { getAuth, signInWithEmailAndPassword, signOut, updatePassword, reauthenticateWithCredential, EmailAuthProvider, onAuthStateChanged, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
     import { getFirestore, doc, setDoc, getDoc, getDocs, collection, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
     const firebaseConfig = {
-  apiKey: "AIzaSyCiTypgkT58vMvLH9b33Oo3XC3sFLB58iI",
-  authDomain: "ina-gms-stwend-7345a.firebaseapp.com",
-  projectId: "ina-gms-stwend-7345a",
-  storageBucket: "ina-gms-stwend-7345a.firebasestorage.app",
-  messagingSenderId: "504743018682",
-  appId: "1:504743018682:web:f1e5031ebca0762b788283"
-};
+      apiKey: "AIzaSyCiTypgkT58vMvLH9b33Oo3XC3sFLB58iI",
+      authDomain: "ina-gms-stwend-7345a.firebaseapp.com",
+      projectId: "ina-gms-stwend-7345a",
+      storageBucket: "ina-gms-stwend-7345a.firebasestorage.app",
+      messagingSenderId: "504743018682",
+      appId: "1:504743018682:web:f1e5031ebca0762b788283"
+    };
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getFirestore(app);
