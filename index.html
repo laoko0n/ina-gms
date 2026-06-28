@@ -259,8 +259,7 @@
     <p class="text-sm text-soft" style="margin-bottom:1rem;">Bitte lege jetzt dein persönliches Passwort fest. Du brauchst es bei jedem Login.</p>
     <div id="setpw-hint" style="display:none;background:#E1F5EE;border-radius:8px;padding:10px 14px;font-size:13px;color:#085041;margin-bottom:1rem;">
       🔑 Dein Passwort wurde von der Schule zurückgesetzt. Bitte wähle jetzt ein neues persönliches Passwort.
-    </div>
-    <div class="pw-form">
+    </div>    <div class="pw-form">
       <div class="form-group">
         <label class="form-label">Neues Passwort</label>
         <input type="password" id="setpw-new" class="form-control" placeholder="Mindestens 6 Zeichen" oninput="checkPwStrength(this.value)" />
@@ -269,6 +268,9 @@
       <div class="form-group"><label class="form-label">Passwort wiederholen</label><input type="password" id="setpw-confirm" class="form-control" /></div>
       <div id="setpw-error" class="text-sm" style="color:#A32D2D;display:none;"></div>
       <button class="btn btn-primary btn-full" onclick="doSetPassword()"><i class="ti ti-check"></i> Passwort speichern</button>
+      <button class="btn btn-secondary btn-full" style="margin-top:8px;" onclick="doLogout()">
+        <i class="ti ti-arrow-left"></i> Zurück zur Anmeldung
+      </button>
     </div>
   </div>
 </div>
@@ -847,15 +849,28 @@ function loginErrMsg(code){
   if(code==='auth/too-many-requests')return 'Zu viele Versuche. Bitte warte kurz.';
   return 'Anmeldung fehlgeschlagen: '+code;
 }
-withFirebase(({auth,onAuthStateChanged,db,doc,getDoc})=>{
+withFirebase(({auth,onAuthStateChanged,db,doc,getDoc,signOut})=>{
   onAuthStateChanged(auth,async user=>{
     if(!user){showScreen('login');return;}
     if(currentUser)return;
-    const snap=await getDoc(doc(db,'users',user.uid));
-    if(!snap.exists()){await auth.signOut();return;}
-    currentUser=user;currentUserData=snap.data();currentRole=snap.data().role;
-    if(snap.data().mustSetPassword)showScreen('setpw'); else enterApp();
 
+    const snap=await getDoc(doc(db,'users',user.uid));
+    if(!snap.exists()){
+      // Kein Firestore-Dokument → ausloggen und Login zeigen
+      await signOut(auth);
+      showScreen('login');
+      return;
+    }
+    currentUser=user;currentUserData=snap.data();currentRole=snap.data().role;
+
+    // Wenn mustSetPassword=true aber die Seite neu geladen wurde →
+    // erst ausloggen damit der Lehrer sich neu anmelden kann
+    // AUSNAHME: wenn gerade aktiv eingeloggt wurde (currentUser war null)
+    if(snap.data().mustSetPassword){
+      showScreen('setpw');
+    } else {
+      enterApp();
+    }
   });
 });
 async function doSetPassword(){
@@ -881,7 +896,20 @@ async function doSetPassword(){
 }
 function doLogout(){
   withFirebase(({auth,signOut})=>{
-    signOut(auth).then(()=>{currentUser=currentUserData=null;gewahlt={1:null,2:null,3:null,4:null};showScreen('login');});
+    signOut(auth).then(()=>{
+      currentUser=null;
+      currentUserData=null;
+      currentRole='schueler';
+      selectedLoginRole='schueler';
+      gewahlt={1:null,2:null,3:null,4:null};
+      // Login-Felder leeren
+      const emailEl=document.getElementById('login-email');
+      const pwEl=document.getElementById('login-pw');
+      if(emailEl)emailEl.value='';
+      if(pwEl)pwEl.value='';
+      document.getElementById('login-error').style.display='none';
+      showScreen('login');
+    });
   });
 }
 function showScreen(name){
