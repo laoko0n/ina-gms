@@ -823,17 +823,10 @@ function doLogin() {
       const data=snap.data();
       if(data.role!==selectedLoginRole){showErr(errEl,`Dieses Konto ist kein ${roleLabel(selectedLoginRole)}-Konto.`);await auth.signOut();return;}
       currentUser=cred.user;currentRole=data.role;currentUserData=data;
-      // Wenn Admin ein tempPw gesetzt hat → Schüler/Lehrer muss es beim Login als echtes PW setzen
-      if(data.mustSetPassword && data.tempPw){
-        // tempPw ins Passwort-Setzen-Formular vorausfüllen (unsichtbar) und Screen zeigen
-        document.getElementById('setpw-new').value='';
-        document.getElementById('setpw-confirm').value='';
-        document.getElementById('setpw-error').style.display='none';
-        // Hinweis anzeigen
+      // Schüler kommen direkt zur App – kein Passwort-Setzen-Screen
+      if(data.mustSetPassword && data.role!=='schueler'){
         const hint=document.getElementById('setpw-hint');
-        if(hint) hint.style.display='block';
-        showScreen('setpw');
-      } else if(data.mustSetPassword){
+        if(data.tempPw&&hint) hint.style.display='block';
         showScreen('setpw');
       } else {
         enterApp();
@@ -863,10 +856,8 @@ withFirebase(({auth,onAuthStateChanged,db,doc,getDoc,signOut})=>{
     }
     currentUser=user;currentUserData=snap.data();currentRole=snap.data().role;
 
-    // Wenn mustSetPassword=true aber die Seite neu geladen wurde →
-    // erst ausloggen damit der Lehrer sich neu anmelden kann
-    // AUSNAHME: wenn gerade aktiv eingeloggt wurde (currentUser war null)
-    if(snap.data().mustSetPassword){
+    // Schüler kommen direkt zur App
+    if(snap.data().mustSetPassword && snap.data().role!=='schueler'){
       showScreen('setpw');
     } else {
       enterApp();
@@ -1543,7 +1534,7 @@ function saveSchueler(){
       // 2. Firestore-Dokument mit echter UID
       await setDoc(doc(db,'users',cred.user.uid),{
         vorname,nachname,klasse,gruppe,email,
-        role:'schueler',mustSetPassword:true,
+        role:'schueler',mustSetPassword:false,
         createdAt:new Date().toISOString()
       });
       toast('Schüler ' + vorname + ' ' + nachname + ' erfolgreich angelegt!');
