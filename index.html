@@ -1139,12 +1139,23 @@ function sprungZuWoche(montagKey){
 }
 function isoDate(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function loadPlanFuerTag(tag){
-  // Sofort visuell zurücksetzen + Speichern sperren
-  gewahlt={1:null,2:null,3:null,4:null};
+  // Sofort alles zurücksetzen
   activeTag=tag;
+  gewahlt={1:null,2:null,3:null,4:null};
+
+  // Speichern-Button sperren
   const saveBtn=document.getElementById('save-btn');
   if(saveBtn){saveBtn.disabled=true;saveBtn.style.opacity='0.5';}
-  try{renderGewahlt();}catch(e){console.warn('renderGewahlt beim Reset:',e);}
+
+  // Sofort visuell leeren
+  [1,2,3,4].forEach(zs=>{
+    const sumEl=document.getElementById('sum-'+zs);
+    if(sumEl){sumEl.className='sum-empty';sumEl.style.cssText='';sumEl.textContent='nicht gewählt';}
+    const hintEl=document.getElementById('hint-'+zs);
+    if(hintEl)hintEl.textContent='Tippe auf ein Angebot, um es zu wählen.';
+    const chips=document.querySelectorAll('#chips-'+zs+' .fach-chip');
+    chips.forEach(c=>{const d=c.style.display;c.className='fach-chip';c.style.display=d;});
+  });
 
   withFirebase(async({db,doc,getDoc})=>{
     try{
@@ -1167,26 +1178,30 @@ function loadPlanFuerTag(tag){
         if(val && val.icon && val.name) gewahlt[n]=val;
       });
 
-      // Gespeicherte Tageswahlen – nur gültige Einträge
+      // Gespeicherte Tageswahlen – nur wenn Dokument existiert
       if(snap.exists()){
         const d=snap.data();
-        (cfg.freiZS||[1,2,3,4]).forEach(zs=>{
-          const val=d['zs'+zs];
-          if(val && val.icon && val.name && val.sel && val.bg && val.color){
-            gewahlt[zs]=val;
-          }
-        });
+        // Sicherheitscheck: Tag muss übereinstimmen!
+        if(d.tag === tag){
+          (cfg.freiZS||[1,2,3,4]).forEach(zs=>{
+            const val=d['zs'+zs];
+            if(val && val.icon && val.name && val.sel && val.bg && val.color){
+              gewahlt[zs]=val;
+            }
+          });
+        }
       }
     }catch(loadErr){
-      console.warn('Fehler beim Laden des Plans:',loadErr);
+      console.warn('Fehler beim Laden:',loadErr);
       gewahlt={1:null,2:null,3:null,4:null};
     }
 
     try{renderGewahlt();}catch(e){console.warn('renderGewahlt:',e);}
     try{updateHalbAGAnzeige();}catch(e){}
 
-    // Speichern-Button wieder freigeben
-    if(saveBtn){saveBtn.disabled=false;saveBtn.style.opacity='';}
+    // Speichern-Button freigeben
+    const sb=document.getElementById('save-btn');
+    if(sb){sb.disabled=false;sb.style.opacity='';}
 
     // Datum im Speichern-Button
     try{
