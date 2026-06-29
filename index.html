@@ -428,7 +428,9 @@
           <div class="sum-row"><span class="sum-zs">10.</span><span class="sum-zeit">10. Std. 15:00–15:45</span><span id="sum-4" class="sum-empty">nicht gewählt</span></div>
         </div>
       </div>
-      <button class="btn btn-primary btn-full" style="margin-top:.75rem;" onclick="savePlan()"><i class="ti ti-device-floppy"></i> Plan speichern</button>
+      <button class="btn btn-primary btn-full" style="margin-top:.75rem;" onclick="savePlan()" id="save-btn">
+        <i class="ti ti-device-floppy"></i> Plan speichern für <span id="save-datum-label">heute</span>
+      </button>
     </div><!-- end s-tab-plan -->
 
     <div id="s-tab-fehlzeiten" class="hidden">
@@ -1126,6 +1128,10 @@ function sprungZuWoche(montagKey){
 }
 function isoDate(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function loadPlanFuerTag(tag){
+  // Sofort visuell zurücksetzen bevor Firestore antwortet
+  gewahlt={1:null,2:null,3:null,4:null};
+  renderGewahlt();
+
   withFirebase(async({db,doc,getDoc})=>{
     const snap=await getDoc(doc(db,'plans',currentUser.uid+'_'+tag));
     const g=currentUserData.gruppe||'durchstarter';const cfg=GRUPPEN[g];
@@ -1156,6 +1162,15 @@ function loadPlanFuerTag(tag){
     }
     renderGewahlt();
     updateHalbAGAnzeige();
+    // Datum im Speichern-Button aktualisieren
+    const saveLbl=document.getElementById('save-datum-label');
+    if(saveLbl){
+      const d=new Date(tag);
+      const heute=isoDate(new Date());
+      saveLbl.textContent = tag===heute
+        ? 'heute ('+d.getDate()+'.'+(d.getMonth()+1)+'.'+')'
+        : WOCHENTAGE[d.getDay()]+' '+d.getDate()+'.'+(d.getMonth()+1)+'.';
+    }
   });
 }
 // Angebote die als Doppelstunde über 9. + 10. Std. laufen
@@ -1301,6 +1316,13 @@ function renderGewahlt(){
 }
 function savePlan(){
   if(!activeTag)return;
+  // Warnung wenn nicht heute gespeichert wird
+  const heute=isoDate(new Date());
+  if(activeTag!==heute){
+    const d=new Date(activeTag);
+    const tagName=WOCHENTAGE[d.getDay()]+' '+d.getDate()+'.'+(d.getMonth()+1)+'.';
+    if(!confirm('Du speicherst den Plan für '+tagName+' – ist das richtig?'))return;
+  }
   withFirebase(async({db,doc,setDoc})=>{
     const data={
       uid:currentUser.uid,
