@@ -1137,53 +1137,60 @@ function sprungZuWoche(montagKey){
 }
 function isoDate(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function loadPlanFuerTag(tag){
-  // Sofort visuell zurücksetzen bevor Firestore antwortet
+  // Sofort visuell zurücksetzen
   gewahlt={1:null,2:null,3:null,4:null};
-  renderGewahlt();
+  try{renderGewahlt();}catch(e){console.warn('renderGewahlt beim Reset:',e);}
 
   withFirebase(async({db,doc,getDoc})=>{
-    const snap=await getDoc(doc(db,'plans',currentUser.uid+'_'+tag));
-    const g=currentUserData.gruppe||'durchstarter';const cfg=GRUPPEN[g];
-    gewahlt={1:null,2:null,3:null,4:null};
+    try{
+      const snap=await getDoc(doc(db,'plans',currentUser.uid+'_'+tag));
+      const gr=currentUserData.gruppe||'durchstarter';
+      const cfg=GRUPPEN[gr]||GRUPPEN.durchstarter;
+      gewahlt={1:null,2:null,3:null,4:null};
 
-    // Feste AG immer vorbelegen (gilt halbjährlich, unabhängig von Gruppe)
-    const ag=currentUserData.halbjahresAG;
-    if(ag){
-      const agEintrag={name:'Feste AG: '+ag,sel:'sel-halbag',icon:'⭐',bg:'#FFF7ED',color:'#7C2D12'};
-      gewahlt[3]=agEintrag;
-      gewahlt[4]=agEintrag;
-    }
+      // Feste AG vorbelegen
+      const ag=currentUserData.halbjahresAG;
+      if(ag){
+        const agE={name:'Feste AG: '+ag,sel:'sel-halbag',icon:'⭐',bg:'#FFF7ED',color:'#7C2D12'};
+        gewahlt[3]=agE; gewahlt[4]=agE;
+      }
 
-    // Danach feste ZS der Gruppe (Webuntis überschreibt NUR wenn kein AG)
-    Object.entries(cfg.festZS).forEach(([zs,val])=>{
-      const zsNr=parseInt(zs);
-      // Feste AG hat Vorrang vor Webuntis in ZS 3+4
-      if((zsNr===3||zsNr===4)&&ag) return;
-      gewahlt[zsNr]=val;
-    });
-
-    // Gespeicherte Tageswahlen laden (nur für freiZS)
-    if(snap.exists()){
-      const d=snap.data();
-      cfg.freiZS.forEach(zs=>{
-        const val=d['zs'+zs];
-        // Nur gültige Einträge übernehmen (müssen icon, name, sel haben)
-        if(val && val.icon && val.name && val.sel){
-          gewahlt[zs]=val;
-        }
+      // Feste ZS der Gruppe
+      Object.entries(cfg.festZS||{}).forEach(([zs,val])=>{
+        const n=parseInt(zs);
+        if((n===3||n===4)&&ag) return;
+        if(val && val.icon && val.name) gewahlt[n]=val;
       });
+
+      // Gespeicherte Tageswahlen – nur gültige Einträge
+      if(snap.exists()){
+        const d=snap.data();
+        (cfg.freiZS||[1,2,3,4]).forEach(zs=>{
+          const val=d['zs'+zs];
+          if(val && val.icon && val.name && val.sel && val.bg && val.color){
+            gewahlt[zs]=val;
+          }
+        });
+      }
+    }catch(loadErr){
+      console.warn('Fehler beim Laden des Plans:',loadErr);
+      gewahlt={1:null,2:null,3:null,4:null};
     }
-    renderGewahlt();
-    updateHalbAGAnzeige();
-    // Datum im Speichern-Button aktualisieren
-    const saveLbl=document.getElementById('save-datum-label');
-    if(saveLbl){
-      const d=new Date(tag);
-      const heute=isoDate(new Date());
-      saveLbl.textContent = tag===heute
-        ? 'heute ('+d.getDate()+'.'+(d.getMonth()+1)+'.'+')'
-        : WOCHENTAGE[d.getDay()]+' '+d.getDate()+'.'+(d.getMonth()+1)+'.';
-    }
+
+    try{renderGewahlt();}catch(e){console.warn('renderGewahlt:',e);}
+    try{updateHalbAGAnzeige();}catch(e){}
+
+    // Datum im Speichern-Button
+    try{
+      const saveLbl=document.getElementById('save-datum-label');
+      if(saveLbl){
+        const d=new Date(tag);
+        const heute=isoDate(new Date());
+        saveLbl.textContent=tag===heute
+          ?'heute ('+d.getDate()+'.'+(d.getMonth()+1)+'.'+')'
+          :WOCHENTAGE[d.getDay()]+' '+d.getDate()+'.'+(d.getMonth()+1)+'.';
+      }
+    }catch(e){}
   });
 }
 // Angebote die als Doppelstunde über 9. + 10. Std. laufen
@@ -1259,8 +1266,9 @@ function renderGewahlt(){
   // Ungültige Einträge in gewahlt bereinigen
   [1,2,3,4].forEach(zs=>{
     const g=gewahlt[zs];
-    if(g && (!g.icon || !g.name || !g.sel)){
-      console.warn('Ungültiger gewahlt-Eintrag für ZS'+zs+', wird zurückgesetzt:', g);
+    if(g===undefined || g===false) { gewahlt[zs]=null; return; }
+    if(g && typeof g === 'object' && (!g.icon || !g.name || !g.sel)){
+      console.warn('Ungültiger gewahlt-Eintrag ZS'+zs+':', g);
       gewahlt[zs]=null;
     }
   });
@@ -1300,20 +1308,20 @@ function renderGewahlt(){
         const disp=c.style.display;
         c.className='fach-chip';
         c.style.display=disp;
-        if(g&&c.textContent.trim().startsWith(g.icon))c.classList.add('selected',g.sel);
+        if(g&&g.icon&&c.textContent.trim().startsWith(g.icon))c.classList.add('selected',g.sel||'');
       });
     }
     const hint=document.getElementById('hint-'+zs);
     if(hint){
       if(zs===4){
         if(zs3&&DOPPELSTUNDEN.includes(zs3.name)){
-          hint.textContent=g?'🔁 Automatisch aus 9. Std.: '+g.icon+' '+g.name:'10. Std. wird durch Doppelstunde aus 9. Std. belegt.';
+          hint.textContent=g?'🔁 Automatisch aus 9. Std.: '+(g.icon||'')+'  '+(g.name||''):'10. Std. wird durch Doppelstunde aus 9. Std. belegt.';
         } else {
-          hint.textContent=g?g.icon+' '+g.name+' gewählt.':'Tippe auf ein Angebot, um es zu wählen.';
+          hint.textContent=g?(g.icon||'')+'  '+(g.name||'')+' gewählt.':'Tippe auf ein Angebot, um es zu wählen.';
         }
       } else if(zs===2){
         if(zs1&&DOPPELSTUNDEN_FRUEH.includes(zs1.name)){
-          hint.textContent='🔁 Automatisch aus 7. Std.: '+zs1.icon+' '+zs1.name;
+          hint.textContent='🔁 Automatisch aus 7. Std.: '+(zs1.icon||'')+' '+(zs1.name||'');
         } else {
           const isDoppelF=g&&DOPPELSTUNDEN_FRUEH.includes(g.name);
           hint.textContent=g?(isDoppelF?g.icon+' '+g.name+' gewählt – 7. Std. automatisch mitgesetzt.':g.icon+' '+g.name+' gewählt.'):'Tippe auf ein Angebot, um es zu wählen.';
@@ -1329,7 +1337,7 @@ function renderGewahlt(){
       sumEl.className='sum-chip';
       sumEl.style.background=g.bg; sumEl.style.color=g.color;
       const autoLabel=(zs===4&&zs3&&DOPPELSTUNDEN.includes(zs3.name))?' (auto)':(zs===2&&gewahlt[1]&&DOPPELSTUNDEN_FRUEH.includes(gewahlt[1].name))?' (auto)':'';
-      sumEl.textContent=g.icon+' '+g.name+autoLabel;
+      sumEl.textContent=(g.icon||'📌')+' '+(g.name||'?')+autoLabel;
     } else {
       sumEl.className='sum-empty'; sumEl.style.cssText='';
       sumEl.textContent='nicht gewählt';
