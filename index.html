@@ -8,7 +8,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
     import { getAuth, signInWithEmailAndPassword, signOut, updatePassword, reauthenticateWithCredential, EmailAuthProvider, onAuthStateChanged, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-    import { getFirestore, doc, setDoc, getDoc, getDocs, collection, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+    import { getFirestore, doc, setDoc, getDoc, getDocFromServer, getDocs, collection, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
     const firebaseConfig = {
       apiKey: "AIzaSyCiTypgkT58vMvLH9b33Oo3XC3sFLB58iI",
       authDomain: "ina-gms-stwend-7345a.firebaseapp.com",
@@ -20,7 +20,7 @@
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getFirestore(app);
-    window._firebase = { auth, db, signInWithEmailAndPassword, signOut, updatePassword, reauthenticateWithCredential, EmailAuthProvider, onAuthStateChanged, createUserWithEmailAndPassword, doc, setDoc, getDoc, getDocs, collection, updateDoc, deleteDoc };
+    window._firebase = { auth, db, signInWithEmailAndPassword, signOut, updatePassword, reauthenticateWithCredential, EmailAuthProvider, onAuthStateChanged, createUserWithEmailAndPassword, doc, setDoc, getDoc, getDocFromServer, getDocs, collection, updateDoc, deleteDoc };
     window._firebaseReady = true;
     document.dispatchEvent(new Event("firebaseReady"));
   </script>
@@ -406,12 +406,12 @@
           <div id="halbag-status-anzeige" style="margin-bottom:10px;">
             <span style="font-size:13px;color:var(--text-soft);">Noch keine feste AG eingetragen.</span>
           </div>
-          <button onclick="openHalbjahresAGModal()"
+          <button onclick="openHalbjahresAGModal()" id="halbag-open-btn"
             style="display:inline-flex;align-items:center;gap:6px;padding:9px 16px;
               background:#FFF7ED;border:1.5px solid #EA580C;color:#7C2D12;
               border-radius:var(--radius-md);font-size:14px;font-weight:500;
               cursor:pointer;font-family:inherit;">
-            ✏️ Feste AG eintragen / ändern
+            ✏️ Feste AG eintragen
           </button>
           <p style="font-size:11px;color:var(--text-lighter);margin-top:6px;">
             Du gibst der AG selbst einen Namen – z.&nbsp;B. Fußball-AG, Theater-AG, Robotik …
@@ -1157,9 +1157,10 @@ function loadPlanFuerTag(tag){
     chips.forEach(c=>{const d=c.style.display;c.className='fach-chip';c.style.display=d;});
   });
 
-  withFirebase(async({db,doc,getDoc})=>{
+  withFirebase(async({db,doc,getDoc,getDocFromServer})=>{
     try{
-      const snap=await getDoc(doc(db,'plans',currentUser.uid+'_'+tag));
+      // Immer frische Daten vom Server holen – kein Cache
+      const snap=await getDocFromServer(doc(db,'plans',currentUser.uid+'_'+tag));
       const gr=currentUserData.gruppe||'durchstarter';
       const cfg=GRUPPEN[gr]||GRUPPEN.durchstarter;
       gewahlt={1:null,2:null,3:null,4:null};
@@ -1359,8 +1360,7 @@ function renderGewahlt(){
     if(g){
       sumEl.className='sum-chip';
       sumEl.style.background=g.bg; sumEl.style.color=g.color;
-      const autoLabel=(zs===4&&zs3&&DOPPELSTUNDEN.includes(zs3.name))?' (auto)':(zs===2&&gewahlt[1]&&DOPPELSTUNDEN_FRUEH.includes(gewahlt[1].name))?' (auto)':'';
-      sumEl.textContent=(g.icon||'📌')+' '+(g.name||'?')+autoLabel;
+      sumEl.textContent=(g.icon||'📌')+' '+(g.name||'?');
     } else {
       sumEl.className='sum-empty'; sumEl.style.cssText='';
       sumEl.textContent='nicht gewählt';
@@ -1551,7 +1551,7 @@ function openSchuelerModal(uid){
   if(uid){
     title.textContent='Schüler bearbeiten';
     document.getElementById('ms-pw-group').style.display='none';
-    withFirebase(async({db,doc,getDoc})=>{
+    withFirebase(async({db,doc,getDoc,getDocFromServer})=>{
       const snap=await getDoc(doc(db,'users',uid));
       if(snap.exists()){
         const d=snap.data();
@@ -1769,7 +1769,7 @@ let schuljahrConfig={
 };
 
 function ladeSchuljahrConfig(){
-  withFirebase(async({db,doc,getDoc})=>{
+  withFirebase(async({db,doc,getDoc,getDocFromServer})=>{
     try{
       const snap=await getDoc(doc(db,'config','schuljahr'));
       if(snap.exists()) schuljahrConfig={...schuljahrConfig,...snap.data()};
@@ -2105,7 +2105,7 @@ function openFachModal(id){
   document.getElementById('fm-error').style.display='none';
   if(id){
     document.getElementById('modal-fach-title').textContent='Fach bearbeiten';
-    withFirebase(async({db,doc,getDoc})=>{
+    withFirebase(async({db,doc,getDoc,getDocFromServer})=>{
       const snap=await getDoc(doc(db,'faecher',id));
       if(snap.exists()){
         const d=snap.data();
@@ -2498,22 +2498,44 @@ function loadAngebotTeilnehmer(tag,meineAngebote){
 // ═══ FESTE HALBJAHRES-AG ═══
 function openHalbjahresAGModal(){
   const aktuell=currentUserData.halbjahresAG||null;
+  const agSeitDatum=currentUserData.halbjahresAGSeit||null;
   const input=document.getElementById('halbag-name-input');
   const aktuellEl=document.getElementById('halbag-aktuell');
   const loeschBtn=document.getElementById('halbag-loeschen-btn');
+  const saveBtn=document.querySelector('#modal-halbag .btn-primary');
   document.getElementById('halbag-error').style.display='none';
+
   if(aktuell){
     input.value=aktuell;
-    aktuellEl.textContent='Aktuelle AG: '+aktuell;
+    input.disabled=true; // Gesperrt – AG kann nicht mehr geändert werden
+
+    // Halbjahr-Datum berechnen
+    const hj2=schuljahrConfig.hj2Beginn||null;
+    const sjEnde=schuljahrConfig.sjEnde||null;
+    const heute=isoDate(new Date());
+    const istHj1=hj2&&heute<hj2;
+    const sperrtBis=istHj1?(hj2||'Halbjahresende'):(sjEnde||'Schuljahresende');
+    const eingetragen=agSeitDatum?new Date(agSeitDatum).toLocaleDateString('de-DE'):'diesem Halbjahr';
+
+    aktuellEl.innerHTML='✅ Eingetragen seit: <b>'+eingetragen+'</b><br>'
+      +'🔒 Gesperrt bis: <b>'+sperrtBis+'</b>';
     aktuellEl.style.display='block';
-    loeschBtn.style.display='inline-flex';
+    aktuellEl.style.color='#085041';
+
+    // Speichern-Button ausblenden
+    if(saveBtn)saveBtn.style.display='none';
+    // Löschen nur für Schulleitung/Lehrer sichtbar (nicht für Schüler)
+    loeschBtn.style.display='none';
+
   } else {
     input.value='';
+    input.disabled=false;
     aktuellEl.style.display='none';
     loeschBtn.style.display='none';
+    if(saveBtn)saveBtn.style.display='';
   }
   document.getElementById('modal-halbag').classList.remove('hidden');
-  setTimeout(()=>input.focus(),100);
+  if(!aktuell)setTimeout(()=>input.focus(),100);
 }
 function closeHalbjahresAGModal(){
   document.getElementById('modal-halbag').classList.add('hidden');
@@ -2525,8 +2547,17 @@ function saveHalbjahresAG(){
   if(!name){showErr(err,'Bitte einen AG-Namen eingeben.');return;}
   withFirebase(async({db,doc,updateDoc})=>{
     try{
-      await updateDoc(doc(db,'users',currentUser.uid),{halbjahresAG:name});
+      // Prüfen ob bereits eingetragen (Sicherheitscheck)
+      if(currentUserData.halbjahresAG){
+        showErr(err,'Du hast bereits eine Feste AG eingetragen. Änderungen sind für dieses Halbjahr gesperrt.');
+        return;
+      }
+      await updateDoc(doc(db,'users',currentUser.uid),{
+        halbjahresAG:name,
+        halbjahresAGSeit:isoDate(new Date())
+      });
       currentUserData.halbjahresAG=name;
+      currentUserData.halbjahresAGSeit=isoDate(new Date());
 
       // Direkt in gewahlt setzen – OHNE waehlen() aufzurufen
       // (waehlen() würde bei Frühstartern/Startern wegen gesperrter ZS fehlschlagen)
@@ -2588,13 +2619,19 @@ function befuelleWochenDropdown(sel, gesamtWochen){
 // Halbjahres-AG Status-Anzeige aktualisieren
 function updateHalbAGAnzeige(){
   const ag=currentUserData.halbjahresAG;
+  const seit=currentUserData.halbjahresAGSeit||null;
   const el=document.getElementById('halbag-status-anzeige');
+  const btn=document.getElementById('halbag-open-btn');
   if(!el)return;
   if(ag){
-    el.innerHTML=`<span style="font-size:14px;font-weight:600;color:#7C2D12;">⭐ ${ag}</span>
-      <span style="font-size:12px;color:#92400E;margin-left:6px;">· 9. + 10. Std. jeden Tag</span>`;
+    const seitTxt=seit?new Date(seit).toLocaleDateString('de-DE'):'';
+    el.innerHTML='<span style="font-size:14px;font-weight:600;color:#7C2D12;">⭐ '+ag+'</span>'
+      +'<span style="font-size:12px;color:#92400E;margin-left:6px;">· 9. + 10. Std. · gesperrt bis Halbjahresende</span>'
+      +(seitTxt?'<div style="font-size:11px;color:var(--text-lighter);margin-top:2px;">Eingetragen am: '+seitTxt+'</div>':'');
+    if(btn)btn.textContent='🔒 Feste AG ansehen';
   } else {
-    el.innerHTML='<span style="color:var(--text-soft);font-size:13px;">Noch keine Halbjahres-AG eingetragen.</span>';
+    el.innerHTML='<span style="color:var(--text-soft);font-size:13px;">Noch keine feste AG eingetragen.</span>';
+    if(btn)btn.textContent='✏️ Feste AG eintragen';
   }
 }
 
