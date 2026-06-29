@@ -735,6 +735,14 @@
       <input type="text" id="ms-pw" class="form-control" placeholder="Mind. 6 Zeichen – z. B. Klasse+Nachname" />
       <p class="text-sm text-soft" style="margin-top:4px;">Der Schüler ändert es beim ersten Login selbst.</p>
     </div>
+    <div class="form-group" id="ms-halbag-group" style="display:none;background:#FFF7ED;border:1.5px solid #EA580C;border-radius:10px;padding:12px 14px;">
+      <label class="form-label" style="color:#7C2D12;">⭐ Feste AG (9.+10. Std.) – Halbjahr</label>
+      <p class="text-sm" style="color:#92400E;margin-bottom:8px;">Hier kann die feste AG des Schülers geändert oder entfernt werden.</p>
+      <div style="display:flex;gap:8px;">
+        <input type="text" id="ms-halbag" class="form-control" placeholder="z. B. Fußball-AG – leer lassen = AG entfernen" />
+        <button type="button" class="btn btn-danger btn-sm" onclick="document.getElementById('ms-halbag').value=''" title="AG entfernen">✕ Entfernen</button>
+      </div>
+    </div>
     <div id="ms-error" class="text-sm" style="color:#A32D2D;display:none;margin-bottom:.5rem;"></div>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeSchuelerModal()">Abbrechen</button>
@@ -1551,7 +1559,8 @@ function openSchuelerModal(uid){
   if(uid){
     title.textContent='Schüler bearbeiten';
     document.getElementById('ms-pw-group').style.display='none';
-    withFirebase(async({db,doc,getDoc,getDocFromServer})=>{
+    document.getElementById('ms-halbag-group').style.display='block';
+    withFirebase(async({db,doc,getDoc})=>{
       const snap=await getDoc(doc(db,'users',uid));
       if(snap.exists()){
         const d=snap.data();
@@ -1563,16 +1572,23 @@ function openSchuelerModal(uid){
         document.getElementById('ms-gruppe').value=d.gruppe||'durchstarter';
         document.getElementById('ms-email').value=d.email||'';
         document.getElementById('ms-email').disabled=true;
+        document.getElementById('ms-halbag').value=d.halbjahresAG||'';
       }
     });
   }else{
     title.textContent='Schüler hinzufügen';
     document.getElementById('ms-pw-group').style.display='';
+    document.getElementById('ms-halbag-group').style.display='none';
     document.getElementById('ms-email').disabled=false;
     ['ms-vorname','ms-nachname','ms-klasse','ms-email','ms-pw'].forEach(id=>document.getElementById(id).value='');
     document.getElementById('ms-gruppe').value='durchstarter';
   }
   document.getElementById('modal-schueler').classList.remove('hidden');
+  // Zum Anfang scrollen
+  setTimeout(()=>{
+    const modal=document.querySelector('#modal-schueler .modal');
+    if(modal)modal.scrollTop=0;
+  },100);
 }
 function closeSchuelerModal(){document.getElementById('modal-schueler').classList.add('hidden');document.getElementById('ms-email').disabled=false;editSchuelerUid=null;}
 function saveSchueler(){
@@ -1591,8 +1607,16 @@ function saveSchueler(){
     // BEARBEITEN: nur Firestore aktualisieren
     if(editSchuelerUid){
       try{
-        await updateDoc(doc(db,'users',editSchuelerUid),{vorname,nachname,klasse,gruppe});
-        toast('Schüler aktualisiert.');
+        const halbagVal=document.getElementById('ms-halbag')?.value.trim()||null;
+        const updateData={vorname,nachname,klasse,gruppe};
+        // AG aktualisieren (Lehrer/Schulleitung dürfen das)
+        if(document.getElementById('ms-halbag-group')?.style.display!=='none'){
+          updateData.halbjahresAG = halbagVal||null;
+          // Wenn AG gelöscht → auch Datum zurücksetzen damit Schüler neu eintragen kann
+          if(!halbagVal) updateData.halbjahresAGSeit=null;
+        }
+        await updateDoc(doc(db,'users',editSchuelerUid),updateData);
+        toast('Schüler aktualisiert ✓');
         closeSchuelerModal();
         loadSchuelerListe(currentRole==='lehrer'?'l-schueler-liste':'sl-schueler-liste');
       }catch(e){showErr(err,e.message);}
@@ -2390,16 +2414,69 @@ function openAngeboteModal(uid,name,angebote){
   editAngeboteAuswahl=[...angebote];
   document.getElementById('ma-name').textContent='Lehrkraft: '+name;
   document.getElementById('ma-error').style.display='none';
-  // Checkboxen rendern
-  const cont=document.getElementById('ma-checkboxen');
-  cont.innerHTML=ALLE_ANGEBOTE.map(a=>`
-    <label style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--gray-bg);border-radius:8px;cursor:pointer;font-size:14px;">
-      <input type="checkbox" value="${a}" ${angebote.includes(a)?'checked':''} onchange="toggleAngebot('${a}',this.checked)"
-        style="width:16px;height:16px;accent-color:var(--orange);cursor:pointer;flex-shrink:0;" />
-      ${a}
-    </label>`).join('');
+  document.getElementById('ma-neues-angebot').value='';
+  renderAngeboteCheckboxen();
   document.getElementById('modal-angebote').classList.remove('hidden');
 }
+
+function renderAngeboteCheckboxen(){
+  const cont=document.getElementById('ma-checkboxen');
+  // Kombination aus festen Angeboten + Firestore-Fächern
+  withFirebase(async({db,getDocs,collection})=>{
+    const snaps=await getDocs(collection(db,'faecher'));
+    const dbFaecher=[];
+    snaps.forEach(s=>dbFaecher.push(s.data().name));
+    // Alle Angebote: fest definierte + aus Firestore + bereits zugewiesene
+    const alle=[...new Set([...ALLE_ANGEBOTE,...dbFaecher,...editAngeboteAuswahl])].sort();
+    cont.innerHTML=alle.map(a=>`
+      <label style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--gray-bg);border-radius:8px;cursor:pointer;font-size:14px;">
+        <input type="checkbox" value="${a}" ${editAngeboteAuswahl.includes(a)?'checked':''}
+          onchange="toggleAngebot('${a}',this.checked)"
+          style="width:16px;height:16px;accent-color:var(--orange);cursor:pointer;flex-shrink:0;" />
+        ${a}
+      </label>`).join('');
+  });
+}
+
+async function addNeuesAngebot(){
+  const input=document.getElementById('ma-neues-angebot');
+  const name=input.value.trim();
+  const err=document.getElementById('ma-error');
+  err.style.display='none';
+  if(!name){showErr(err,'Bitte einen Namen für das neue Angebot eingeben.');return;}
+  if(editAngeboteAuswahl.includes(name)){showErr(err,'Dieses Angebot ist bereits zugewiesen.');return;}
+
+  // Sofort zur Auswahl hinzufügen
+  if(!ALLE_ANGEBOTE.includes(name)) ALLE_ANGEBOTE.push(name);
+  if(!editAngeboteAuswahl.includes(name)) editAngeboteAuswahl.push(name);
+
+  // In Firestore-Fächerliste speichern
+  withFirebase(async({db,collection})=>{
+    try{
+      const {addDoc}=await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+      await addDoc(collection(db,'faecher'),{
+        name, icon:'📌', zeitschiene:'', maxTeilnehmer:null,
+        beschreibung:'', gruppen:[], createdAt:new Date().toISOString()
+      });
+      toast('✓ Angebot „'+name+'" angelegt und zugewiesen.');
+    }catch(e){
+      console.warn('Fach Firestore-Fehler:',e);
+      toast('✓ Angebot „'+name+'" zugewiesen (Details später in Fächer-Tab ergänzen).');
+    }
+  });
+
+  input.value='';
+
+  // Checkbox sofort hinzufügen ohne neu zu laden
+  const cont=document.getElementById('ma-checkboxen');
+  const label=document.createElement('label');
+  label.style.cssText='display:flex;align-items:center;gap:10px;padding:8px 12px;background:#E1F5EE;border-radius:8px;cursor:pointer;font-size:14px;border:1px solid #1D9E75;';
+  label.innerHTML=`<input type="checkbox" checked style="width:16px;height:16px;accent-color:var(--orange);cursor:pointer;flex-shrink:0;"
+    onchange="toggleAngebot('${name}',this.checked)" /> ${name} <span style="font-size:11px;color:#085041;">(neu)</span>`;
+  cont.appendChild(label);
+  cont.scrollTop=cont.scrollHeight;
+}
+
 function toggleAngebot(name,checked){
   if(checked){ if(!editAngeboteAuswahl.includes(name))editAngeboteAuswahl.push(name); }
   else { editAngeboteAuswahl=editAngeboteAuswahl.filter(a=>a!==name); }
@@ -2846,14 +2923,31 @@ function savePwReset(){
 
 <!-- ═══ MODAL: ANGEBOTE ZUWEISEN (Schulleitung) ═══ -->
 <div id="modal-angebote" class="modal-backdrop hidden">
-  <div class="modal">
+  <div class="modal" style="max-width:480px;">
     <div class="modal-title">🎯 Angebote zuweisen</div>
     <p class="text-sm text-soft" style="margin-bottom:.875rem;" id="ma-name"></p>
+
     <div class="form-group">
-      <label class="form-label">Welche Angebote leitet diese Lehrkraft?</label>
-      <div id="ma-checkboxen" style="display:flex;flex-direction:column;gap:8px;"></div>
+      <label class="form-label">Bestehende Angebote auswählen</label>
+      <div id="ma-checkboxen" style="display:flex;flex-direction:column;gap:6px;max-height:220px;overflow-y:auto;"></div>
     </div>
-    <div id="ma-error" class="text-sm" style="color:#A32D2D;display:none;margin-bottom:.5rem;"></div>
+
+    <!-- Neues Angebot direkt hier anlegen -->
+    <div style="border-top:0.5px solid var(--gray-border);margin-top:.75rem;padding-top:.75rem;">
+      <div class="form-label" style="margin-bottom:6px;">➕ Neues Angebot direkt anlegen</div>
+      <div style="display:flex;gap:6px;">
+        <input type="text" id="ma-neues-angebot" class="form-control"
+          placeholder="Name des neuen Angebots (z. B. Chor-AG)"
+          style="flex:1;"
+          onkeydown="if(event.key==='Enter'){event.preventDefault();addNeuesAngebot();}" />
+        <button class="btn btn-primary btn-sm" onclick="addNeuesAngebot()">
+          <i class="ti ti-plus"></i> Hinzufügen
+        </button>
+      </div>
+      <p class="text-sm text-soft" style="margin-top:4px;">Das Angebot wird in der Fächerliste gespeichert und sofort zugewiesen.</p>
+    </div>
+
+    <div id="ma-error" class="text-sm" style="color:#A32D2D;display:none;margin-bottom:.5rem;margin-top:.5rem;"></div>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeAngeboteModal()">Abbrechen</button>
       <button class="btn btn-primary" onclick="saveAngebote()"><i class="ti ti-check"></i> Speichern</button>
