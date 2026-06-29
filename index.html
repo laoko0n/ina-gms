@@ -1166,7 +1166,11 @@ function loadPlanFuerTag(tag){
     if(snap.exists()){
       const d=snap.data();
       cfg.freiZS.forEach(zs=>{
-        if(d['zs'+zs])gewahlt[zs]=d['zs'+zs];
+        const val=d['zs'+zs];
+        // Nur gültige Einträge übernehmen (müssen icon, name, sel haben)
+        if(val && val.icon && val.name && val.sel){
+          gewahlt[zs]=val;
+        }
       });
     }
     renderGewahlt();
@@ -1252,6 +1256,15 @@ function waehlen(zs,name,sel,icon,bg,color){
   renderGewahlt();
 }
 function renderGewahlt(){
+  // Ungültige Einträge in gewahlt bereinigen
+  [1,2,3,4].forEach(zs=>{
+    const g=gewahlt[zs];
+    if(g && (!g.icon || !g.name || !g.sel)){
+      console.warn('Ungültiger gewahlt-Eintrag für ZS'+zs+', wird zurückgesetzt:', g);
+      gewahlt[zs]=null;
+    }
+  });
+
   const cfg=GRUPPEN[currentUserData?(currentUserData.gruppe||'durchstarter'):'durchstarter'];
   // 10. Std. sperren/freigeben je nach 9. Std.-Wahl
   const zs3=gewahlt[3];
