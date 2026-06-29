@@ -1559,18 +1559,32 @@ function openSchuelerModal(uid){
   if(uid){
     title.textContent='Schüler bearbeiten';
     document.getElementById('ms-pw-group').style.display='none';
-    document.getElementById('ms-halbag-group').style.display='block';
+    // AG-Feld für Schulleitung immer zeigen, für Lehrer nur eigene Klassen
+    const zeigeAGFeld = currentRole==='leitung' || currentRole==='lehrer';
+    document.getElementById('ms-halbag-group').style.display= zeigeAGFeld ? 'block' : 'none';
     withFirebase(async({db,doc,getDoc})=>{
       const snap=await getDoc(doc(db,'users',uid));
       if(snap.exists()){
         const d=snap.data();
-        // Prüfen ob Lehrer darf
-        if(!lehrerDarfBearbeiten(d.klasse)){toast('Du kannst nur Schüler deiner eigenen Klassen bearbeiten.');return;}
-        document.getElementById('ms-vorname').value=d.vorname||'';
-        document.getElementById('ms-nachname').value=d.nachname||'';
-        document.getElementById('ms-klasse').value=d.klasse||'';
-        document.getElementById('ms-gruppe').value=d.gruppe||'durchstarter';
-        document.getElementById('ms-email').value=d.email||'';
+        // Lehrer darf nur eigene Klassen bearbeiten (außer AG-Feld)
+        if(currentRole==='lehrer' && !lehrerDarfBearbeiten(d.klasse)){
+          // Nur AG-Feld anzeigen, Rest sperren
+          document.getElementById('ms-vorname').value=d.vorname||'';
+          document.getElementById('ms-nachname').value=d.nachname||'';
+          document.getElementById('ms-klasse').value=d.klasse||'';
+          document.getElementById('ms-gruppe').value=d.gruppe||'durchstarter';
+          document.getElementById('ms-email').value=d.email||'';
+          ['ms-vorname','ms-nachname','ms-klasse','ms-gruppe','ms-email'].forEach(id=>{
+            const el=document.getElementById(id);
+            if(el)el.disabled=true;
+          });
+        } else {
+          document.getElementById('ms-vorname').value=d.vorname||'';
+          document.getElementById('ms-nachname').value=d.nachname||'';
+          document.getElementById('ms-klasse').value=d.klasse||'';
+          document.getElementById('ms-gruppe').value=d.gruppe||'durchstarter';
+          document.getElementById('ms-email').value=d.email||'';
+        }
         document.getElementById('ms-email').disabled=true;
         document.getElementById('ms-halbag').value=d.halbjahresAG||'';
       }
@@ -1590,7 +1604,14 @@ function openSchuelerModal(uid){
     if(modal)modal.scrollTop=0;
   },100);
 }
-function closeSchuelerModal(){document.getElementById('modal-schueler').classList.add('hidden');document.getElementById('ms-email').disabled=false;editSchuelerUid=null;}
+function closeSchuelerModal(){
+  document.getElementById('modal-schueler').classList.add('hidden');
+  ['ms-vorname','ms-nachname','ms-klasse','ms-gruppe','ms-email'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el)el.disabled=false;
+  });
+  editSchuelerUid=null;
+}
 function saveSchueler(){
   const vorname=document.getElementById('ms-vorname').value.trim();
   const nachname=document.getElementById('ms-nachname').value.trim();
