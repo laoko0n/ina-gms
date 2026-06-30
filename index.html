@@ -933,6 +933,7 @@ function enterApp(){
     document.getElementById('s-klasse-display').textContent='Klasse '+currentUserData.klasse;
     renderGruppeBadge();applyGruppenRegeln();
     ladeSchuljahrConfig();
+    ladeDynamischeFaecher();
     // Dropdown nach kurzem Warten befüllen (Config muss erst laden)
     setTimeout(()=>{
       const sel=document.getElementById('s-woche-select');
@@ -975,13 +976,12 @@ function applyGruppenRegeln(){
   document.getElementById('gruppe-info-text').innerHTML=cfg.infoText;
   banner.classList.remove('hidden');
 
-  // Chips in 7. Std.+2 je nach Gruppe ein-/ausblenden
+  // Chips in 7. Std.+2 je nach Gruppe ein-/ausblenden (nur feste Chips, keine dynamischen)
   const erlaubt=cfg.erlaubteChips; // null = alle, array = nur diese
   [1,2].forEach(zs=>{
-    const chips=document.querySelectorAll('#chips-'+zs+' .fach-chip');
+    const chips=document.querySelectorAll('#chips-'+zs+' .fach-chip:not(.fach-chip-dyn)');
     chips.forEach(c=>{
       if(!erlaubt){ c.style.display=''; return; }
-      // Chip-Text mit erlaubten Namen abgleichen
       const sichtbar=erlaubt.some(name=>c.textContent.trim().startsWith(name.slice(0,6))||c.textContent.includes(name));
       c.style.display=sichtbar?'':'none';
     });
@@ -994,7 +994,6 @@ function applyGruppenRegeln(){
     } else {
       wrap.classList.add('zs-locked');
       if(cfg.festZS[zs]) gewahlt[zs]=cfg.festZS[zs];
-      // Webuntis-Hinweis im Body der gesperrten ZS anzeigen
       const body=wrap.querySelector('.zs-body');
       if(body && cfg.festZS[zs]===WEBUNTIS){
         body.innerHTML=`<div class="webuntis-hinweis">
@@ -1003,6 +1002,9 @@ function applyGruppenRegeln(){
       }
     }
   });
+
+  // Dynamische Fächer nach Gruppenwechsel neu rendern (Gruppe könnte sich geändert haben)
+  if(typeof renderDynamischeChips==='function') renderDynamischeChips();
 }
 
 // ═══ SCHÜLER PLAN ═══
@@ -2123,16 +2125,23 @@ function loadFaecherListe(){
 
 function renderFaecherListe(liste){
   const cont=document.getElementById('sl-faecher-liste');
-  if(!liste.length){cont.innerHTML='<p class="text-sm text-soft">Noch keine Fächer angelegt.</p>';return;}
+  if(!liste.length){cont.innerHTML='<p class="text-sm text-soft">Noch keine Fächer angelegt. Klicke auf „Neues Fach" um loszulegen.</p>';return;}
   let html=`<table class="schueler-table"><thead><tr>
-    <th>Fach / Angebot</th><th>Zeitschiene</th><th>Max. Teiln./Tag</th><th>Gruppe</th><th></th>
+    <th>Fach / Angebot</th><th>Zeitschiene</th><th>Max./Tag</th><th>Gruppen</th><th>Status</th><th></th>
   </tr></thead><tbody>`;
   liste.forEach(f=>{
-    html+=`<tr>
-      <td style="font-weight:500;">${f.icon||'📌'} ${f.name}</td>
-      <td style="font-size:12px;color:var(--text-soft);">${f.zeitschiene||'–'}</td>
+    const aktiv=f.aktiv!==false;
+    const gruppenLabels={fruehstarter:'⭐',starter:'🔵',durchstarter:'🟢'};
+    const gruppenAnzeige=(f.gruppen||[]).map(g=>gruppenLabels[g]||g).join(' ')||'–';
+    html+=`<tr style="${aktiv?'':'opacity:.5;'}">
+      <td style="font-weight:500;">
+        <span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:${f.bg||'#FAECE7'};border:1px solid ${f.color||'#4A1B0C'};margin-right:6px;"></span>
+        ${f.icon||'📌'} ${f.name}
+      </td>
+      <td style="font-size:12px;color:var(--text-soft);">${f.zeitschieneName||f.zeitschiene||'–'}${f.isDoppelstunde?' 🔁':''}</td>
       <td><span style="background:var(--orange-light);color:var(--orange-dark);font-size:12px;font-weight:600;padding:2px 8px;border-radius:99px;">${f.maxTeilnehmer||'∞'}</span></td>
-      <td style="font-size:12px;color:var(--text-soft);">${(f.gruppen||[]).join(', ')||'Alle'}</td>
+      <td style="font-size:13px;">${gruppenAnzeige}</td>
+      <td>${aktiv?'<span style="color:#1D9E75;font-size:12px;font-weight:600;">● aktiv</span>':'<span style="color:var(--text-lighter);font-size:12px;">○ inaktiv</span>'}</td>
       <td>
         <div class="flex-row" style="gap:6px;justify-content:flex-end;">
           <button class="btn btn-secondary btn-sm" onclick="openFachModal('${f.id}')"><i class="ti ti-edit"></i></button>
@@ -2150,28 +2159,44 @@ function openFachModal(id){
   document.getElementById('fm-error').style.display='none';
   if(id){
     document.getElementById('modal-fach-title').textContent='Fach bearbeiten';
-    withFirebase(async({db,doc,getDoc,getDocFromServer})=>{
+    withFirebase(async({db,doc,getDoc})=>{
       const snap=await getDoc(doc(db,'faecher',id));
       if(snap.exists()){
         const d=snap.data();
         document.getElementById('fm-name').value=d.name||'';
         document.getElementById('fm-icon').value=d.icon||'';
-        document.getElementById('fm-zeitschiene').value=d.zeitschiene||'';
         document.getElementById('fm-max').value=d.maxTeilnehmer||'';
         document.getElementById('fm-beschreibung').value=d.beschreibung||'';
-        // Gruppen-Checkboxen
+        if(document.getElementById('fm-aktiv'))
+          document.getElementById('fm-aktiv').checked=d.aktiv!==false;
+        // Zeitschiene
+        const zsR=document.querySelector('input[name="fm-zs"][value="'+(d.zeitschiene||'')+'"]');
+        if(zsR)zsR.checked=true;
+        // Farbe
+        const fVal=(d.bg||'')+'|'+(d.color||'');
+        const fR=document.querySelector('input[name="fm-farbe"][value="'+fVal+'"]');
+        if(fR)fR.checked=true;
+        // Gruppen
         ['fruehstarter','starter','durchstarter'].forEach(g=>{
           const cb=document.getElementById('fm-gruppe-'+g);
-          if(cb)cb.checked=(d.gruppen||[]).includes(g)||(d.gruppen||[]).length===0;
+          if(cb)cb.checked=(d.gruppen||[]).includes(g);
         });
       }
     });
   } else {
     document.getElementById('modal-fach-title').textContent='Neues Fach anlegen';
-    ['fm-name','fm-icon','fm-zeitschiene','fm-max','fm-beschreibung'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('fm-name').value='';
+    document.getElementById('fm-icon').value='';
+    document.getElementById('fm-max').value='';
+    document.getElementById('fm-beschreibung').value='';
+    if(document.getElementById('fm-aktiv')) document.getElementById('fm-aktiv').checked=true;
     ['fruehstarter','starter','durchstarter'].forEach(g=>{
       const cb=document.getElementById('fm-gruppe-'+g);if(cb)cb.checked=true;
     });
+    const firstZs=document.querySelector('input[name="fm-zs"]');
+    if(firstZs)firstZs.checked=true;
+    const firstF=document.querySelector('input[name="fm-farbe"]');
+    if(firstF)firstF.checked=true;
   }
   document.getElementById('modal-fach').classList.remove('hidden');
 }
@@ -2180,26 +2205,52 @@ function closeFachModal(){document.getElementById('modal-fach').classList.add('h
 function saveFach(){
   const name=document.getElementById('fm-name').value.trim();
   const icon=document.getElementById('fm-icon').value.trim()||'📌';
-  const zeitschiene=document.getElementById('fm-zeitschiene').value.trim();
   const maxTeilnehmer=parseInt(document.getElementById('fm-max').value)||null;
   const beschreibung=document.getElementById('fm-beschreibung').value.trim();
   const gruppen=['fruehstarter','starter','durchstarter'].filter(g=>document.getElementById('fm-gruppe-'+g)?.checked);
+  const aktiv=document.getElementById('fm-aktiv')?.checked||false;
   const err=document.getElementById('fm-error');
   err.style.display='none';
-  if(!name){showErr(err,'Bitte einen Namen eingeben.');return;}
 
-  withFirebase(async({db,doc,setDoc,updateDoc,collection})=>{
+  // Zeitschiene auslesen
+  const zsRadio=document.querySelector('input[name="fm-zs"]:checked');
+  if(!name){showErr(err,'Bitte einen Namen eingeben.');return;}
+  if(!zsRadio){showErr(err,'Bitte eine Zeitschiene auswählen.');return;}
+  if(gruppen.length===0){showErr(err,'Bitte mindestens eine Schülergruppe auswählen.');return;}
+
+  const zsWert=zsRadio.value; // z.B. "1", "2", "1,2", "3,4"
+  const zsNummern=zsWert.split(',').map(Number);
+  const isDoppel=zsNummern.length>1;
+
+  // Farbe auslesen
+  const farbenRadio=document.querySelector('input[name="fm-farbe"]:checked');
+  const farben=farbenRadio?farbenRadio.value.split('|'):['#FAECE7','#4A1B0C'];
+
+  // CSS-Selektor generieren
+  const sel='sel-custom-'+name.toLowerCase().replace(/[^a-z0-9]/g,'-').slice(0,20);
+
+  withFirebase(async({db,doc,updateDoc,collection})=>{
     try{
-      const data={name,icon,zeitschiene,maxTeilnehmer,beschreibung,gruppen,updatedAt:new Date().toISOString()};
+      const data={
+        name, icon, sel,
+        bg:farben[0], color:farben[1],
+        zeitschiene:zsWert,
+        zeitschieneName:zsNummern.map(z=>({1:'7. Std.',2:'8. Std.',3:'9. Std.',4:'10. Std.'}[z])).join('+'),
+        isDoppelstunde:isDoppel,
+        maxTeilnehmer, beschreibung, gruppen, aktiv,
+        updatedAt:new Date().toISOString()
+      };
       if(editFachId){
         await updateDoc(doc(db,'faecher',editFachId),data);
       } else {
         const {addDoc}=await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
         await addDoc(collection(db,'faecher'),{...data,createdAt:new Date().toISOString()});
       }
-      toast('Fach gespeichert ✓');
+      toast('✓ Fach gespeichert – erscheint jetzt bei Schülern!');
       closeFachModal();
       loadFaecherListe();
+      // Dynamische Fächer neu laden
+      ladeDynamischeFaecher();
     }catch(e){showErr(err,'Fehler: '+e.message);}
   });
 }
@@ -2421,6 +2472,68 @@ async function loadFehlzeitenUebersicht(rolle){
     });
     html+='</div>';
     cont.innerHTML=html;
+  });
+}
+
+// ═══ DYNAMISCHE FÄCHER AUS FIRESTORE ═══
+let dynamischeFaecher=[];
+
+function ladeDynamischeFaecher(){
+  withFirebase(async({db,getDocs,collection})=>{
+    try{
+      const snaps=await getDocs(collection(db,'faecher'));
+      dynamischeFaecher=[];
+      snaps.forEach(s=>{
+        const d={id:s.id,...s.data()};
+        if(d.aktiv!==false && d.name && d.zeitschiene && d.gruppen && d.gruppen.length>0){
+          dynamischeFaecher.push(d);
+        }
+      });
+      // Chips in Zeitschienen einfügen
+      renderDynamischeChips();
+    }catch(e){console.warn('Dynamische Fächer konnten nicht geladen werden:',e);}
+  });
+}
+
+function renderDynamischeChips(){
+  const gruppe=currentUserData?.gruppe||'durchstarter';
+  // Alte dynamische Chips entfernen
+  document.querySelectorAll('.fach-chip-dyn').forEach(c=>c.remove());
+
+  dynamischeFaecher.forEach(f=>{
+    // Gruppe prüfen
+    if(f.gruppen && !f.gruppen.includes(gruppe)) return;
+
+    const zsNummern=f.zeitschiene.split(',').map(Number);
+    const isDoppel=zsNummern.length>1;
+
+    zsNummern.forEach((zs,idx)=>{
+      // Nur den ersten ZS-Chip anzeigen bei Doppelstunden
+      if(isDoppel && idx>0) return;
+
+      const container=document.getElementById('chips-'+zs);
+      if(!container) return;
+
+      // Prüfen ob Chip bereits existiert
+      if(container.querySelector(`[data-fach-id="${f.id}"]`)) return;
+
+      const btn=document.createElement('button');
+      btn.className='fach-chip fach-chip-dyn';
+      btn.setAttribute('data-fach-id',f.id);
+      btn.style.cssText=`background:${f.bg||'#FAECE7'};border-color:${f.color||'#4A1B0C'};color:${f.color||'#4A1B0C'};`;
+      btn.textContent=(f.icon||'📌')+' '+f.name+(isDoppel?' 🔁':'');
+      btn.onclick=()=>{
+        // Wählen mit korrekten Parametern
+        waehlen(zs, f.name, f.sel||'sel-custom', f.icon||'📌', f.bg||'#FAECE7', f.color||'#4A1B0C');
+        // Bei Doppelstunde ZS 2 oder 4 automatisch setzen
+        if(isDoppel){
+          const zsZwei=zsNummern[1];
+          gewahlt[zsZwei]={name:f.name,sel:f.sel||'sel-custom',icon:f.icon||'📌',bg:f.bg||'#FAECE7',color:f.color||'#4A1B0C'};
+          renderGewahlt();
+        }
+      };
+      container.appendChild(btn);
+    });
   });
 }
 
@@ -2978,55 +3091,88 @@ function savePwReset(){
 
 <!-- ═══ MODAL: FACH ANLEGEN / BEARBEITEN ═══ -->
 <div id="modal-fach" class="modal-backdrop hidden">
-  <div class="modal" style="max-width:440px;">
+  <div class="modal" style="max-width:480px;">
     <div class="modal-title" id="modal-fach-title">Neues Fach anlegen</div>
-    <div style="display:grid;grid-template-columns:1fr auto;gap:8px;">
+
+    <div style="display:grid;grid-template-columns:1fr 80px;gap:8px;">
       <div class="form-group">
-        <label class="form-label">Name des Fachs / Angebots</label>
-        <input type="text" id="fm-name" class="form-control" placeholder="z. B. Kunst-AG, Lesezirkel …" />
+        <label class="form-label">Name des Fachs / Angebots *</label>
+        <input type="text" id="fm-name" class="form-control" placeholder="z. B. Sportgeräteausleihe, Kunst-AG …" />
       </div>
       <div class="form-group">
         <label class="form-label">Symbol</label>
-        <input type="text" id="fm-icon" class="form-control" placeholder="🎨" style="width:60px;text-align:center;" />
+        <input type="text" id="fm-icon" class="form-control" placeholder="⚽" style="text-align:center;font-size:18px;" />
       </div>
     </div>
+
     <div class="form-group">
-      <label class="form-label">Zeitschiene</label>
-      <select id="fm-zeitschiene" class="form-control">
-        <option value="">– bitte wählen –</option>
-        <option value="7. Std. (12:55–13:30)">7. Std. (12:55–13:30)</option>
-        <option value="8. Std. (13:30–14:15)">8. Std. (13:30–14:15)</option>
-        <option value="7.+8. Std. (Doppelstunde)">7.+8. Std. (Doppelstunde)</option>
-        <option value="9. Std. (14:15–15:00)">9. Std. (14:15–15:00)</option>
-        <option value="10. Std. (15:00–15:45)">10. Std. (15:00–15:45)</option>
-        <option value="9.+10. Std. (Doppelstunde)">9.+10. Std. (Doppelstunde)</option>
-      </select>
+      <label class="form-label">Hintergrundfarbe des Chips</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;" id="fm-farbe-auswahl">
+        <label style="cursor:pointer;"><input type="radio" name="fm-farbe" value="#FAECE7|#4A1B0C" checked style="display:none;" /><span style="display:inline-block;width:28px;height:28px;border-radius:6px;background:#FAECE7;border:2px solid #4A1B0C;" title="Orange"></span></label>
+        <label style="cursor:pointer;"><input type="radio" name="fm-farbe" value="#E1F5EE|#085041" style="display:none;" /><span style="display:inline-block;width:28px;height:28px;border-radius:6px;background:#E1F5EE;border:2px solid #085041;" title="Grün"></span></label>
+        <label style="cursor:pointer;"><input type="radio" name="fm-farbe" value="#E6F1FB|#0C447C" style="display:none;" /><span style="display:inline-block;width:28px;height:28px;border-radius:6px;background:#E6F1FB;border:2px solid #0C447C;" title="Blau"></span></label>
+        <label style="cursor:pointer;"><input type="radio" name="fm-farbe" value="#EEEDFE|#26215C" style="display:none;" /><span style="display:inline-block;width:28px;height:28px;border-radius:6px;background:#EEEDFE;border:2px solid #26215C;" title="Lila"></span></label>
+        <label style="cursor:pointer;"><input type="radio" name="fm-farbe" value="#EAF3DE|#27500A" style="display:none;" /><span style="display:inline-block;width:28px;height:28px;border-radius:6px;background:#EAF3DE;border:2px solid #27500A;" title="Hellgrün"></span></label>
+        <label style="cursor:pointer;"><input type="radio" name="fm-farbe" value="#F3E8FF|#4C1D95" style="display:none;" /><span style="display:inline-block;width:28px;height:28px;border-radius:6px;background:#F3E8FF;border:2px solid #4C1D95;" title="Violett"></span></label>
+        <label style="cursor:pointer;"><input type="radio" name="fm-farbe" value="#FFF7ED|#7C2D12" style="display:none;" /><span style="display:inline-block;width:28px;height:28px;border-radius:6px;background:#FFF7ED;border:2px solid #7C2D12;" title="Dunkelorange"></span></label>
+        <label style="cursor:pointer;"><input type="radio" name="fm-farbe" value="#FAEEDA|#633806" style="display:none;" /><span style="display:inline-block;width:28px;height:28px;border-radius:6px;background:#FAEEDA;border:2px solid #633806;" title="Braun"></span></label>
+      </div>
     </div>
+
+    <div class="section-label" style="margin-top:.5rem;">Zeitschiene *</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:1rem;">
+      <label style="display:flex;align-items:center;gap:8px;padding:8px 12px;border:1.5px solid var(--gray-border);border-radius:8px;cursor:pointer;font-size:13px;" id="fm-zs-lbl-1">
+        <input type="radio" name="fm-zs" value="1" style="accent-color:var(--orange);" /> 7. Std. (12:55–13:30)
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;padding:8px 12px;border:1.5px solid var(--gray-border);border-radius:8px;cursor:pointer;font-size:13px;">
+        <input type="radio" name="fm-zs" value="2" style="accent-color:var(--orange);" /> 8. Std. (13:30–14:15)
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;padding:8px 12px;border:1.5px solid var(--gray-border);border-radius:8px;cursor:pointer;font-size:13px;">
+        <input type="radio" name="fm-zs" value="1,2" style="accent-color:var(--orange);" /> 7.+8. Std. 🔁 Doppelstunde
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;padding:8px 12px;border:1.5px solid var(--gray-border);border-radius:8px;cursor:pointer;font-size:13px;">
+        <input type="radio" name="fm-zs" value="3" style="accent-color:var(--orange);" /> 9. Std. (14:15–15:00)
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;padding:8px 12px;border:1.5px solid var(--gray-border);border-radius:8px;cursor:pointer;font-size:13px;">
+        <input type="radio" name="fm-zs" value="4" style="accent-color:var(--orange);" /> 10. Std. (15:00–15:45)
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;padding:8px 12px;border:1.5px solid var(--gray-border);border-radius:8px;cursor:pointer;font-size:13px;">
+        <input type="radio" name="fm-zs" value="3,4" style="accent-color:var(--orange);" /> 9.+10. Std. 🔁 Doppelstunde
+      </label>
+    </div>
+
     <div class="form-group">
       <label class="form-label">Max. Teilnehmer pro Tag (leer = unbegrenzt)</label>
       <input type="number" id="fm-max" class="form-control" placeholder="z. B. 15" min="1" />
     </div>
+
     <div class="form-group">
-      <label class="form-label">Beschreibung (optional)</label>
-      <input type="text" id="fm-beschreibung" class="form-control" placeholder="Kurze Beschreibung des Angebots" />
+      <label class="form-label">Beschreibung / Info für Schüler (optional)</label>
+      <input type="text" id="fm-beschreibung" class="form-control" placeholder="z. B. Basketbälle, Springseile, Hula-Hoop …" />
     </div>
+
     <div class="form-group">
-      <label class="form-label">Verfügbar für Schülergruppen</label>
+      <label class="form-label">Verfügbar für Schülergruppen *</label>
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:4px;">
-        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
-          <input type="checkbox" id="fm-gruppe-fruehstarter" style="accent-color:var(--orange);" />
-          ⭐ Frühstarter
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;padding:6px 10px;border:1.5px solid var(--gray-border);border-radius:8px;">
+          <input type="checkbox" id="fm-gruppe-fruehstarter" style="accent-color:var(--orange);" /> ⭐ Frühstarter
         </label>
-        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
-          <input type="checkbox" id="fm-gruppe-starter" style="accent-color:var(--orange);" />
-          🔵 Starter
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;padding:6px 10px;border:1.5px solid var(--gray-border);border-radius:8px;">
+          <input type="checkbox" id="fm-gruppe-starter" style="accent-color:var(--orange);" /> 🔵 Starter
         </label>
-        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
-          <input type="checkbox" id="fm-gruppe-durchstarter" style="accent-color:var(--orange);" />
-          🟢 Durchstarter
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;padding:6px 10px;border:1.5px solid var(--gray-border);border-radius:8px;">
+          <input type="checkbox" id="fm-gruppe-durchstarter" style="accent-color:var(--orange);" /> 🟢 Durchstarter
         </label>
       </div>
     </div>
+
+    <div class="form-group">
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
+        <input type="checkbox" id="fm-aktiv" checked style="accent-color:var(--orange);width:16px;height:16px;" />
+        <span><b>Bei Schülern anzeigen</b> – Fach erscheint als wählbarer Chip im Stundenplan</span>
+      </label>
+    </div>
+
     <div id="fm-error" class="text-sm" style="color:#A32D2D;display:none;margin-bottom:.5rem;"></div>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeFachModal()">Abbrechen</button>
