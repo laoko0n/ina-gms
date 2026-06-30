@@ -1387,7 +1387,7 @@ const ALLE_ANGEBOTE = [
 ];
 const DOPPELSTUNDEN_FRUEH = ['Freizeit mit Nico']; // Doppelstunde 7. Std.+2
 
-function waehlen(zs,name,sel,icon,bg,color){
+function waehlen(zs,name,sel,icon,bg,color,fachId){
   // Harte Sperre: außerhalb des Schuljahres keine Wahl möglich
   const sjBeginn=schuljahrConfig.sjBeginn;
   const sjEnde=schuljahrConfig.sjEnde;
@@ -1427,13 +1427,13 @@ function waehlen(zs,name,sel,icon,bg,color){
     }
   }
 
-  gewahlt[zs]={name,sel,icon,bg,color};
+  gewahlt[zs]={name,sel,icon,bg,color,fachId};
 
   // ── Frühe Doppelstunde: Freizeit mit Nico in 7. Std. → 8. Std. automatisch ──
   if(zs===1 && DOPPELSTUNDEN_FRUEH.includes(name)){
     const cfg=GRUPPEN[currentUserData?(currentUserData.gruppe||'durchstarter'):'durchstarter'];
     if(cfg.freiZS.includes(2)){
-      gewahlt[2]={name,sel,icon,bg,color};
+      gewahlt[2]={name,sel,icon,bg,color,fachId};
       const w2=document.getElementById('zs-wrap-2');
       w2.classList.add('zs-doppel');
       setTimeout(()=>w2.classList.remove('zs-doppel'),2000);
@@ -1450,7 +1450,7 @@ function waehlen(zs,name,sel,icon,bg,color){
 
   if(zs===3 && DOPPELSTUNDEN.includes(name)){
     // Doppelstunde: 10. Std. automatisch gleich setzen
-    gewahlt[4]={name,sel,icon,bg,color};
+    gewahlt[4]={name,sel,icon,bg,color,fachId};
     const w4=document.getElementById('zs-wrap-4');
     w4.classList.add('zs-doppel');
     setTimeout(()=>w4.classList.remove('zs-doppel'),2000);
@@ -1510,7 +1510,23 @@ function renderGewahlt(){
         const disp=c.style.display;
         c.className='fach-chip';
         c.style.display=disp;
-        if(g&&g.icon&&c.textContent.trim().startsWith(g.icon))c.classList.add('selected',g.sel||'');
+        // Abgleich über eindeutige Kennung: für statische Chips der sel-Wert in der CSS-Klasse,
+        // für dynamische Chips das data-fach-id Attribut (NICHT über Icon/Text, da mehrere
+        // Fächer dasselbe Icon teilen können und das sonst fälschlich mehrere Chips markiert!)
+        if(g){
+          const chipFachId=c.getAttribute('data-fach-id');
+          if(chipFachId){
+            // Dynamischer Chip: eindeutig über fachId-ZS-Kombination
+            const erwarteteId=(g.fachId||'')+'-'+zs;
+            if(chipFachId===erwarteteId) c.classList.add('selected',g.sel||'');
+          } else if(g.sel && c.classList.contains(g.sel)===false) {
+            // Statischer Chip: Abgleich über die im Button onclick hinterlegte sel-Klasse.
+            // Da die Klasse vor dem Reset entfernt wurde, vergleichen wir stattdessen
+            // den Onclick-Handler-Text, der den sel-Parameter enthält.
+            const onclickAttr=c.getAttribute('onclick')||'';
+            if(onclickAttr.includes("'"+g.sel+"'")) c.classList.add('selected',g.sel);
+          }
+        }
       });
     }
     const hint=document.getElementById('hint-'+zs);
@@ -2596,7 +2612,7 @@ function renderFaecherListe(liste){
         <span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:${f.bg||'#FAECE7'};border:1px solid ${f.color||'#4A1B0C'};margin-right:6px;"></span>
         ${f.icon||'📌'} ${f.name}
       </td>
-      <td style="font-size:12px;color:var(--text-soft);">${f.zeitschieneName||f.zeitschiene||'–'}${f.isDoppelstunde?' 🔁':''}</td>
+      <td style="font-size:12px;color:var(--text-soft);">${f.zeitschieneName||f.zeitschiene||'–'}${f.isDoppelstunde?' 🔁':''}${f.isEinzelnWaehlbar?' <span style="color:var(--orange);font-weight:600;">(einzeln)</span>':''}</td>
       <td><span style="background:var(--orange-light);color:var(--orange-dark);font-size:12px;font-weight:600;padding:2px 8px;border-radius:99px;">${f.maxTeilnehmer||'∞'}</span></td>
       <td style="font-size:13px;">${gruppenAnzeige}</td>
       <td>${aktiv?'<span style="color:#1D9E75;font-size:12px;font-weight:600;">● aktiv</span>':'<span style="color:var(--text-lighter);font-size:12px;">○ inaktiv</span>'}</td>
@@ -2628,7 +2644,8 @@ function openFachModal(id){
         if(document.getElementById('fm-aktiv'))
           document.getElementById('fm-aktiv').checked=d.aktiv!==false;
         // Zeitschiene
-        const zsR=document.querySelector('input[name="fm-zs"][value="'+(d.zeitschiene||'')+'"]');
+        const zsRohWert=d.isEinzelnWaehlbar?('einzeln:'+(d.zeitschiene||'')):(d.zeitschiene||'');
+        const zsR=document.querySelector('input[name="fm-zs"][value="'+zsRohWert+'"]');
         if(zsR)zsR.checked=true;
         // Farbe
         const fVal=(d.bg||'')+'|'+(d.color||'');
@@ -2676,9 +2693,11 @@ function saveFach(){
   if(!zsRadio){showErr(err,'Bitte eine Zeitschiene auswählen.');return;}
   if(gruppen.length===0){showErr(err,'Bitte mindestens eine Schülergruppe auswählen.');return;}
 
-  const zsWert=zsRadio.value; // z.B. "1", "2", "1,2", "3,4"
+  const zsRoh=zsRadio.value; // z.B. "1", "1,2", "einzeln:1,2"
+  const istEinzelnWaehlbar=zsRoh.startsWith('einzeln:');
+  const zsWert=istEinzelnWaehlbar?zsRoh.slice(8):zsRoh; // "1,2" ohne Präfix für die Stundenliste
   const zsNummern=zsWert.split(',').map(Number);
-  const isDoppel=zsNummern.length>1;
+  const isDoppel=!istEinzelnWaehlbar && zsNummern.length>1;
 
   // Farbe auslesen
   const farbenRadio=document.querySelector('input[name="fm-farbe"]:checked');
@@ -2693,8 +2712,9 @@ function saveFach(){
         name, icon, sel,
         bg:farben[0], color:farben[1],
         zeitschiene:zsWert,
-        zeitschieneName:zsNummern.map(z=>({1:'7. Std.',2:'8. Std.',3:'9. Std.',4:'10. Std.'}[z])).join('+'),
+        zeitschieneName:zsNummern.map(z=>({1:'7. Std.',2:'8. Std.',3:'9. Std.',4:'10. Std.'}[z])).join(istEinzelnWaehlbar?' + ':'+'),
         isDoppelstunde:isDoppel,
+        isEinzelnWaehlbar:istEinzelnWaehlbar,
         maxTeilnehmer, beschreibung, gruppen, aktiv,
         updatedAt:new Date().toISOString()
       };
@@ -2963,30 +2983,33 @@ function renderDynamischeChips(){
     if(f.gruppen && !f.gruppen.includes(gruppe)) return;
 
     const zsNummern=f.zeitschiene.split(',').map(Number);
-    const isDoppel=zsNummern.length>1;
+    const isDoppel=f.isDoppelstunde && zsNummern.length>1;
+    const istEinzeln=f.isEinzelnWaehlbar && zsNummern.length>1;
 
     zsNummern.forEach((zs,idx)=>{
-      // Nur den ersten ZS-Chip anzeigen bei Doppelstunden
+      // Bei echter Doppelstunde nur den ersten ZS-Chip anzeigen (zweiter wird automatisch mitgesetzt)
+      // Bei "einzeln wählbar" JEDEN Chip separat anzeigen
       if(isDoppel && idx>0) return;
 
       const container=document.getElementById('chips-'+zs);
       if(!container) return;
 
-      // Prüfen ob Chip bereits existiert
-      if(container.querySelector(`[data-fach-id="${f.id}"]`)) return;
+      // Prüfen ob Chip bereits existiert (pro Zeitschiene eindeutig, da bei "einzeln" mehrere Chips entstehen)
+      const chipKey=f.id+'-'+zs;
+      if(container.querySelector(`[data-fach-id="${chipKey}"]`)) return;
 
       const btn=document.createElement('button');
       btn.className='fach-chip fach-chip-dyn';
-      btn.setAttribute('data-fach-id',f.id);
+      btn.setAttribute('data-fach-id',chipKey);
       btn.style.cssText=`background:${f.bg||'#FAECE7'};border-color:${f.color||'#4A1B0C'};color:${f.color||'#4A1B0C'};`;
       btn.textContent=(f.icon||'📌')+' '+f.name+(isDoppel?' 🔁':'');
       btn.onclick=()=>{
-        // Wählen mit korrekten Parametern
-        waehlen(zs, f.name, f.sel||'sel-custom', f.icon||'📌', f.bg||'#FAECE7', f.color||'#4A1B0C');
-        // Bei Doppelstunde ZS 2 oder 4 automatisch setzen
+        waehlen(zs, f.name, f.sel||'sel-custom', f.icon||'📌', f.bg||'#FAECE7', f.color||'#4A1B0C', f.id);
+        // Bei echter Doppelstunde: zweite Zeitschiene automatisch mitsetzen
+        // Bei "einzeln wählbar": NICHTS automatisch setzen, jede Stunde bleibt unabhängig
         if(isDoppel){
           const zsZwei=zsNummern[1];
-          gewahlt[zsZwei]={name:f.name,sel:f.sel||'sel-custom',icon:f.icon||'📌',bg:f.bg||'#FAECE7',color:f.color||'#4A1B0C'};
+          gewahlt[zsZwei]={name:f.name,sel:f.sel||'sel-custom',icon:f.icon||'📌',bg:f.bg||'#FAECE7',color:f.color||'#4A1B0C',fachId:f.id};
           renderGewahlt();
         }
       };
@@ -3713,6 +3736,9 @@ function savePwReset(){
         <input type="radio" name="fm-zs" value="1,2" style="accent-color:var(--orange);" /> 7.+8. Std. 🔁 Doppelstunde
       </label>
       <label style="display:flex;align-items:center;gap:8px;padding:8px 12px;border:1.5px solid var(--gray-border);border-radius:8px;cursor:pointer;font-size:13px;">
+        <input type="radio" name="fm-zs" value="einzeln:1,2" style="accent-color:var(--orange);" /> 7. + 8. Std. – einzeln wählbar
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;padding:8px 12px;border:1.5px solid var(--gray-border);border-radius:8px;cursor:pointer;font-size:13px;">
         <input type="radio" name="fm-zs" value="3" style="accent-color:var(--orange);" /> 9. Std. (14:15–15:00)
       </label>
       <label style="display:flex;align-items:center;gap:8px;padding:8px 12px;border:1.5px solid var(--gray-border);border-radius:8px;cursor:pointer;font-size:13px;">
@@ -3721,7 +3747,13 @@ function savePwReset(){
       <label style="display:flex;align-items:center;gap:8px;padding:8px 12px;border:1.5px solid var(--gray-border);border-radius:8px;cursor:pointer;font-size:13px;">
         <input type="radio" name="fm-zs" value="3,4" style="accent-color:var(--orange);" /> 9.+10. Std. 🔁 Doppelstunde
       </label>
+      <label style="display:flex;align-items:center;gap:8px;padding:8px 12px;border:1.5px solid var(--gray-border);border-radius:8px;cursor:pointer;font-size:13px;">
+        <input type="radio" name="fm-zs" value="einzeln:3,4" style="accent-color:var(--orange);" /> 9. + 10. Std. – einzeln wählbar
+      </label>
     </div>
+    <p class="text-sm text-soft" style="margin-top:-.5rem;margin-bottom:1rem;">
+      <b>„Einzeln wählbar"</b> bedeutet: Schüler können nur die 1. Stunde, nur die 2. Stunde, oder beide unabhängig voneinander auswählen (wie bei der Spielausleihe) – im Unterschied zur Doppelstunde, die immer beide Stunden gemeinsam belegt.
+    </p>
 
     <div class="form-group">
       <label class="form-label">Max. Teilnehmer pro Tag (leer = unbegrenzt)</label>
