@@ -530,7 +530,10 @@
         <div class="plan-tag-grid" id="l-anw-tage"></div>
         <div id="l-anw-inhalt"><p class="text-sm text-soft">Wähle einen Tag.</p></div>
       </div>
-      <div class="card" style="margin-top:0;">
+    </div>
+
+    <div id="l-tab-fehlzeiten" class="hidden">
+      <div class="card">
         <div class="card-title"><i class="ti ti-clipboard-x"></i> Fehlzeiten meiner Schüler</div>
         <div style="display:flex;gap:8px;margin-bottom:.75rem;flex-wrap:wrap;">
           <select id="l-fehlzeiten-zeitraum" class="form-control" style="max-width:200px;" onchange="loadFehlzeitenUebersicht('l')">
@@ -1213,17 +1216,23 @@ function loadPlanFuerTag(tag){
       gewahlt={1:null,2:null,3:null,4:null};
 
       // Feste AG vorbelegen – NUR am Wochentag an dem sie stattfindet
+      // (alte Einträge ohne Tag: immer vorbelegen, Rückwärtskompatibilität)
       const ag=currentUserData.halbjahresAG;
       const agTag=currentUserData.halbjahresAGTag;
       let agHeute=false;
       if(ag && agTag){
         const d=new Date(tag);
-        const dow=d.getDay(); // 0=So,1=Mo,...
+        const dow=d.getDay();
         if(dow===agTag){
           agHeute=true;
           const agE={name:'Feste AG: '+ag,sel:'sel-halbag',icon:'⭐',bg:'#FFF7ED',color:'#7C2D12'};
           gewahlt[3]=agE; gewahlt[4]=agE;
         }
+      } else if(ag && !agTag){
+        // Alter Eintrag ohne Tag - vorbelegen wie früher
+        agHeute=true;
+        const agE={name:'Feste AG: '+ag,sel:'sel-halbag',icon:'⭐',bg:'#FFF7ED',color:'#7C2D12'};
+        gewahlt[3]=agE; gewahlt[4]=agE;
       }
 
       // Feste ZS der Gruppe (Webuntis) – nur wenn heute nicht der AG-Tag ist
@@ -2932,6 +2941,15 @@ function updateHalbAGAnzeige(){
         document.getElementById('halbag-hinweis-tag').textContent=WOCHENTAG_NAMEN[agTag];
       }
     }
+  } else if(ag && !agTag){
+    // Alte AG ohne Wochentag (vor diesem Update eingetragen) → immer anzeigen + Hinweis zum Nachtragen
+    if(blockEl)blockEl.style.display='block';
+    const statusEl=document.getElementById('halbag-status-anzeige');
+    if(statusEl){
+      statusEl.innerHTML='<span style="font-size:14px;font-weight:600;color:#7C2D12;">⭐ '+ag+'</span>'
+        +'<div style="font-size:11px;color:#A32D2D;margin-top:4px;">⚠️ Kein Wochentag hinterlegt – bitte Lehrkraft informieren, damit dieser ergänzt wird.</div>';
+    }
+    if(btn)btn.textContent='🔒 Feste AG ansehen';
   } else {
     // Keine AG eingetragen → Hinweis zum Eintragen zeigen (nur Mo-Fr)
     if(aktiverWochentag && hinweisEintragenEl){
@@ -2964,24 +2982,7 @@ function befuelleWochenDropdown(sel, gesamtWochen){
   }
 }
 
-// Halbjahres-AG Status-Anzeige aktualisieren
-function updateHalbAGAnzeige(){
-  const ag=currentUserData.halbjahresAG;
-  const seit=currentUserData.halbjahresAGSeit||null;
-  const el=document.getElementById('halbag-status-anzeige');
-  const btn=document.getElementById('halbag-open-btn');
-  if(!el)return;
-  if(ag){
-    const seitTxt=seit?new Date(seit).toLocaleDateString('de-DE'):'';
-    el.innerHTML='<span style="font-size:14px;font-weight:600;color:#7C2D12;">⭐ '+ag+'</span>'
-      +'<span style="font-size:12px;color:#92400E;margin-left:6px;">· 9. + 10. Std. · gesperrt bis Halbjahresende</span>'
-      +(seitTxt?'<div style="font-size:11px;color:var(--text-lighter);margin-top:2px;">Eingetragen am: '+seitTxt+'</div>':'');
-    if(btn)btn.textContent='🔒 Feste AG ansehen';
-  } else {
-    el.innerHTML='<span style="color:var(--text-soft);font-size:13px;">Noch keine feste AG eingetragen.</span>';
-    if(btn)btn.textContent='✏️ Feste AG eintragen';
-  }
-}
+// (Alte updateHalbAGAnzeige entfernt - aktuelle Version mit Wochentag-Logik weiter oben)
 
 // Halbjahres-AG beim App-Start nachladen
 function initHalbjahresAGChip(){
