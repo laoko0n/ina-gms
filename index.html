@@ -999,16 +999,16 @@ async function enterApp(){
     const klassen=(currentUserData.klassen||[]).join(', ')||'–';
     document.getElementById('l-klassen-display').textContent='Meine Klassen: '+klassen;
     document.getElementById('l-meine-klassen-hint').textContent=klassen;
-    buildPlanTagLeiste('l-plan-tage',renderLehrerPlan);
     loadSchuelerListe('l-schueler-liste');
-    ladeSchuljahrConfig();
     showScreen('lehrer');
+    await ladeSchuljahrConfig();
+    buildPlanTagLeiste('l-plan-tage',renderLehrerPlan);
   }else{
-    buildPlanTagLeiste('sl-plan-tage',renderLeitungPlan);
     loadSchuelerListe('sl-schueler-liste');
     loadLehrerKlassenListe();
-    ladeSchuljahrConfig(); // Für Wochenberechnung
     showScreen('leitung');
+    await ladeSchuljahrConfig(); // Für Wochenberechnung
+    buildPlanTagLeiste('sl-plan-tage',renderLeitungPlan);
   }
 }
 
@@ -1622,18 +1622,150 @@ function sShowTab(tab){
 }
 
 // ═══ PLAN LEHRER / LEITUNG ═══
-function buildPlanTagLeiste(containerId,renderFn){
-  const bar=document.getElementById(containerId);bar.innerHTML='';
-  const today=new Date();const dow=today.getDay();const mo=(dow===0?-6:1-dow);
+// Zustand der Wochennavigation pro Container (für mehrere Tagesleisten gleichzeitig)
+const planTagLeisteState={};
+
+function buildPlanTagLeiste(containerId,renderFn,startMontag){
+  const bar=document.getElementById(containerId);
+  if(!bar)return;
+
+  const sjBeginn=schuljahrConfig.sjBeginn||null;
+  const sjEnde=schuljahrConfig.sjEnde||null;
+
+  let mo;
+  if(startMontag){
+    mo=new Date(startMontag);
+  } else if(planTagLeisteState[containerId]){
+    mo=new Date(planTagLeisteState[containerId]);
+  } else {
+    mo=getMontag(new Date());
+    // Wenn heute vor Schuljahresbeginn liegt → erste Schulwoche nehmen
+    if(sjBeginn && isoDate(new Date())<sjBeginn){
+      mo=getMontag(new Date(sjBeginn));
+    }
+  }
+
+  // Innerhalb der Schuljahresgrenzen halten
+  if(sjBeginn){
+    const sjBeginnMo=getMontag(new Date(sjBeginn));
+    if(mo<sjBeginnMo) mo=sjBeginnMo;
+  }
+  if(sjEnde){
+    const sjEndeMo=getMontag(new Date(sjEnde));
+    if(mo>sjEndeMo) mo=sjEndeMo;
+  }
+
+  planTagLeisteState[containerId]=isoDate(mo);
+
+  // Äußeren Wrapper mit Navigation + Dropdown + Tag-Grid aufbauen
+  bar.innerHTML='';
+  bar.className='plan-tag-grid'; // Klasse beibehalten falls CSS darauf zielt
+
+  const navWrap=document.createElement('div');
+  navWrap.style.cssText='display:flex;align-items:center;gap:8px;margin-bottom:.5rem;width:100%;';
+
+  const btnZurueck=document.createElement('button');
+  btnZurueck.className='btn btn-secondary btn-sm';
+  btnZurueck.style.cssText='padding:8px 12px;font-size:16px;';
+  btnZurueck.textContent='‹';
+  btnZurueck.onclick=()=>{
+    const neu=new Date(mo);neu.setDate(neu.getDate()-7);
+    buildPlanTagLeiste(containerId,renderFn,neu);
+  };
+
+  const select=document.createElement('select');
+  select.className='form-control';
+  select.style.cssText='flex:1;font-size:13px;padding:8px 12px;cursor:pointer;';
+  if(schuljahrConfig.sjBeginn){
+    const gs=getGesamtSchulwochen()||40;
+    const startMo=getMontag(new Date(schuljahrConfig.sjBeginn));
+    for(let w=1;w<=gs;w++){
+      const wMo=new Date(startMo);wMo.setDate(startMo.getDate()+(w-1)*7);
+      const wFr=new Date(wMo);wFr.setDate(wMo.getDate()+4);
+      const key=isoDate(wMo);
+      const istFerien=(schuljahrConfig.ferien||[]).some(f=>f.von&&f.bis&&new Date(f.von)<=wMo&&new Date(f.bis)>=wMo);
+      const opt=document.createElement('option');
+      opt.value=key;
+      opt.textContent=w+'. Schulwoche'+(istFerien?' 🌴':'')+' · '+wMo.getDate()+'.'+String(wMo.getMonth()+1).padStart(2,'0')+'. – '+wFr.getDate()+'.'+String(wFr.getMonth()+1).padStart(2,'0')+'.'+wFr.getFullYear();
+      if(key===isoDate(mo))opt.selected=true;
+      select.appendChild(opt);
+    }
+  } else {
+    const opt=document.createElement('option');
+    opt.textContent='Kein Schuljahr konfiguriert';
+    select.appendChild(opt);
+  }
+  select.onchange=()=>{
+    if(select.value)buildPlanTagLeiste(containerId,renderFn,new Date(select.value));
+  };
+
+  const btnVor=document.createElement('button');
+  btnVor.className='btn btn-secondary btn-sm';
+  btnVor.style.cssText='padding:8px 12px;font-size:16px;';
+  btnVor.textContent='›';
+  btnVor.onclick=()=>{
+    const neu=new Date(mo);neu.setDate(neu.getDate()+7);
+    buildPlanTagLeiste(containerId,renderFn,neu);
+  };
+
+  // Navigation an Schuljahresgrenzen sperren
+  if(sjBeginn){
+    const istErsteWoche=isoDate(mo)<=isoDate(getMontag(new Date(sjBeginn)));
+    btnZurueck.disabled=istErsteWoche;btnZurueck.style.opacity=istErsteWoche?'0.3':'';
+  }
+  if(sjEnde){
+    const istLetzteWoche=isoDate(mo)>=isoDate(getMontag(new Date(sjEnde)));
+    btnVor.disabled=istLetzteWoche;btnVor.style.opacity=istLetzteWoche?'0.3':'';
+  }
+
+  navWrap.appendChild(btnZurueck);
+  navWrap.appendChild(select);
+  navWrap.appendChild(btnVor);
+  bar.appendChild(navWrap);
+
+  // Tag-Buttons für Mo-Fr dieser Woche
+  const tagGrid=document.createElement('div');
+  tagGrid.style.cssText='display:flex;gap:6px;flex-wrap:wrap;width:100%;';
+
+  const heute=isoDate(new Date());
+  let aktivGesetzt=false;
+  let ersterTag=null;
+
   for(let i=0;i<5;i++){
-    const d=new Date(today);d.setDate(today.getDate()+mo+i);
+    const d=new Date(mo);d.setDate(mo.getDate()+i);
     const key=isoDate(d);
+    const ausserhalbSchuljahr=(sjBeginn&&key<sjBeginn)||(sjEnde&&key>sjEnde);
+    if(!ersterTag && !ausserhalbSchuljahr) ersterTag=key;
+
     const label=WOCHENTAGE[d.getDay()]+' '+d.getDate()+'.'+String(d.getMonth()+1).padStart(2,'0')+'.';
     const btn=document.createElement('button');
-    btn.className='plan-tag-btn'+(i===0?' active':'');btn.textContent=label;
-    btn.onclick=()=>{bar.querySelectorAll('.plan-tag-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');renderFn(key);};
-    bar.appendChild(btn);if(i===0)renderFn(key);
+    const isToday=key===heute;
+    btn.className='plan-tag-btn'+(isToday&&!ausserhalbSchuljahr?' active':'');
+    btn.textContent=label;
+
+    if(ausserhalbSchuljahr){
+      btn.disabled=true;
+      btn.style.opacity='0.35';
+      btn.style.cursor='not-allowed';
+      btn.title='Außerhalb des Schuljahres';
+    } else {
+      btn.onclick=()=>{
+        tagGrid.querySelectorAll('.plan-tag-btn').forEach(b=>b.classList.remove('active'));
+        btn.classList.add('active');
+        renderFn(key);
+      };
+      if(isToday){renderFn(key);aktivGesetzt=true;}
+    }
+    tagGrid.appendChild(btn);
   }
+
+  if(!aktivGesetzt && ersterTag){
+    const erstBtn=Array.from(tagGrid.children).find(b=>!b.disabled);
+    if(erstBtn)erstBtn.classList.add('active');
+    renderFn(ersterTag);
+  }
+
+  bar.appendChild(tagGrid);
 }
 async function renderLehrerPlan(tag){
   const cont=document.getElementById('l-plan-inhalt');cont.innerHTML='<p class="text-sm text-soft">Lade…</p>';
@@ -1643,7 +1775,7 @@ async function renderLehrerPlan(tag){
     schueler.sort((a,b)=>(a.klasse+a.nachname).localeCompare(b.klasse+b.nachname));
     const planSnaps=await getDocs(collection(db,'plans'));
     const planMap={};planSnaps.forEach(p=>{const d=p.data();if(d.tag===tag)planMap[d.uid]=d;});
-    renderPlanTabelle(cont,schueler,planMap);
+    renderPlanTabelle(cont,schueler,planMap,tag);
   });
 }
 async function renderLeitungPlan(tag){
@@ -1654,7 +1786,7 @@ async function renderLeitungPlan(tag){
     schueler.sort((a,b)=>(a.klasse+a.nachname).localeCompare(b.klasse+b.nachname));
     const planSnaps=await getDocs(collection(db,'plans'));
     const planMap={};planSnaps.forEach(p=>{const d=p.data();if(d.tag===tag)planMap[d.uid]=d;});
-    renderPlanTabelle(cont,schueler,planMap);
+    renderPlanTabelle(cont,schueler,planMap,tag);
   });
 }
 function gruppenBadgeHtml(gruppe){
@@ -1663,14 +1795,32 @@ function gruppenBadgeHtml(gruppe){
   const g=gruppe||'durchstarter';
   return `<span class="gruppe-tbl-badge ${classes[g]}">${labels[g]}</span>`;
 }
-function renderPlanTabelle(cont,schueler,planMap){
+function renderPlanTabelle(cont,schueler,planMap,tag){
   if(!schueler.length){cont.innerHTML='<p class="text-sm text-soft">Keine Schüler angelegt.</p>';return;}
-  const ZS=['7. Std. 12:55–13:30','8. Std. 13:30–14:15','9. Std. 14:15–15:00','10. Std. 15:00–15:45'];
   const ZS_KURZ=['7.','8.','9.','10.'];
+
+  // Wochentag des angezeigten Tages ermitteln (1=Mo...5=Fr), für Feste-AG-Ableitung
+  let wochentagDesTages=null;
+  if(tag){
+    const [jahr,monat,tagNr]=tag.split('-').map(Number);
+    wochentagDesTages=new Date(jahr,monat-1,tagNr).getDay();
+  }
 
   let html='<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;">';
   schueler.forEach(s=>{
     const plan=planMap[s.uid]||{};
+
+    // Feste AG ableiten: gilt nur am hinterlegten Wochentag
+    let agHeute=null;
+    if(s.halbjahresAG){
+      if(s.halbjahresAGTag && wochentagDesTages===s.halbjahresAGTag){
+        agHeute=s.halbjahresAG;
+      } else if(!s.halbjahresAGTag){
+        // Altdaten ohne Wochentag: immer anzeigen (Rückwärtskompatibilität)
+        agHeute=s.halbjahresAG;
+      }
+    }
+
     html+=`<div style="border:0.5px solid var(--gray-border);border-radius:var(--radius-lg);overflow:hidden;">
       <div style="background:var(--gray-bg);padding:8px 12px;border-bottom:0.5px solid var(--gray-border);">
         <div style="font-weight:600;font-size:13px;color:var(--text);">${s.vorname} ${s.nachname}</div>
@@ -1681,6 +1831,22 @@ function renderPlanTabelle(cont,schueler,planMap){
       <div style="padding:8px 12px;display:flex;flex-direction:column;gap:5px;">`;
 
     [1,2,3,4].forEach((zs,i)=>{
+      // An ZS 3/4 hat die Feste AG (falls heute ihr Tag ist) Vorrang vor allem anderen
+      if((zs===3||zs===4) && agHeute){
+        if(zs===3){
+          html+=`<div style="display:flex;align-items:center;gap:6px;">
+            <span style="font-size:10px;font-weight:600;color:var(--text-lighter);width:28px;flex-shrink:0;">${ZS_KURZ[i]}</span>
+            <span style="background:#FFF7ED;color:#7C2D12;font-size:11px;font-weight:600;padding:3px 8px;border-radius:99px;flex:1;">⭐ ${agHeute} (Feste AG)</span>
+          </div>`;
+        } else {
+          html+=`<div style="display:flex;align-items:center;gap:6px;">
+            <span style="font-size:10px;font-weight:600;color:var(--text-lighter);width:28px;flex-shrink:0;">${ZS_KURZ[i]}</span>
+            <span style="background:#FFF7ED;color:#7C2D12;font-size:11px;font-weight:600;padding:3px 8px;border-radius:99px;flex:1;">⭐ ${agHeute} (Fortsetzung)</span>
+          </div>`;
+        }
+        return;
+      }
+
       const g=plan['zs'+zs];
       if(g){
         html+=`<div style="display:flex;align-items:center;gap:6px;">
