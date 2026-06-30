@@ -1821,11 +1821,12 @@ function renderPlanTabelle(cont,schueler,planMap,tag){
       }
     }
 
-    html+=`<div style="border:0.5px solid var(--gray-border);border-radius:var(--radius-lg);overflow:hidden;">
+    html+=`<div style="border:0.5px solid var(--gray-border);border-radius:var(--radius-lg);overflow:hidden;${(s.halbjahresAG&&!s.halbjahresAGTag)?'border:1.5px solid #A32D2D;':''}">
       <div style="background:var(--gray-bg);padding:8px 12px;border-bottom:0.5px solid var(--gray-border);">
         <div style="font-weight:600;font-size:13px;color:var(--text);">${s.vorname} ${s.nachname}</div>
         <div style="display:flex;gap:5px;margin-top:4px;flex-wrap:wrap;">
           <span class="klasse-badge">${s.klasse}</span>${gruppenBadgeHtml(s.gruppe)}
+          ${(s.halbjahresAG&&!s.halbjahresAGTag)?'<span style="background:#FCEBEB;color:#A32D2D;font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px;">⚠️ AG ohne Wochentag!</span>':''}
         </div>
       </div>
       <div style="padding:8px 12px;display:flex;flex-direction:column;gap:5px;">`;
@@ -1886,23 +1887,20 @@ function renderSchuelerListe(containerId,liste){
   if(!liste.length){cont.innerHTML='<p class="text-sm text-soft">Noch keine Schüler angelegt.</p>';return;}
   let html=`<table class="schueler-table"><thead><tr><th>Klasse</th><th>Name</th><th>Gruppe</th><th>E-Mail</th><th></th></tr></thead><tbody>`;
   liste.forEach(s=>{
-    const darf=lehrerDarfBearbeiten(s.klasse);
-    html+=`<tr class="${darf?'':'row-locked'}">
+    const volleRechte=lehrerDarfBearbeiten(s.klasse);
+    html+=`<tr>
       <td><span class="klasse-badge">${s.klasse}</span></td>
       <td>${s.vorname} ${s.nachname}</td>
       <td>${gruppenBadgeHtml(s.gruppe)}</td>
       <td class="text-soft" style="font-size:12px;">${s.email||''}</td>
-      <td>`;
-    if(darf){
-      html+=`<div class="flex-row" style="gap:6px;justify-content:flex-end;">
-        <button class="btn btn-secondary btn-sm" title="Bearbeiten" onclick="openSchuelerModal('${s.uid}')"><i class="ti ti-edit"></i></button>
-        <button class="btn btn-secondary btn-sm" title="Passwort zurücksetzen" onclick="openPwResetModal('${s.uid}','${s.vorname} ${s.nachname}','schueler')"><i class="ti ti-key"></i></button>
-        <button class="btn btn-danger btn-sm" title="Löschen" onclick="deleteSchueler('${s.uid}','${s.vorname} ${s.nachname}')"><i class="ti ti-trash"></i></button>
-      </div>`;
-    }else{
-      html+=`<span class="lock-hint"><i class="ti ti-lock" style="font-size:13px;"></i> Nicht deine Klasse</span>`;
-    }
-    html+=`</td></tr>`;
+      <td>
+        <div class="flex-row" style="gap:6px;justify-content:flex-end;align-items:center;">
+          ${volleRechte?'':'<span style="font-size:11px;color:var(--text-lighter);margin-right:4px;" title="Nur Feste AG bearbeitbar – nicht deine Klasse"><i class="ti ti-lock" style="font-size:12px;"></i></span>'}
+          <button class="btn btn-secondary btn-sm" title="${volleRechte?'Bearbeiten':'Feste AG bearbeiten (nur diese, da nicht deine Klasse)'}" onclick="openSchuelerModal('${s.uid}')"><i class="ti ti-edit"></i></button>
+          <button class="btn btn-secondary btn-sm" title="Passwort zurücksetzen" onclick="openPwResetModal('${s.uid}','${s.vorname} ${s.nachname}','schueler')"><i class="ti ti-key"></i></button>
+          ${volleRechte?`<button class="btn btn-danger btn-sm" title="Löschen" onclick="deleteSchueler('${s.uid}','${s.vorname} ${s.nachname}')"><i class="ti ti-trash"></i></button>`:''}
+        </div>
+      </td></tr>`;
   });
   html+='</tbody></table>';
   cont.innerHTML=html;
@@ -1989,26 +1987,32 @@ function saveSchueler(){
     // BEARBEITEN: nur Firestore aktualisieren
     if(editSchuelerUid){
       try{
+        const halbagGroupSichtbar = document.getElementById('ms-halbag-group')?.style.display!=='none';
         const halbagVal=document.getElementById('ms-halbag')?.value.trim()||null;
         const halbagTagRadio=document.querySelector('input[name="ms-halbag-tag"]:checked');
         const halbagTag=halbagTagRadio?parseInt(halbagTagRadio.value):null;
         const updateData={vorname,nachname,klasse,gruppe};
-        // AG aktualisieren (Lehrer/Schulleitung dürfen das)
-        if(document.getElementById('ms-halbag-group')?.style.display!=='none'){
+
+        if(halbagGroupSichtbar){
           if(halbagVal && !halbagTag){
-            showErr(err,'Bitte den Wochentag für die Feste AG auswählen.');
+            showErr(err,'⚠️ Bitte den Wochentag für die Feste AG auswählen (Mo–Fr unter dem Namensfeld).');
+            err.scrollIntoView({behavior:'smooth',block:'center'});
             return;
           }
           updateData.halbjahresAG = halbagVal||null;
           updateData.halbjahresAGTag = halbagVal ? halbagTag : null;
-          // Wenn AG gelöscht → auch Datum zurücksetzen damit Schüler neu eintragen kann
           updateData.halbjahresAGSeit = halbagVal ? isoDate(new Date()) : null;
         }
+
         await updateDoc(doc(db,'users',editSchuelerUid),updateData);
-        toast('Schüler aktualisiert ✓');
+        toast('✓ Schüler aktualisiert.');
         closeSchuelerModal();
         loadSchuelerListe(currentRole==='lehrer'?'l-schueler-liste':'sl-schueler-liste');
-      }catch(e){showErr(err,e.message);}
+      }catch(e){
+        console.error('Fehler beim Speichern des Schülers:',e);
+        showErr(err,'Fehler beim Speichern: '+(e.message||e.code||'Unbekannter Fehler')+'. Bitte Firestore-Regeln prüfen.');
+        err.scrollIntoView({behavior:'smooth',block:'center'});
+      }
       return;
     }
 
@@ -3029,31 +3033,49 @@ function renderAngeboteCheckboxen(){
 async function addNeuesAngebot(){
   const input=document.getElementById('ma-neues-angebot');
   const name=input.value.trim();
+  const zeitschiene=document.getElementById('ma-neues-zeitschiene')?.value||'';
+  const gruppen=['fruehstarter','starter','durchstarter'].filter(g=>document.getElementById('ma-neues-'+g)?.checked);
   const err=document.getElementById('ma-error');
   err.style.display='none';
+
   if(!name){showErr(err,'Bitte einen Namen für das neue Angebot eingeben.');return;}
   if(editAngeboteAuswahl.includes(name)){showErr(err,'Dieses Angebot ist bereits zugewiesen.');return;}
+  if(!zeitschiene){showErr(err,'Bitte eine Zeitschiene auswählen – sonst erscheint das Angebot nicht bei den Schülern.');return;}
+  if(gruppen.length===0){showErr(err,'Bitte mindestens eine Schülergruppe auswählen.');return;}
+
+  const zsNummern=zeitschiene.split(',').map(Number);
+  const isDoppel=zsNummern.length>1;
+  const sel='sel-custom-'+name.toLowerCase().replace(/[^a-z0-9]/g,'-').slice(0,20);
 
   // Sofort zur Auswahl hinzufügen
   if(!ALLE_ANGEBOTE.includes(name)) ALLE_ANGEBOTE.push(name);
   if(!editAngeboteAuswahl.includes(name)) editAngeboteAuswahl.push(name);
 
-  // In Firestore-Fächerliste speichern
+  // Vollständig in Firestore-Fächerliste speichern – mit allen Pflichtfeldern,
+  // damit es als Chip bei Schülern erscheint (siehe renderDynamischeChips)
   withFirebase(async({db,collection})=>{
     try{
       const {addDoc}=await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
       await addDoc(collection(db,'faecher'),{
-        name, icon:'📌', zeitschiene:'', maxTeilnehmer:null,
-        beschreibung:'', gruppen:[], createdAt:new Date().toISOString()
+        name, icon:'📌', sel,
+        bg:'#FAECE7', color:'#4A1B0C',
+        zeitschiene,
+        zeitschieneName:zsNummern.map(z=>({1:'7. Std.',2:'8. Std.',3:'9. Std.',4:'10. Std.'}[z])).join('+'),
+        isDoppelstunde:isDoppel,
+        maxTeilnehmer:null, beschreibung:'', gruppen, aktiv:true,
+        createdAt:new Date().toISOString()
       });
-      toast('✓ Angebot „'+name+'" angelegt und zugewiesen.');
+      toast('✓ Angebot „'+name+'" angelegt – erscheint jetzt bei Schülern!');
+      ladeDynamischeFaecher(); // direkt für aktuell offene Sessions aktualisieren (eigene Session)
     }catch(e){
       console.warn('Fach Firestore-Fehler:',e);
-      toast('✓ Angebot „'+name+'" zugewiesen (Details später in Fächer-Tab ergänzen).');
+      showErr(err,'Fehler beim Speichern: '+(e.message||'unbekannt'));
+      return;
     }
   });
 
   input.value='';
+  document.getElementById('ma-neues-zeitschiene').value='';
 
   // Checkbox sofort hinzufügen ohne neu zu laden
   const cont=document.getElementById('ma-checkboxen');
@@ -3319,13 +3341,20 @@ function updateHalbAGAnzeige(){
     }
   } else if(ag && !agTag){
     // Alte AG ohne Wochentag (vor diesem Update eingetragen) → immer anzeigen + 9./10. Std. ausblenden
-    if(blockEl)blockEl.style.display='block';
+    // ABER: deutliche Warnung, da dies vermutlich nicht gewünscht ist
+    if(blockEl){
+      blockEl.style.display='block';
+      blockEl.style.borderColor='#A32D2D';
+    }
     if(zsWrap3)zsWrap3.style.display='none';
     if(zsWrap4)zsWrap4.style.display='none';
     const statusEl=document.getElementById('halbag-status-anzeige');
     if(statusEl){
       statusEl.innerHTML='<span style="font-size:14px;font-weight:600;color:#7C2D12;">⭐ '+ag+'</span>'
-        +'<div style="font-size:11px;color:#A32D2D;margin-top:4px;">⚠️ Kein Wochentag hinterlegt – bitte Lehrkraft informieren, damit dieser ergänzt wird.</div>';
+        +'<div style="background:#FCEBEB;border:1px solid #A32D2D;border-radius:6px;padding:8px 10px;margin-top:6px;font-size:12px;color:#A32D2D;font-weight:600;">'
+        +'⚠️ KEIN WOCHENTAG HINTERLEGT – diese AG wird deshalb fälschlich an jedem Tag angezeigt!<br>'
+        +'<span style="font-weight:400;">Bitte Lehrkraft/Schulleitung bitten, im Bearbeiten-Formular den Wochentag (Mo–Fr) nachzutragen.</span>'
+        +'</div>';
     }
     if(btn)btn.textContent='🔒 Feste AG ansehen';
   } else {
@@ -3600,16 +3629,38 @@ function savePwReset(){
     <!-- Neues Angebot direkt hier anlegen -->
     <div style="border-top:0.5px solid var(--gray-border);margin-top:.75rem;padding-top:.75rem;">
       <div class="form-label" style="margin-bottom:6px;">➕ Neues Angebot direkt anlegen</div>
-      <div style="display:flex;gap:6px;">
-        <input type="text" id="ma-neues-angebot" class="form-control"
-          placeholder="Name des neuen Angebots (z. B. Chor-AG)"
-          style="flex:1;"
-          onkeydown="if(event.key==='Enter'){event.preventDefault();addNeuesAngebot();}" />
-        <button class="btn btn-primary btn-sm" onclick="addNeuesAngebot()">
-          <i class="ti ti-plus"></i> Hinzufügen
-        </button>
+      <input type="text" id="ma-neues-angebot" class="form-control"
+        placeholder="Name des neuen Angebots (z. B. Sportgeräteausleihe)"
+        style="margin-bottom:8px;" />
+
+      <label class="form-label" style="font-size:12px;">Zeitschiene *</label>
+      <select id="ma-neues-zeitschiene" class="form-control" style="margin-bottom:8px;font-size:13px;">
+        <option value="">– bitte wählen –</option>
+        <option value="1">7. Std. (12:55–13:30)</option>
+        <option value="2">8. Std. (13:30–14:15)</option>
+        <option value="1,2">7.+8. Std. 🔁 Doppelstunde</option>
+        <option value="3">9. Std. (14:15–15:00)</option>
+        <option value="4">10. Std. (15:00–15:45)</option>
+        <option value="3,4">9.+10. Std. 🔁 Doppelstunde</option>
+      </select>
+
+      <label class="form-label" style="font-size:12px;">Für welche Gruppen? *</label>
+      <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
+        <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;padding:5px 9px;border:1px solid var(--gray-border);border-radius:7px;">
+          <input type="checkbox" id="ma-neues-fruehstarter" checked style="accent-color:var(--orange);" /> ⭐ Frühstarter
+        </label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;padding:5px 9px;border:1px solid var(--gray-border);border-radius:7px;">
+          <input type="checkbox" id="ma-neues-starter" checked style="accent-color:var(--orange);" /> 🔵 Starter
+        </label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;padding:5px 9px;border:1px solid var(--gray-border);border-radius:7px;">
+          <input type="checkbox" id="ma-neues-durchstarter" checked style="accent-color:var(--orange);" /> 🟢 Durchstarter
+        </label>
       </div>
-      <p class="text-sm text-soft" style="margin-top:4px;">Das Angebot wird in der Fächerliste gespeichert und sofort zugewiesen.</p>
+
+      <button class="btn btn-primary btn-sm btn-full" onclick="addNeuesAngebot()">
+        <i class="ti ti-plus"></i> Anlegen und zuweisen
+      </button>
+      <p class="text-sm text-soft" style="margin-top:4px;">Das Angebot erscheint danach sofort als wählbarer Chip bei den passenden Schülern.</p>
     </div>
 
     <div id="ma-error" class="text-sm" style="color:#A32D2D;display:none;margin-bottom:.5rem;margin-top:.5rem;"></div>
