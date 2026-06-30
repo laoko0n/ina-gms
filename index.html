@@ -981,21 +981,19 @@ function showScreen(name){
 }
 
 // ═══ APP BETRETEN ═══
-function enterApp(){
+async function enterApp(){
   if(currentRole==='schueler'){
     document.getElementById('s-name-display').textContent=currentUserData.vorname+' '+currentUserData.nachname;
     document.getElementById('s-klasse-display').textContent='Klasse '+currentUserData.klasse;
     renderGruppeBadge();applyGruppenRegeln();
-    ladeSchuljahrConfig();
     ladeDynamischeFaecher();
-    // Dropdown nach kurzem Warten befüllen (Config muss erst laden)
-    setTimeout(()=>{
-      const sel=document.getElementById('s-woche-select');
-      if(sel)befuelleWochenDropdown(sel,getGesamtSchulwochen());
-    },800);
+    showScreen('schueler'); // Screen sofort zeigen, Inhalte folgen
+    // Erst Schuljahres-Konfiguration laden, DANN Datumsleiste aufbauen
+    await ladeSchuljahrConfig();
+    const sel=document.getElementById('s-woche-select');
+    if(sel)befuelleWochenDropdown(sel,getGesamtSchulwochen());
     buildDateBar();
     initHalbjahresAGChip();
-    showScreen('schueler');
   }else if(currentRole==='lehrer'){
     document.getElementById('l-name-display').textContent=currentUserData.vorname+' '+currentUserData.nachname;
     const klassen=(currentUserData.klassen||[]).join(', ')||'–';
@@ -1072,7 +1070,32 @@ function getMontag(datum){
 
 function buildDateBar(startDatum){
   const bar=document.getElementById('s-date-bar');bar.innerHTML='';
-  const mo=startDatum?new Date(startDatum):getMontag(new Date());
+
+  const sjBeginn=schuljahrConfig.sjBeginn||null; // "2026-08-10"
+  const sjEnde=schuljahrConfig.sjEnde||null;
+
+  let mo=startDatum?new Date(startDatum):getMontag(new Date());
+
+  // Wenn vor Schuljahresbeginn → auf erste Schulwoche springen
+  if(sjBeginn){
+    const moKey=isoDate(mo);
+    if(moKey<sjBeginn || !startDatum){
+      // Beim allerersten Aufruf (kein startDatum) oder wenn Zielwoche vor Schuljahr liegt:
+      // heutiges Datum prüfen statt Montag-Woche
+      const heuteKey=isoDate(new Date());
+      if(heuteKey<sjBeginn){
+        mo=getMontag(new Date(sjBeginn));
+      }
+    }
+    // Begrenzung: niemals vor Schuljahresbeginn-Woche
+    const sjBeginnMo=getMontag(new Date(sjBeginn));
+    if(mo<sjBeginnMo) mo=sjBeginnMo;
+  }
+  if(sjEnde){
+    const sjEndeMo=getMontag(new Date(sjEnde));
+    if(mo>sjEndeMo) mo=sjEndeMo;
+  }
+
   aktiverMontag=isoDate(mo);
 
   // Dropdown aktualisieren
@@ -1080,11 +1103,21 @@ function buildDateBar(startDatum){
   const gs=getGesamtSchulwochen();
   const sel=document.getElementById('s-woche-select');
   if(sel){
-    // Dropdown nur einmalig befüllen
     if(sel.options.length<=1) befuelleWochenDropdown(sel,gs);
-    // Aktuellen Wert setzen
     sel.value=aktiverMontag;
-    if(!sel.value) sel.value=''; // Fallback wenn nicht gefunden
+    if(!sel.value) sel.value='';
+  }
+
+  // Navigationspfeile sperren an den Schuljahresgrenzen
+  const btnZurueck=document.querySelector('button[onclick="navWoche(-1)"]');
+  const btnVor=document.querySelector('button[onclick="navWoche(1)"]');
+  if(sjBeginn){
+    const istErsteWoche = aktiverMontag<=isoDate(getMontag(new Date(sjBeginn)));
+    if(btnZurueck){btnZurueck.disabled=istErsteWoche;btnZurueck.style.opacity=istErsteWoche?'0.3':'';}
+  }
+  if(sjEnde){
+    const istLetzteWoche = aktiverMontag>=isoDate(getMontag(new Date(sjEnde)));
+    if(btnVor){btnVor.disabled=istLetzteWoche;btnVor.style.opacity=istLetzteWoche?'0.3':'';}
   }
 
   const heute=isoDate(new Date());
@@ -1093,32 +1126,63 @@ function buildDateBar(startDatum){
     const d=new Date(mo);d.setDate(mo.getDate()+i);
     const key=isoDate(d);
     const isToday=key===heute;
-    const istVergangen=key<heute;
+    // "Vergangen" nur innerhalb des Schuljahres relevant - vor Schuljahresbeginn gibt's nichts zu sperren extra,
+    // da diese Tage ohnehin nicht erreichbar sind
+    const istVergangen=key<heute && (!sjBeginn || key>=sjBeginn);
+    const ausserhalbSchuljahr = (sjBeginn&&key<sjBeginn) || (sjEnde&&key>sjEnde);
+
     const btn=document.createElement('button');
-    btn.className='date-btn'+(isToday?' active':'')+(istVergangen?' date-btn-past':'');
+    btn.className='date-btn'+(isToday?' active':'')+(istVergangen?' date-btn-past':'')+(ausserhalbSchuljahr?' date-btn-past':'');
     btn.innerHTML=`<div class="day">${WOCHENTAGE[d.getDay()]}</div>${d.getDate()}.${String(d.getMonth()+1).padStart(2,'0')}.`;
-    if(istVergangen){
+
+    if(ausserhalbSchuljahr){
+      btn.disabled=true;
+      btn.style.cursor='not-allowed';
+      btn.title='Außerhalb des Schuljahres';
+    } else if(istVergangen){
       btn.title='Vergangener Tag – nur ansehen, keine Änderung möglich';
+      btn.onclick=()=>{
+        document.querySelectorAll('#s-date-bar .date-btn').forEach(b=>b.classList.remove('active'));
+        btn.classList.add('active');
+        activeTag=key;
+        loadPlanFuerTag(key);
+      };
+    } else {
+      btn.onclick=()=>{
+        document.querySelectorAll('#s-date-bar .date-btn').forEach(b=>b.classList.remove('active'));
+        btn.classList.add('active');
+        activeTag=key;
+        loadPlanFuerTag(key);
+      };
     }
-    btn.onclick=()=>{
-      document.querySelectorAll('#s-date-bar .date-btn').forEach(b=>b.classList.remove('active'));
-      btn.classList.add('active');
-      activeTag=key;
-      loadPlanFuerTag(key);
-    };
     bar.appendChild(btn);
     if(isToday){activeTag=key;loadPlanFuerTag(key);gesetzt=true;}
   }
   if(!gesetzt){
-    bar.querySelector('.date-btn').classList.add('active');
-    activeTag=isoDate(mo);loadPlanFuerTag(activeTag);
+    const ersterAuswaehlbar=bar.querySelector('.date-btn:not([disabled])')||bar.querySelector('.date-btn');
+    if(ersterAuswaehlbar){
+      ersterAuswaehlbar.classList.add('active');
+      activeTag=isoDate(mo);
+      loadPlanFuerTag(activeTag);
+    }
   }
 }
 
 function navWoche(richtung){
   const mo=aktiverMontag?new Date(aktiverMontag):getMontag(new Date());
-  if(richtung===0){buildDateBar(getMontag(new Date()));}
-  else{mo.setDate(mo.getDate()+richtung*7);buildDateBar(mo);}
+  if(richtung===0){
+    const heuteKey=isoDate(new Date());
+    const sjBeginn=schuljahrConfig.sjBeginn;
+    // "Heute"-Button: wenn vor Schuljahresbeginn, zur ersten Schulwoche springen
+    if(sjBeginn && heuteKey<sjBeginn){
+      buildDateBar(getMontag(new Date(sjBeginn)));
+    } else {
+      buildDateBar(getMontag(new Date()));
+    }
+  } else {
+    mo.setDate(mo.getDate()+richtung*7);
+    buildDateBar(mo);
+  }
 }
 
 // ═══ JAHRESPLAN-MODAL ═══
@@ -1924,11 +1988,14 @@ let schuljahrConfig={
 };
 
 function ladeSchuljahrConfig(){
-  withFirebase(async({db,doc,getDoc,getDocFromServer})=>{
-    try{
-      const snap=await getDoc(doc(db,'config','schuljahr'));
-      if(snap.exists()) schuljahrConfig={...schuljahrConfig,...snap.data()};
-    }catch(e){}
+  return new Promise((resolve)=>{
+    withFirebase(async({db,doc,getDoc})=>{
+      try{
+        const snap=await getDoc(doc(db,'config','schuljahr'));
+        if(snap.exists()) schuljahrConfig={...schuljahrConfig,...snap.data()};
+      }catch(e){}
+      resolve();
+    });
   });
 }
 
@@ -3103,15 +3170,10 @@ function befuelleWochenDropdown(sel, gesamtWochen){
 
 // Halbjahres-AG beim App-Start nachladen
 function initHalbjahresAGChip(){
+  // gewahlt[3]/[4] werden bereits korrekt tagesabhängig in loadPlanFuerTag() gesetzt.
+  // Hier nur die Anzeige (Block/Hinweis) aktualisieren - KEINE gewahlt-Manipulation mehr,
+  // da das sonst die Wochentag-Logik überschreibt und die AG an jedem Tag zeigt.
   updateHalbAGAnzeige();
-  // Wenn AG vorhanden, in gewahlt für ZS3+4 vorbelegen (wird aber täglich überschrieben)
-  const ag=currentUserData.halbjahresAG;
-  if(ag){
-    const agEintrag={name:'Feste Halbjahres-AG ('+ag+')','sel':'sel-halbag',icon:'⭐',bg:'#FFF7ED',color:'#7C2D12'};
-    // Nur vorbelegen wenn noch nichts in ZS3 gewählt
-    if(!gewahlt[3])gewahlt[3]=agEintrag;
-    if(!gewahlt[4])gewahlt[4]=agEintrag;
-  }
 }
 
 // ═══ SPIELAUSLEIHE – LEHRER-ÜBERSICHT ═══
