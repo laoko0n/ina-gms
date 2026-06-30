@@ -3027,10 +3027,18 @@ function updateHalbAGAnzeige(){
   if(hinweisAndereEl)hinweisAndereEl.style.display='none';
   if(hinweisEintragenEl)hinweisEintragenEl.style.display='none';
 
+  // 9./10. Std.-Blöcke: standardmäßig wieder einblenden, werden unten ggf. ausgeblendet
+  const zsWrap3=document.getElementById('zs-wrap-3');
+  const zsWrap4=document.getElementById('zs-wrap-4');
+  if(zsWrap3)zsWrap3.style.display='';
+  if(zsWrap4)zsWrap4.style.display='';
+
   if(ag && agTag){
     if(aktiverWochentag===agTag){
-      // Heute ist AG-Tag → vollen Block zeigen
+      // Heute ist AG-Tag → vollen Block zeigen, 9./10. Std.-Felder ausblenden
       if(blockEl)blockEl.style.display='block';
+      if(zsWrap3)zsWrap3.style.display='none';
+      if(zsWrap4)zsWrap4.style.display='none';
       const statusEl=document.getElementById('halbag-status-anzeige');
       const seit=currentUserData.halbjahresAGSeit;
       const seitTxt=seit?new Date(seit).toLocaleDateString('de-DE'):'';
@@ -3041,7 +3049,7 @@ function updateHalbAGAnzeige(){
       }
       if(btn)btn.textContent='🔒 Feste AG ansehen';
     } else {
-      // Anderer Tag → kleiner Hinweis dass AG an anderem Tag ist
+      // Anderer Tag → kleiner Hinweis dass AG an anderem Tag ist, 9./10. Std. bleiben normal wählbar
       if(hinweisAndereEl){
         hinweisAndereEl.style.display='block';
         document.getElementById('halbag-hinweis-name').textContent=ag;
@@ -3049,8 +3057,10 @@ function updateHalbAGAnzeige(){
       }
     }
   } else if(ag && !agTag){
-    // Alte AG ohne Wochentag (vor diesem Update eingetragen) → immer anzeigen + Hinweis zum Nachtragen
+    // Alte AG ohne Wochentag (vor diesem Update eingetragen) → immer anzeigen + 9./10. Std. ausblenden
     if(blockEl)blockEl.style.display='block';
+    if(zsWrap3)zsWrap3.style.display='none';
+    if(zsWrap4)zsWrap4.style.display='none';
     const statusEl=document.getElementById('halbag-status-anzeige');
     if(statusEl){
       statusEl.innerHTML='<span style="font-size:14px;font-weight:600;color:#7C2D12;">⭐ '+ag+'</span>'
