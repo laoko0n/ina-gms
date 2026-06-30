@@ -690,7 +690,25 @@
           <i class="ti ti-device-floppy"></i> Einstellungen speichern
         </button>
       </div>
-    </div>
+
+      <div class="card" style="border:1.5px solid #A32D2D;">
+        <div class="card-title" style="color:#A32D2D;"><i class="ti ti-trash"></i> Alte Plandaten bereinigen</div>
+        <p class="text-sm text-soft" style="margin-bottom:.75rem;">
+          Löscht alle gespeicherten Tagespläne, die <b>vor dem Schuljahresbeginn</b> liegen
+          (z.&nbsp;B. Testdaten aus der Entwicklungsphase). Schüler-, Lehrer- und Fächerdaten bleiben unberührt –
+          nur die Tageswahlen in <code>plans</code> werden geprüft.
+        </p>
+        <div id="cleanup-info" class="text-sm" style="margin-bottom:.75rem;color:var(--text-soft);"></div>
+        <button class="btn btn-secondary" onclick="pruefeAltePlandaten()" style="margin-bottom:.5rem;">
+          <i class="ti ti-search"></i> Alte Pläne suchen
+        </button>
+        <div id="cleanup-ergebnis" style="display:none;">
+          <div id="cleanup-liste" style="max-height:240px;overflow-y:auto;background:var(--gray-bg);border-radius:8px;padding:10px 12px;margin-bottom:.75rem;font-size:12px;font-family:monospace;"></div>
+          <button class="btn btn-danger btn-full" id="cleanup-loeschen-btn" onclick="loescheAltePlandaten()">
+            <i class="ti ti-trash"></i> <span id="cleanup-loeschen-label">Alle gefundenen Pläne löschen</span>
+          </button>
+        </div>
+      </div>
 
     <div id="sl-tab-fehlzeiten" class="hidden">
       <div class="card">
@@ -1221,7 +1239,8 @@ function loadPlanFuerTag(tag){
       const agTag=currentUserData.halbjahresAGTag;
       let agHeute=false;
       if(ag && agTag){
-        const d=new Date(tag);
+        const [jahr,monat,tagNr]=tag.split('-').map(Number);
+        const d=new Date(jahr,monat-1,tagNr);
         const dow=d.getDay();
         if(dow===agTag){
           agHeute=true;
@@ -1961,6 +1980,91 @@ function saveEinstellungen(){
       ok.textContent='✓ Einstellungen gespeichert!';ok.style.display='block';
       setTimeout(()=>ok.style.display='none',3000);
     }catch(e){showErr(err,'Fehler: '+e.message);}
+  });
+}
+
+// ═══ ALTE PLANDATEN BEREINIGEN ═══
+let gefundenAltePläne=[];
+
+function pruefeAltePlandaten(){
+  const info=document.getElementById('cleanup-info');
+  const ergebnisBox=document.getElementById('cleanup-ergebnis');
+  const liste=document.getElementById('cleanup-liste');
+  ergebnisBox.style.display='none';
+  gefundenAltePläne=[];
+
+  if(!schuljahrConfig.sjBeginn){
+    info.textContent='⚠️ Bitte zuerst Schuljahresbeginn eintragen und speichern.';
+    info.style.color='#A32D2D';
+    return;
+  }
+
+  info.textContent='🔍 Suche läuft…';
+  info.style.color='var(--text-soft)';
+
+  withFirebase(async({db,getDocs,collection})=>{
+    try{
+      const snaps=await getDocs(collection(db,'plans'));
+      const sjBeginn=schuljahrConfig.sjBeginn; // "2026-08-10"
+      const alte=[];
+      snaps.forEach(s=>{
+        const d=s.data();
+        if(d.tag && d.tag<sjBeginn){
+          alte.push({id:s.id, tag:d.tag, uid:d.uid});
+        }
+      });
+
+      gefundenAltePläne=alte;
+
+      if(!alte.length){
+        info.textContent='✓ Keine alten Plandaten gefunden – alles sauber!';
+        info.style.color='#0F6E56';
+        return;
+      }
+
+      info.textContent='Gefunden: '+alte.length+' Plan(e) vor dem '+new Date(sjBeginn).toLocaleDateString('de-DE');
+      info.style.color='#A32D2D';
+
+      // Sortiert nach Datum anzeigen
+      alte.sort((a,b)=>a.tag.localeCompare(b.tag));
+      liste.innerHTML=alte.map(p=>p.tag+'  ·  '+p.id).join('<br>');
+
+      document.getElementById('cleanup-loeschen-label').textContent=
+        'Alle '+alte.length+' gefundenen Pläne löschen';
+      ergebnisBox.style.display='block';
+
+    }catch(e){
+      info.textContent='Fehler bei der Suche: '+e.message;
+      info.style.color='#A32D2D';
+    }
+  });
+}
+
+function loescheAltePlandaten(){
+  if(!gefundenAltePläne.length)return;
+  if(!confirm(gefundenAltePläne.length+' alte Pläne wirklich unwiderruflich löschen?'))return;
+
+  const btn=document.getElementById('cleanup-loeschen-btn');
+  btn.disabled=true;
+  document.getElementById('cleanup-loeschen-label').textContent='Lösche…';
+
+  withFirebase(async({db,doc,deleteDoc})=>{
+    let geloescht=0, fehler=0;
+    for(const p of gefundenAltePläne){
+      try{
+        await deleteDoc(doc(db,'plans',p.id));
+        geloescht++;
+      }catch(e){
+        fehler++;
+        console.warn('Löschfehler:',p.id,e);
+      }
+    }
+    toast('✓ '+geloescht+' alte Pläne gelöscht'+(fehler?' ('+fehler+' Fehler)':''));
+    document.getElementById('cleanup-info').textContent='✓ '+geloescht+' Pläne gelöscht.';
+    document.getElementById('cleanup-info').style.color='#0F6E56';
+    document.getElementById('cleanup-ergebnis').style.display='none';
+    gefundenAltePläne=[];
+    btn.disabled=false;
   });
 }
 
@@ -2908,9 +3012,12 @@ function updateHalbAGAnzeige(){
   const hinweisEintragenEl=document.getElementById('halbag-hinweis-eintragen');
 
   // Wochentag des aktiven Tages ermitteln (1=Mo...5=Fr)
+  // WICHTIG: "YYYY-MM-DD" als String wird von JS als UTC interpretiert -> Zeitzone kann Tag verschieben!
+  // Deshalb manuell als lokales Datum parsen.
   let aktiverWochentag=null;
   if(activeTag){
-    const d=new Date(activeTag);
+    const [jahr,monat,tagNr]=activeTag.split('-').map(Number);
+    const d=new Date(jahr,monat-1,tagNr); // lokales Datum, keine UTC-Verschiebung
     const dow=d.getDay(); // 0=So,1=Mo,...6=Sa
     aktiverWochentag = dow>=1&&dow<=5 ? dow : null;
   }
