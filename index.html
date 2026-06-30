@@ -570,6 +570,7 @@
       <div class="card">
         <div class="card-title"><i class="ti ti-puzzle"></i> Spielausleihe – Wochenübersicht</div>
         <p class="text-sm text-soft" style="margin-bottom:.75rem;">Welcher Schüler hat wann Spielausleihe? (Mo–Do, 7.+8. Std.)</p>
+        <div id="l-spielausleihe-woche"></div>
         <div id="l-spielausleihe-inhalt"><p class="text-sm text-soft">Lade…</p></div>
       </div>
     </div>
@@ -1922,6 +1923,7 @@ function renderSchuelerListe(containerId,liste){
   cont.innerHTML=html;
 }
 function openSchuelerModal(uid){
+ try{
   editSchuelerUid=uid||null;
   document.getElementById('ms-error').style.display='none';
   const title=document.getElementById('modal-schueler-title');
@@ -1932,6 +1934,7 @@ function openSchuelerModal(uid){
     const zeigeAGFeld = currentRole==='leitung' || currentRole==='lehrer';
     document.getElementById('ms-halbag-group').style.display= zeigeAGFeld ? 'block' : 'none';
     withFirebase(async({db,doc,getDoc})=>{
+     try{
       const snap=await getDoc(doc(db,'users',uid));
       if(snap.exists()){
         const d=snap.data();
@@ -1961,7 +1964,13 @@ function openSchuelerModal(uid){
         document.querySelectorAll('input[name="ms-halbag-tag"]').forEach(r=>{
           r.checked=(parseInt(r.value)===agTag);
         });
+      } else {
+        toast('⚠️ Schülerdaten nicht gefunden (UID: '+uid+').');
       }
+     }catch(innerErr){
+       console.error('Fehler beim Laden der Schülerdaten:',innerErr);
+       toast('⚠️ Fehler beim Laden: '+(innerErr.message||innerErr));
+     }
     });
   }else{
     title.textContent='Schüler hinzufügen';
@@ -1978,6 +1987,10 @@ function openSchuelerModal(uid){
     const modal=document.querySelector('#modal-schueler .modal');
     if(modal)modal.scrollTop=0;
   },100);
+ }catch(outerErr){
+   console.error('Kritischer Fehler in openSchuelerModal:',outerErr);
+   toast('⚠️ Fehler beim Öffnen: '+(outerErr.message||outerErr));
+ }
 }
 function closeSchuelerModal(){
   document.getElementById('modal-schueler').classList.add('hidden');
@@ -2400,10 +2413,8 @@ const ALLE_FAECHER=[
   {name:'Feste Halbjahres-AG', icon:'⭐', bg:'#FFF7ED',color:'#7C2D12'},
 ];
 
-function getWochenRange(){
-  const today=new Date();
-  const dow=today.getDay();
-  const mo=new Date(today);mo.setDate(today.getDate()+(dow===0?-6:1-dow));
+function getWochenRange(startMontag){
+  const mo=startMontag?new Date(startMontag):getMontag(new Date());
   const tage=[];
   for(let i=0;i<5;i++){const d=new Date(mo);d.setDate(mo.getDate()+i);tage.push(isoDate(d));}
   return tage;
@@ -3381,9 +3392,12 @@ function updateHalbAGAnzeige(){
     }
     if(btn)btn.textContent='🔒 Feste AG ansehen';
   } else {
-    // Keine AG eingetragen → Hinweis zum Eintragen zeigen (nur Mo-Fr)
-    if(aktiverWochentag && hinweisEintragenEl){
-      hinweisEintragenEl.style.display='block';
+    // Keine AG eingetragen → den vollen Block mit Eintragen-Button anzeigen
+    // (nicht nur einen kleinen Hinweis - der Button muss klar sichtbar sein!)
+    if(blockEl)blockEl.style.display='block';
+    const statusEl=document.getElementById('halbag-status-anzeige');
+    if(statusEl){
+      statusEl.innerHTML='<span style="font-size:13px;color:var(--text-soft);">Noch keine feste AG eingetragen.</span>';
     }
     if(btn)btn.textContent='✏️ Feste AG eintragen';
   }
@@ -3423,10 +3437,96 @@ function initHalbjahresAGChip(){
 }
 
 // ═══ SPIELAUSLEIHE – LEHRER-ÜBERSICHT ═══
-function loadSpielausleiheUebersicht(){
+// Zustand der Spielausleihe-Wochenauswahl
+let spielausleiheMontag=null;
+
+function loadSpielausleiheUebersicht(startMontag){
+  const navCont=document.getElementById('l-spielausleihe-woche');
   const cont=document.getElementById('l-spielausleihe-inhalt');
   cont.innerHTML='<p class="text-sm text-soft">Lade…</p>';
 
+  const sjBeginn=schuljahrConfig.sjBeginn||null;
+  const sjEnde=schuljahrConfig.sjEnde||null;
+
+  let mo;
+  if(startMontag){
+    mo=new Date(startMontag);
+  } else if(spielausleiheMontag){
+    mo=new Date(spielausleiheMontag);
+  } else {
+    mo=getMontag(new Date());
+    if(sjBeginn && isoDate(new Date())<sjBeginn){
+      mo=getMontag(new Date(sjBeginn));
+    }
+  }
+
+  // Innerhalb der Schuljahresgrenzen halten
+  if(sjBeginn){
+    const sjBeginnMo=getMontag(new Date(sjBeginn));
+    if(mo<sjBeginnMo) mo=sjBeginnMo;
+  }
+  if(sjEnde){
+    const sjEndeMo=getMontag(new Date(sjEnde));
+    if(mo>sjEndeMo) mo=sjEndeMo;
+  }
+  spielausleiheMontag=isoDate(mo);
+
+  // ── Wochennavigation aufbauen (Dropdown + Pfeile, wie beim Schülerplan) ──
+  navCont.innerHTML='';
+  const navWrap=document.createElement('div');
+  navWrap.style.cssText='display:flex;align-items:center;gap:8px;margin-bottom:.75rem;';
+
+  const btnZurueck=document.createElement('button');
+  btnZurueck.className='btn btn-secondary btn-sm';
+  btnZurueck.style.cssText='padding:8px 12px;font-size:16px;';
+  btnZurueck.textContent='‹';
+  btnZurueck.onclick=()=>{const neu=new Date(mo);neu.setDate(neu.getDate()-7);loadSpielausleiheUebersicht(neu);};
+
+  const select=document.createElement('select');
+  select.className='form-control';
+  select.style.cssText='flex:1;font-size:13px;padding:8px 12px;cursor:pointer;';
+  if(sjBeginn){
+    const gs=getGesamtSchulwochen()||40;
+    const startMo=getMontag(new Date(sjBeginn));
+    for(let w=1;w<=gs;w++){
+      const wMo=new Date(startMo);wMo.setDate(startMo.getDate()+(w-1)*7);
+      const wDo=new Date(wMo);wDo.setDate(wMo.getDate()+3); // Spielausleihe nur Mo-Do
+      const key=isoDate(wMo);
+      const istFerien=(schuljahrConfig.ferien||[]).some(f=>f.von&&f.bis&&new Date(f.von)<=wMo&&new Date(f.bis)>=wMo);
+      const opt=document.createElement('option');
+      opt.value=key;
+      opt.textContent=w+'. Schulwoche'+(istFerien?' 🌴':'')+' · '+wMo.getDate()+'.'+String(wMo.getMonth()+1).padStart(2,'0')+'. – '+wDo.getDate()+'.'+String(wDo.getMonth()+1).padStart(2,'0')+'.'+wDo.getFullYear();
+      if(key===isoDate(mo))opt.selected=true;
+      select.appendChild(opt);
+    }
+  } else {
+    const opt=document.createElement('option');
+    opt.textContent='Kein Schuljahr konfiguriert';
+    select.appendChild(opt);
+  }
+  select.onchange=()=>{if(select.value)loadSpielausleiheUebersicht(new Date(select.value));};
+
+  const btnVor=document.createElement('button');
+  btnVor.className='btn btn-secondary btn-sm';
+  btnVor.style.cssText='padding:8px 12px;font-size:16px;';
+  btnVor.textContent='›';
+  btnVor.onclick=()=>{const neu=new Date(mo);neu.setDate(neu.getDate()+7);loadSpielausleiheUebersicht(neu);};
+
+  if(sjBeginn){
+    const istErsteWoche=isoDate(mo)<=isoDate(getMontag(new Date(sjBeginn)));
+    btnZurueck.disabled=istErsteWoche;btnZurueck.style.opacity=istErsteWoche?'0.3':'';
+  }
+  if(sjEnde){
+    const istLetzteWoche=isoDate(mo)>=isoDate(getMontag(new Date(sjEnde)));
+    btnVor.disabled=istLetzteWoche;btnVor.style.opacity=istLetzteWoche?'0.3':'';
+  }
+
+  navWrap.appendChild(btnZurueck);
+  navWrap.appendChild(select);
+  navWrap.appendChild(btnVor);
+  navCont.appendChild(navWrap);
+
+  // ── Daten für diese Woche laden ──
   withFirebase(async({db,getDocs,collection})=>{
     const userSnaps=await getDocs(collection(db,'users'));
     const alleSchueler=[];
@@ -3436,20 +3536,29 @@ function loadSpielausleiheUebersicht(){
     const planSnaps=await getDocs(collection(db,'plans'));
     const allePlans=[];planSnaps.forEach(p=>allePlans.push(p.data()));
 
-    // Aktuelle Woche Mo–Do (kein Fr für Spielausleihe)
-    const today=new Date();
-    const dow=today.getDay();
-    const mo=new Date(today);mo.setDate(today.getDate()+(dow===0?-6:1-dow));
+    // Mo–Do dieser Woche (kein Fr für Spielausleihe)
     const tage=[];
     const tagNamen=['Mo','Di','Mi','Do'];
     for(let i=0;i<4;i++){
       const d=new Date(mo);d.setDate(mo.getDate()+i);
-      tage.push({key:isoDate(d),label:tagNamen[i]+' '+d.getDate()+'.'+String(d.getMonth()+1).padStart(2,'0')+'.'});
+      const key=isoDate(d);
+      const ausserhalbSchuljahr=(sjBeginn&&key<sjBeginn)||(sjEnde&&key>sjEnde);
+      tage.push({key,label:tagNamen[i]+' '+d.getDate()+'.'+String(d.getMonth()+1).padStart(2,'0')+'.',ausserhalbSchuljahr});
     }
 
     let html='<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;">';
 
-    tage.forEach(({key,label})=>{
+    tage.forEach(({key,label,ausserhalbSchuljahr})=>{
+      if(ausserhalbSchuljahr){
+        html+=`<div style="border:0.5px solid var(--gray-border);border-radius:10px;overflow:hidden;opacity:.4;">
+          <div style="background:var(--gray-bg);padding:8px 12px;">
+            <div style="font-weight:600;font-size:13px;color:var(--text-lighter);">🎲 Spielausleihe · ${label}</div>
+            <div style="font-size:11px;color:var(--text-lighter);margin-top:2px;">Außerhalb des Schuljahres</div>
+          </div>
+        </div>`;
+        return;
+      }
+
       const planMap={};
       allePlans.filter(p=>p.tag===key).forEach(p=>planMap[p.uid]=p);
 
@@ -3471,7 +3580,6 @@ function loadSpielausleiheUebersicht(){
       } else {
         spieler.forEach((s,idx)=>{
           const plan=planMap[s.uid]||{};
-          // Welche Stunden genau?
           const stunden=[];
           if(plan.zs1&&plan.zs1.name==='Spielausleihe')stunden.push('7. Std.');
           if(plan.zs2&&plan.zs2.name==='Spielausleihe')stunden.push('8. Std.');
@@ -3509,6 +3617,7 @@ let pwResetUid=null;
 let pwResetRole='schueler';
 
 function openPwResetModal(uid, name, role){
+ try{
   pwResetUid=uid;
   pwResetRole=role||'schueler';
   const label=role==='lehrer'?'Lehrkraft':'Schüler';
@@ -3521,6 +3630,10 @@ function openPwResetModal(uid, name, role){
   document.getElementById('pw-reset-error').style.display='none';
   document.getElementById('modal-pw-reset').classList.remove('hidden');
   setTimeout(()=>document.getElementById('pw-reset-input').focus(),100);
+ }catch(e){
+   console.error('Fehler in openPwResetModal:',e);
+   toast('⚠️ Fehler beim Öffnen: '+(e.message||e));
+ }
 }
 function closePwResetModal(){
   document.getElementById('modal-pw-reset').classList.add('hidden');
