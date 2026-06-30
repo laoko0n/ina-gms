@@ -1331,6 +1331,10 @@ function loadPlanFuerTag(tag){
         // Sicherheitscheck: Tag muss übereinstimmen!
         if(d.tag === tag){
           (cfg.freiZS||[1,2,3,4]).forEach(zs=>{
+            // Am AG-Tag dürfen ZS3/ZS4 NIE durch gespeicherte Daten überschrieben werden -
+            // diese Stunden gehören exklusiv der Festen AG, unabhängig davon was früher
+            // (z.B. vor Eintragung der AG) dort gespeichert wurde.
+            if(agHeute && (zs===3||zs===4)) return;
             const val=d['zs'+zs];
             if(val && val.icon && val.name && val.sel && val.bg && val.color){
               gewahlt[zs]=val;
@@ -1384,6 +1388,18 @@ const ALLE_ANGEBOTE = [
 const DOPPELSTUNDEN_FRUEH = ['Freizeit mit Nico']; // Doppelstunde 7. Std.+2
 
 function waehlen(zs,name,sel,icon,bg,color){
+  // Harte Sperre: außerhalb des Schuljahres keine Wahl möglich
+  const sjBeginn=schuljahrConfig.sjBeginn;
+  const sjEnde=schuljahrConfig.sjEnde;
+  if(sjBeginn && activeTag && activeTag<sjBeginn){
+    toast('⛔ Dieser Tag liegt vor Schuljahresbeginn und kann nicht gewählt werden.');
+    return;
+  }
+  if(sjEnde && activeTag && activeTag>sjEnde){
+    toast('⛔ Dieser Tag liegt nach Schuljahresende und kann nicht gewählt werden.');
+    return;
+  }
+
   // Vergangene Tage sind nur zum Ansehen, keine Änderung möglich
   const heute=isoDate(new Date());
   if(activeTag && activeTag<heute){
@@ -1533,7 +1549,19 @@ function savePlan(){
   if(!activeTag)return;
   const heute=isoDate(new Date());
 
-  // Vergangene Tage dürfen niemals gespeichert werden
+  // Harte Sperre: außerhalb des Schuljahres darf NIE gespeichert werden
+  const sjBeginn=schuljahrConfig.sjBeginn;
+  const sjEnde=schuljahrConfig.sjEnde;
+  if(sjBeginn && activeTag<sjBeginn){
+    toast('⛔ Dieser Tag liegt vor Schuljahresbeginn ('+new Date(sjBeginn).toLocaleDateString('de-DE')+') und kann nicht gewählt werden.');
+    return;
+  }
+  if(sjEnde && activeTag>sjEnde){
+    toast('⛔ Dieser Tag liegt nach Schuljahresende und kann nicht gewählt werden.');
+    return;
+  }
+
+  // Vergangene Tage (innerhalb des Schuljahres) dürfen nicht mehr gespeichert werden
   if(activeTag<heute){
     toast('⛔ Vergangene Tage können nicht mehr gespeichert werden.');
     return;
