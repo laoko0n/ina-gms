@@ -176,6 +176,7 @@
     .pw-strength-bar { height: 100%; border-radius: 2px; transition: width .3s, background .3s; }
     .date-bar { display: flex; gap: 6px; margin-bottom: 1rem; overflow-x: auto; }
     .date-btn { flex-shrink: 0; padding: 8px 12px; border-radius: var(--radius-md); border: 0.5px solid var(--gray-border); background: #fff; cursor: pointer; font-size: 13px; color: var(--text-soft); text-align: center; font-family: inherit; }
+    .date-btn-past { opacity: .5; background: #F5F4F1; }
     .date-btn .day { font-size: 10px; color: var(--text-lighter); }
     .date-btn.active { background: var(--orange); color: #fff; border-color: var(--orange); }
     .date-btn.active .day { color: rgba(255,255,255,.8); }
@@ -392,13 +393,13 @@
         </div>
       </div>
 
-      <!-- ══ FESTE AG (9. + 10. Stunde) – für ALLE Schülergruppen ══ -->
-      <div style="border:2px solid #EA580C;border-radius:var(--radius-lg);overflow:hidden;margin-bottom:10px;margin-top:4px;" id="halbag-block">
+      <!-- ══ FESTE AG (9. + 10. Stunde) – nur am gewählten AG-Tag sichtbar ══ -->
+      <div style="border:2px solid #EA580C;border-radius:var(--radius-lg);overflow:hidden;margin-bottom:10px;margin-top:4px;display:none;" id="halbag-block">
         <div style="background:#FFF7ED;padding:10px 14px;display:flex;align-items:center;gap:10px;border-bottom:1px solid #FED7AA;">
           <span style="font-size:22px;">⭐</span>
           <div style="flex:1;">
-            <div style="font-size:14px;font-weight:700;color:#7C2D12;">Feste AG</div>
-            <div style="font-size:11px;color:#92400E;margin-top:1px;">9. + 10. Stunde · Doppelstunde · gilt für ein halbes Schuljahr</div>
+            <div style="font-size:14px;font-weight:700;color:#7C2D12;" id="halbag-titel">Feste AG</div>
+            <div style="font-size:11px;color:#92400E;margin-top:1px;">9. + 10. Stunde · Doppelstunde</div>
           </div>
           <span style="font-size:11px;font-weight:600;background:#FED7AA;color:#7C2D12;padding:3px 10px;border-radius:99px;flex-shrink:0;">🔁 Halbjahr</span>
         </div>
@@ -414,8 +415,21 @@
             ✏️ Feste AG eintragen
           </button>
           <p style="font-size:11px;color:var(--text-lighter);margin-top:6px;">
-            Du gibst der AG selbst einen Namen – z.&nbsp;B. Fußball-AG, Theater-AG, Robotik …
+            Du gibst der AG selbst einen Namen und wählst den Wochentag – z.&nbsp;B. Fußball-AG, dienstags.
           </p>
+        </div>
+      </div>
+
+      <!-- Hinweis-Karte wenn heute KEIN AG-Tag ist, aber AG existiert -->
+      <div style="border:1px solid var(--gray-border);border-radius:var(--radius-md);padding:10px 14px;margin-bottom:10px;display:none;background:var(--gray-bg);" id="halbag-hinweis-andere-tage">
+        <span style="font-size:12px;color:var(--text-soft);">⭐ Deine feste AG <b id="halbag-hinweis-name"></b> findet <b id="halbag-hinweis-tag"></b> statt – nicht heute.</span>
+      </div>
+
+      <!-- Hinweis wenn noch keine AG eingetragen (an Tagen ohne AG) -->
+      <div style="border:1.5px dashed #EA580C;border-radius:var(--radius-md);padding:10px 14px;margin-bottom:10px;display:none;" id="halbag-hinweis-eintragen">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+          <span style="font-size:12px;color:#92400E;">⭐ Du hast noch keine feste AG (9.+10. Std.) eingetragen.</span>
+          <button onclick="openHalbjahresAGModal()" style="background:none;border:none;color:#EA580C;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;">Jetzt eintragen ›</button>
         </div>
       </div>
 
@@ -468,7 +482,7 @@
     </div>
 
   </div>
-  <nav class="bottom-nav">
+  <nav class="bottom-nav" style="flex-wrap:nowrap;overflow-x:auto;justify-content:flex-start;">
     <button class="nav-btn active" id="s-nav-plan" onclick="sShowTab('plan')"><i class="ti ti-calendar"></i>Mein Plan</button>
     <button class="nav-btn" id="s-nav-stats" onclick="sShowTab('stats')"><i class="ti ti-chart-bar"></i>Woche</button>
     <button class="nav-btn" id="s-nav-fehlzeiten" onclick="sShowTab('fehlzeiten')"><i class="ti ti-clipboard-x"></i>Fehlzeiten</button>
@@ -567,13 +581,14 @@
     </div>
 
   </div>
-  <nav class="bottom-nav">
+  <nav class="bottom-nav" style="flex-wrap:nowrap;overflow-x:auto;justify-content:flex-start;">
     <button class="nav-btn active" id="l-nav-uebersicht" onclick="lShowTab('uebersicht')"><i class="ti ti-list-check"></i>Übersicht</button>
     <button class="nav-btn" id="l-nav-angebot" onclick="lShowTab('angebot')"><i class="ti ti-clipboard-check"></i>Angebot</button>
     <button class="nav-btn" id="l-nav-anwesenheit" onclick="lShowTab('anwesenheit')"><i class="ti ti-user-check"></i>Anwesenh.</button>
     <button class="nav-btn" id="l-nav-spielausleihe" onclick="lShowTab('spielausleihe')"><i class="ti ti-puzzle"></i>Ausleihe</button>
     <button class="nav-btn" id="l-nav-stats" onclick="lShowTab('stats')"><i class="ti ti-chart-bar"></i>Statistik</button>
     <button class="nav-btn" id="l-nav-schueler" onclick="lShowTab('schueler')"><i class="ti ti-users"></i>Schüler</button>
+    <button class="nav-btn" id="l-nav-fehlzeiten" onclick="lShowTab('fehlzeiten')"><i class="ti ti-clipboard-x"></i>Fehlzeiten</button>
     <button class="nav-btn" id="l-nav-pw" onclick="lShowTab('pw')"><i class="ti ti-lock"></i>Passwort</button>
   </nav>
 </div>
@@ -738,9 +753,27 @@
     <div class="form-group" id="ms-halbag-group" style="display:none;background:#FFF7ED;border:1.5px solid #EA580C;border-radius:10px;padding:12px 14px;">
       <label class="form-label" style="color:#7C2D12;">⭐ Feste AG (9.+10. Std.) – Halbjahr</label>
       <p class="text-sm" style="color:#92400E;margin-bottom:8px;">Hier kann die feste AG des Schülers geändert oder entfernt werden.</p>
-      <div style="display:flex;gap:8px;">
+      <div style="display:flex;gap:8px;margin-bottom:8px;">
         <input type="text" id="ms-halbag" class="form-control" placeholder="z. B. Fußball-AG – leer lassen = AG entfernen" />
         <button type="button" class="btn btn-danger btn-sm" onclick="document.getElementById('ms-halbag').value=''" title="AG entfernen">✕ Entfernen</button>
+      </div>
+      <label class="form-label" style="color:#7C2D12;font-size:12px;">Wochentag der AG</label>
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:5px;margin-top:4px;">
+        <label style="display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 2px;border:1.5px solid #FED7AA;border-radius:6px;cursor:pointer;font-size:11px;background:#fff;">
+          <input type="radio" name="ms-halbag-tag" value="1" style="accent-color:#EA580C;" /> Mo
+        </label>
+        <label style="display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 2px;border:1.5px solid #FED7AA;border-radius:6px;cursor:pointer;font-size:11px;background:#fff;">
+          <input type="radio" name="ms-halbag-tag" value="2" style="accent-color:#EA580C;" /> Di
+        </label>
+        <label style="display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 2px;border:1.5px solid #FED7AA;border-radius:6px;cursor:pointer;font-size:11px;background:#fff;">
+          <input type="radio" name="ms-halbag-tag" value="3" style="accent-color:#EA580C;" /> Mi
+        </label>
+        <label style="display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 2px;border:1.5px solid #FED7AA;border-radius:6px;cursor:pointer;font-size:11px;background:#fff;">
+          <input type="radio" name="ms-halbag-tag" value="4" style="accent-color:#EA580C;" /> Do
+        </label>
+        <label style="display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 2px;border:1.5px solid #FED7AA;border-radius:6px;cursor:pointer;font-size:11px;background:#fff;">
+          <input type="radio" name="ms-halbag-tag" value="5" style="accent-color:#EA580C;" /> Fr
+        </label>
       </div>
     </div>
     <div id="ms-error" class="text-sm" style="color:#A32D2D;display:none;margin-bottom:.5rem;"></div>
@@ -1039,9 +1072,13 @@ function buildDateBar(startDatum){
     const d=new Date(mo);d.setDate(mo.getDate()+i);
     const key=isoDate(d);
     const isToday=key===heute;
+    const istVergangen=key<heute;
     const btn=document.createElement('button');
-    btn.className='date-btn'+(isToday?' active':'');
+    btn.className='date-btn'+(isToday?' active':'')+(istVergangen?' date-btn-past':'');
     btn.innerHTML=`<div class="day">${WOCHENTAGE[d.getDay()]}</div>${d.getDate()}.${String(d.getMonth()+1).padStart(2,'0')}.`;
+    if(istVergangen){
+      btn.title='Vergangener Tag – nur ansehen, keine Änderung möglich';
+    }
     btn.onclick=()=>{
       document.querySelectorAll('#s-date-bar .date-btn').forEach(b=>b.classList.remove('active'));
       btn.classList.add('active');
@@ -1175,17 +1212,24 @@ function loadPlanFuerTag(tag){
       const cfg=GRUPPEN[gr]||GRUPPEN.durchstarter;
       gewahlt={1:null,2:null,3:null,4:null};
 
-      // Feste AG vorbelegen
+      // Feste AG vorbelegen – NUR am Wochentag an dem sie stattfindet
       const ag=currentUserData.halbjahresAG;
-      if(ag){
-        const agE={name:'Feste AG: '+ag,sel:'sel-halbag',icon:'⭐',bg:'#FFF7ED',color:'#7C2D12'};
-        gewahlt[3]=agE; gewahlt[4]=agE;
+      const agTag=currentUserData.halbjahresAGTag;
+      let agHeute=false;
+      if(ag && agTag){
+        const d=new Date(tag);
+        const dow=d.getDay(); // 0=So,1=Mo,...
+        if(dow===agTag){
+          agHeute=true;
+          const agE={name:'Feste AG: '+ag,sel:'sel-halbag',icon:'⭐',bg:'#FFF7ED',color:'#7C2D12'};
+          gewahlt[3]=agE; gewahlt[4]=agE;
+        }
       }
 
-      // Feste ZS der Gruppe
+      // Feste ZS der Gruppe (Webuntis) – nur wenn heute nicht der AG-Tag ist
       Object.entries(cfg.festZS||{}).forEach(([zs,val])=>{
         const n=parseInt(zs);
-        if((n===3||n===4)&&ag) return;
+        if((n===3||n===4)&&agHeute) return;
         if(val && val.icon && val.name) gewahlt[n]=val;
       });
 
@@ -1210,19 +1254,28 @@ function loadPlanFuerTag(tag){
     try{renderGewahlt();}catch(e){console.warn('renderGewahlt:',e);}
     try{updateHalbAGAnzeige();}catch(e){}
 
-    // Speichern-Button freigeben
+    // Speichern-Button: gesperrt bei vergangenen Tagen
     const sb=document.getElementById('save-btn');
-    if(sb){sb.disabled=false;sb.style.opacity='';}
+    const heuteCheck=isoDate(new Date());
+    const istVergangenerTag=tag<heuteCheck;
+    if(sb){
+      sb.disabled=istVergangenerTag;
+      sb.style.opacity=istVergangenerTag?'0.4':'';
+      sb.style.cursor=istVergangenerTag?'not-allowed':'';
+    }
 
     // Datum im Speichern-Button
     try{
       const saveLbl=document.getElementById('save-datum-label');
       if(saveLbl){
         const d=new Date(tag);
-        const heute=isoDate(new Date());
-        saveLbl.textContent=tag===heute
-          ?'heute ('+d.getDate()+'.'+(d.getMonth()+1)+'.'+')'
-          :WOCHENTAGE[d.getDay()]+' '+d.getDate()+'.'+(d.getMonth()+1)+'.';
+        if(istVergangenerTag){
+          saveLbl.textContent='vergangener Tag – gesperrt';
+        } else if(tag===heuteCheck){
+          saveLbl.textContent='heute ('+d.getDate()+'.'+(d.getMonth()+1)+'.'+')';
+        } else {
+          saveLbl.textContent=WOCHENTAGE[d.getDay()]+' '+d.getDate()+'.'+(d.getMonth()+1)+'.';
+        }
       }
     }catch(e){}
   });
@@ -1239,6 +1292,13 @@ const ALLE_ANGEBOTE = [
 const DOPPELSTUNDEN_FRUEH = ['Freizeit mit Nico']; // Doppelstunde 7. Std.+2
 
 function waehlen(zs,name,sel,icon,bg,color){
+  // Vergangene Tage sind nur zum Ansehen, keine Änderung möglich
+  const heute=isoDate(new Date());
+  if(activeTag && activeTag<heute){
+    toast('Vergangene Tage können nicht mehr geändert werden.');
+    return;
+  }
+
   const g=currentUserData?(currentUserData.gruppe||'durchstarter'):'durchstarter';
   if(!GRUPPEN[g].freiZS.includes(zs))return;
 
@@ -1379,8 +1439,15 @@ function renderGewahlt(){
 }
 function savePlan(){
   if(!activeTag)return;
-  // Warnung wenn nicht heute gespeichert wird
   const heute=isoDate(new Date());
+
+  // Vergangene Tage dürfen niemals gespeichert werden
+  if(activeTag<heute){
+    toast('⛔ Vergangene Tage können nicht mehr gespeichert werden.');
+    return;
+  }
+
+  // Bestätigung wenn nicht heute (aber Zukunft erlaubt)
   if(activeTag!==heute){
     const d=new Date(activeTag);
     const tagName=WOCHENTAGE[d.getDay()]+' '+d.getDate()+'.'+(d.getMonth()+1)+'.';
@@ -1400,7 +1467,7 @@ function savePlan(){
 
 // ═══ TABS ═══
 function lShowTab(tab){
-  ['uebersicht','angebot','anwesenheit','spielausleihe','stats','schueler','pw'].forEach(t=>{
+  ['uebersicht','angebot','anwesenheit','spielausleihe','stats','schueler','fehlzeiten','pw'].forEach(t=>{
     const te=document.getElementById('l-tab-'+t);
     const ne=document.getElementById('l-nav-'+t);
     if(te)te.classList.toggle('hidden',t!==tab);
@@ -1589,6 +1656,11 @@ function openSchuelerModal(uid){
         }
         document.getElementById('ms-email').disabled=true;
         document.getElementById('ms-halbag').value=d.halbjahresAG||'';
+        // Wochentag-Radio setzen
+        const agTag=d.halbjahresAGTag||null;
+        document.querySelectorAll('input[name="ms-halbag-tag"]').forEach(r=>{
+          r.checked=(parseInt(r.value)===agTag);
+        });
       }
     });
   }else{
@@ -1598,6 +1670,7 @@ function openSchuelerModal(uid){
     document.getElementById('ms-email').disabled=false;
     ['ms-vorname','ms-nachname','ms-klasse','ms-email','ms-pw'].forEach(id=>document.getElementById(id).value='');
     document.getElementById('ms-gruppe').value='durchstarter';
+    document.querySelectorAll('input[name="ms-halbag-tag"]').forEach(r=>{r.checked=false;});
   }
   document.getElementById('modal-schueler').classList.remove('hidden');
   // Zum Anfang scrollen
@@ -1631,12 +1704,19 @@ function saveSchueler(){
     if(editSchuelerUid){
       try{
         const halbagVal=document.getElementById('ms-halbag')?.value.trim()||null;
+        const halbagTagRadio=document.querySelector('input[name="ms-halbag-tag"]:checked');
+        const halbagTag=halbagTagRadio?parseInt(halbagTagRadio.value):null;
         const updateData={vorname,nachname,klasse,gruppe};
         // AG aktualisieren (Lehrer/Schulleitung dürfen das)
         if(document.getElementById('ms-halbag-group')?.style.display!=='none'){
+          if(halbagVal && !halbagTag){
+            showErr(err,'Bitte den Wochentag für die Feste AG auswählen.');
+            return;
+          }
           updateData.halbjahresAG = halbagVal||null;
+          updateData.halbjahresAGTag = halbagVal ? halbagTag : null;
           // Wenn AG gelöscht → auch Datum zurücksetzen damit Schüler neu eintragen kann
-          if(!halbagVal) updateData.halbjahresAGSeit=null;
+          updateData.halbjahresAGSeit = halbagVal ? isoDate(new Date()) : null;
         }
         await updateDoc(doc(db,'users',editSchuelerUid),updateData);
         toast('Schüler aktualisiert ✓');
@@ -2706,41 +2786,51 @@ function loadAngebotTeilnehmer(tag,meineAngebote){
   });
 }
 
-// ═══ FESTE HALBJAHRES-AG ═══
+// ═══ FESTE HALBJAHRES-AG (an einem bestimmten Wochentag) ═══
+const WOCHENTAG_NAMEN={1:'montags',2:'dienstags',3:'mittwochs',4:'donnerstags',5:'freitags'};
+const WOCHENTAG_KURZ={1:'Mo',2:'Di',3:'Mi',4:'Do',5:'Fr'};
+
 function openHalbjahresAGModal(){
   const aktuell=currentUserData.halbjahresAG||null;
+  const agTag=currentUserData.halbjahresAGTag||null; // 1-5
   const agSeitDatum=currentUserData.halbjahresAGSeit||null;
   const input=document.getElementById('halbag-name-input');
   const aktuellEl=document.getElementById('halbag-aktuell');
   const loeschBtn=document.getElementById('halbag-loeschen-btn');
   const saveBtn=document.querySelector('#modal-halbag .btn-primary');
+  const tagAuswahl=document.getElementById('halbag-tag-auswahl');
   document.getElementById('halbag-error').style.display='none';
 
   if(aktuell){
     input.value=aktuell;
-    input.disabled=true; // Gesperrt – AG kann nicht mehr geändert werden
+    input.disabled=true;
+    // Tag-Radios sperren
+    tagAuswahl.querySelectorAll('input[type=radio]').forEach(r=>{
+      r.disabled=true;
+      r.checked=(parseInt(r.value)===agTag);
+    });
 
-    // Halbjahr-Datum berechnen
     const hj2=schuljahrConfig.hj2Beginn||null;
     const sjEnde=schuljahrConfig.sjEnde||null;
     const heute=isoDate(new Date());
     const istHj1=hj2&&heute<hj2;
     const sperrtBis=istHj1?(hj2||'Halbjahresende'):(sjEnde||'Schuljahresende');
     const eingetragen=agSeitDatum?new Date(agSeitDatum).toLocaleDateString('de-DE'):'diesem Halbjahr';
+    const tagText=agTag?WOCHENTAG_NAMEN[agTag]:'';
 
     aktuellEl.innerHTML='✅ Eingetragen seit: <b>'+eingetragen+'</b><br>'
+      +'📅 Findet statt: <b>'+tagText+'</b><br>'
       +'🔒 Gesperrt bis: <b>'+sperrtBis+'</b>';
     aktuellEl.style.display='block';
     aktuellEl.style.color='#085041';
 
-    // Speichern-Button ausblenden
     if(saveBtn)saveBtn.style.display='none';
-    // Löschen nur für Schulleitung/Lehrer sichtbar (nicht für Schüler)
     loeschBtn.style.display='none';
 
   } else {
     input.value='';
     input.disabled=false;
+    tagAuswahl.querySelectorAll('input[type=radio]').forEach(r=>{r.disabled=false;r.checked=false;});
     aktuellEl.style.display='none';
     loeschBtn.style.display='none';
     if(saveBtn)saveBtn.style.display='';
@@ -2753,55 +2843,102 @@ function closeHalbjahresAGModal(){
 }
 function saveHalbjahresAG(){
   const name=document.getElementById('halbag-name-input').value.trim();
+  const tagRadio=document.querySelector('input[name="halbag-tag"]:checked');
   const err=document.getElementById('halbag-error');
   err.style.display='none';
   if(!name){showErr(err,'Bitte einen AG-Namen eingeben.');return;}
+  if(!tagRadio){showErr(err,'Bitte den Wochentag auswählen, an dem die AG stattfindet.');return;}
+  const tag=parseInt(tagRadio.value);
+
   withFirebase(async({db,doc,updateDoc})=>{
     try{
-      // Prüfen ob bereits eingetragen (Sicherheitscheck)
       if(currentUserData.halbjahresAG){
         showErr(err,'Du hast bereits eine Feste AG eingetragen. Änderungen sind für dieses Halbjahr gesperrt.');
         return;
       }
       await updateDoc(doc(db,'users',currentUser.uid),{
         halbjahresAG:name,
+        halbjahresAGTag:tag,
         halbjahresAGSeit:isoDate(new Date())
       });
       currentUserData.halbjahresAG=name;
+      currentUserData.halbjahresAGTag=tag;
       currentUserData.halbjahresAGSeit=isoDate(new Date());
 
-      // Direkt in gewahlt setzen – OHNE waehlen() aufzurufen
-      // (waehlen() würde bei Frühstartern/Startern wegen gesperrter ZS fehlschlagen)
-      const agEintrag={
-        name:'Feste AG: '+name,
-        sel:'sel-halbag',
-        icon:'⭐',
-        bg:'#FFF7ED',
-        color:'#7C2D12'
-      };
-      gewahlt[3]=agEintrag;
-      gewahlt[4]=agEintrag;
-
       updateHalbAGAnzeige();
-      renderGewahlt();
-      toast('⭐ Feste AG „'+name+'" gespeichert!');
+      // Aktuellen Tag neu laden, damit Block korrekt erscheint/verschwindet
+      if(activeTag) loadPlanFuerTag(activeTag);
+      toast('⭐ Feste AG „'+name+'" eingetragen für '+WOCHENTAG_NAMEN[tag]+'!');
       closeHalbjahresAGModal();
     }catch(e){showErr(err,'Fehler beim Speichern: '+e.message);}
   });
 }
 function loescheHalbjahresAG(){
-  if(!confirm('Halbjahres-AG wirklich entfernen?'))return;
+  if(!confirm('Feste AG wirklich entfernen?'))return;
   withFirebase(async({db,doc,updateDoc})=>{
-    await updateDoc(doc(db,'users',currentUser.uid),{halbjahresAG:null});
+    await updateDoc(doc(db,'users',currentUser.uid),{
+      halbjahresAG:null, halbjahresAGTag:null, halbjahresAGSeit:null
+    });
     currentUserData.halbjahresAG=null;
-    gewahlt[3]=null;gewahlt[4]=null;
-    const chip=document.getElementById('chip-halbag-3');
-    if(chip)chip.textContent='⭐ Feste Halbjahres-AG 🔁';
-    renderGewahlt();
+    currentUserData.halbjahresAGTag=null;
     updateHalbAGAnzeige();
-    toast('Halbjahres-AG entfernt.');
+    if(activeTag) loadPlanFuerTag(activeTag);
+    toast('Feste AG entfernt.');
     closeHalbjahresAGModal();
   });
+}
+
+// Steuert Sichtbarkeit der drei Block-Varianten je nach aktivem Tag
+function updateHalbAGAnzeige(){
+  const ag=currentUserData.halbjahresAG;
+  const agTag=currentUserData.halbjahresAGTag;
+  const btn=document.getElementById('halbag-open-btn');
+
+  const blockEl=document.getElementById('halbag-block');
+  const hinweisAndereEl=document.getElementById('halbag-hinweis-andere-tage');
+  const hinweisEintragenEl=document.getElementById('halbag-hinweis-eintragen');
+
+  // Wochentag des aktiven Tages ermitteln (1=Mo...5=Fr)
+  let aktiverWochentag=null;
+  if(activeTag){
+    const d=new Date(activeTag);
+    const dow=d.getDay(); // 0=So,1=Mo,...6=Sa
+    aktiverWochentag = dow>=1&&dow<=5 ? dow : null;
+  }
+
+  // Alle drei ausblenden, dann gezielt einblenden
+  if(blockEl)blockEl.style.display='none';
+  if(hinweisAndereEl)hinweisAndereEl.style.display='none';
+  if(hinweisEintragenEl)hinweisEintragenEl.style.display='none';
+
+  if(ag && agTag){
+    if(aktiverWochentag===agTag){
+      // Heute ist AG-Tag → vollen Block zeigen
+      if(blockEl)blockEl.style.display='block';
+      const statusEl=document.getElementById('halbag-status-anzeige');
+      const seit=currentUserData.halbjahresAGSeit;
+      const seitTxt=seit?new Date(seit).toLocaleDateString('de-DE'):'';
+      if(statusEl){
+        statusEl.innerHTML='<span style="font-size:14px;font-weight:600;color:#7C2D12;">⭐ '+ag+'</span>'
+          +'<span style="font-size:12px;color:#92400E;margin-left:6px;">· heute, 9.+10. Std.</span>'
+          +(seitTxt?'<div style="font-size:11px;color:var(--text-lighter);margin-top:2px;">Eingetragen am: '+seitTxt+'</div>':'');
+      }
+      if(btn)btn.textContent='🔒 Feste AG ansehen';
+    } else {
+      // Anderer Tag → kleiner Hinweis dass AG an anderem Tag ist
+      if(hinweisAndereEl){
+        hinweisAndereEl.style.display='block';
+        document.getElementById('halbag-hinweis-name').textContent=ag;
+        document.getElementById('halbag-hinweis-tag').textContent=WOCHENTAG_NAMEN[agTag];
+      }
+    }
+  } else {
+    // Keine AG eingetragen → Hinweis zum Eintragen zeigen (nur Mo-Fr)
+    if(aktiverWochentag && hinweisEintragenEl){
+      hinweisEintragenEl.style.display='block';
+    }
+    if(btn)btn.textContent='✏️ Feste AG eintragen';
+  }
 }
 
 // Dropdown mit allen Schulwochen befüllen
@@ -3036,14 +3173,34 @@ function savePwReset(){
   <div class="modal">
     <div class="modal-title">⭐ Feste Halbjahres-AG</div>
     <p class="text-sm text-soft" style="margin-bottom:.875rem;">
-      Diese AG gilt für das gesamte Halbjahr und belegt die 9. und 10. Std. als Doppelstunde.
-      Gib den Namen deiner AG ein:
+      Diese AG gilt für das gesamte Halbjahr und belegt die 9. und 10. Std. als Doppelstunde –
+      an dem Wochentag, an dem sie stattfindet.
     </p>
     <div class="form-group">
       <label class="form-label">Name deiner AG</label>
       <input type="text" id="halbag-name-input" class="form-control"
              placeholder="z. B. Fußball-AG, Theater-AG, Robotik-AG …"
              onkeydown="if(event.key==='Enter')saveHalbjahresAG()" />
+    </div>
+    <div class="form-group">
+      <label class="form-label">An welchem Wochentag findet die AG statt?</label>
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:4px;" id="halbag-tag-auswahl">
+        <label style="display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 4px;border:1.5px solid var(--gray-border);border-radius:8px;cursor:pointer;font-size:12px;">
+          <input type="radio" name="halbag-tag" value="1" style="accent-color:#EA580C;" /> Mo
+        </label>
+        <label style="display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 4px;border:1.5px solid var(--gray-border);border-radius:8px;cursor:pointer;font-size:12px;">
+          <input type="radio" name="halbag-tag" value="2" style="accent-color:#EA580C;" /> Di
+        </label>
+        <label style="display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 4px;border:1.5px solid var(--gray-border);border-radius:8px;cursor:pointer;font-size:12px;">
+          <input type="radio" name="halbag-tag" value="3" style="accent-color:#EA580C;" /> Mi
+        </label>
+        <label style="display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 4px;border:1.5px solid var(--gray-border);border-radius:8px;cursor:pointer;font-size:12px;">
+          <input type="radio" name="halbag-tag" value="4" style="accent-color:#EA580C;" /> Do
+        </label>
+        <label style="display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 4px;border:1.5px solid var(--gray-border);border-radius:8px;cursor:pointer;font-size:12px;">
+          <input type="radio" name="halbag-tag" value="5" style="accent-color:#EA580C;" /> Fr
+        </label>
+      </div>
     </div>
     <div id="halbag-aktuell" class="text-sm" style="color:#085041;display:none;margin-bottom:.5rem;"></div>
     <div id="halbag-error" class="text-sm" style="color:#A32D2D;display:none;margin-bottom:.5rem;"></div>
