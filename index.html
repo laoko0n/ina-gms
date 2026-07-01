@@ -524,8 +524,8 @@
 
     <div id="l-tab-spielausleihe" class="hidden">
       <div class="card">
-        <div class="card-title"><i class="ti ti-puzzle"></i> Spielausleihe – Wochenübersicht</div>
-        <p class="text-sm text-soft" style="margin-bottom:.75rem;">Welcher Schüler hat wann Spielausleihe? (Mo–Do, 7.+8. Std.)</p>
+        <div class="card-title"><i class="ti ti-puzzle"></i> Ausleihe – Wochenübersicht</div>
+        <p class="text-sm text-soft" style="margin-bottom:.75rem;">Wer hat sich diese Woche für Spiel- oder Sportgeräteausleihe eingetragen?</p>
         <div id="l-spielausleihe-woche"></div>
         <div id="l-spielausleihe-inhalt"><p class="text-sm text-soft">Lade…</p></div>
       </div>
@@ -543,7 +543,7 @@
   </div><!-- close page-wide -->
   <nav class="bottom-nav" style="flex-wrap:nowrap;overflow-x:auto;justify-content:flex-start;">
     <button class="nav-btn active" id="l-nav-uebersicht" onclick="lShowTab('uebersicht')"><i class="ti ti-list-check"></i>Übersicht</button>
-    <button class="nav-btn" id="l-nav-angebot" onclick="lShowTab('angebot')"><i class="ti ti-clipboard-check"></i>Angebot</button>
+    <button class="nav-btn" id="l-nav-angebot" onclick="lShowTab('angebot')"><i class="ti ti-clipboard-check"></i>INA-Angebot</button>
     <button class="nav-btn" id="l-nav-spielausleihe" onclick="lShowTab('spielausleihe')"><i class="ti ti-puzzle"></i>Ausleihe</button>
     <button class="nav-btn" id="l-nav-stats" onclick="lShowTab('stats')"><i class="ti ti-chart-bar"></i>Statistik</button>
     <button class="nav-btn" id="l-nav-schueler" onclick="lShowTab('schueler')"><i class="ti ti-users"></i>Schüler</button>
@@ -1295,6 +1295,9 @@ function loadPlanFuerTag(tag){
 
   if(istFreitag)return; // Nicht weiter laden – kein Plan nötig
 
+  // Dynamische Chips bei jedem Tagwechsel neu aufbauen (sonst bleibt alter Zustand)
+  renderDynamischeChips();
+
   withFirebase(async({db,doc,getDoc,getDocFromServer})=>{
     try{
       // Immer frische Daten vom Server holen – kein Cache
@@ -1339,14 +1342,13 @@ function loadPlanFuerTag(tag){
                 if(agHeute && (zs===3||zs===4)) return;
                 const val=d['zs'+zs];
                 if(val && val.name){
-                  // Fehlende Felder mit Defaults auffüllen
                   gewahlt[zs]={
-                    name: val.name,
-                    sel:  val.sel  || 'sel-default',
-                    icon: val.icon || '📌',
-                    bg:   val.bg   || '#F5F4F1',
-                    color:val.color|| '#1a1a1a',
-                    fachId: val.fachId||null
+                    name:   val.name,
+                    sel:    val.sel   || 'sel-default',
+                    icon:   val.icon  || '📌',
+                    bg:     val.bg    || '#F5F4F1',
+                    color:  val.color || '#1a1a1a',
+                    fachId: val.fachId|| null  // aus Firestore wiederherstellen
                   };
                 }
               });
@@ -3045,22 +3047,21 @@ function loadAnwesenheitFuerTag(tag){
 function setAnwesenheit(uid,tag,status){
   if(!window._anwCache)window._anwCache={};
   window._anwCache[uid]=status;
-  // UI aktualisieren
+  // UI-Buttons aktualisieren
   const row=document.getElementById('anw-row-'+uid);
   if(!row)return;
-  const btns=row.querySelectorAll('.anw-btn');
-  btns.forEach(b=>{
+  row.querySelectorAll('.anw-btn').forEach(b=>{
     const bs=b.getAttribute('data-status');
     const active=bs===status;
-    if(bs==='anwesend')
-      b.style.cssText=b.style.cssText.replace(/background:[^;]+;border-color:[^;]+;color:[^;]+/,
-        active?'background:#E1F5EE;border-color:#1D9E75;color:#085041':'background:#fff;border-color:var(--gray-border);color:var(--text-soft)');
-    else if(bs==='unentschuldigt')
-      b.style.cssText=b.style.cssText.replace(/background:[^;]+;border-color:[^;]+;color:[^;]+/,
-        active?'background:#FCEBEB;border-color:#A32D2D;color:#A32D2D':'background:#fff;border-color:var(--gray-border);color:var(--text-soft)');
-    else
-      b.style.cssText=b.style.cssText.replace(/background:[^;]+;border-color:[^;]+;color:[^;]+/,
-        active?'background:#FFF7ED;border-color:#EA580C;color:#7C2D12':'background:#fff;border-color:var(--gray-border);color:var(--text-soft)');
+    if(bs==='anwesend'){
+      b.style.background=active?'#E1F5EE':'#fff';
+      b.style.borderColor=active?'#1D9E75':'var(--gray-border)';
+      b.style.color=active?'#085041':'var(--text-soft)';
+    } else {
+      b.style.background=active?'#FCEBEB':'#fff';
+      b.style.borderColor=active?'#A32D2D':'var(--gray-border)';
+      b.style.color=active?'#A32D2D':'var(--text-soft)';
+    }
   });
 }
 
@@ -3180,41 +3181,32 @@ function ladeDynamischeFaecher(){
 
 function renderDynamischeChips(){
   const gruppe=currentUserData?.gruppe||'durchstarter';
-  // Alte dynamische Chips entfernen
+  // ALLE alten dynamischen Chips entfernen (erzwingt sauberen Neuaufbau ohne alten Zustand)
   document.querySelectorAll('.fach-chip-dyn').forEach(c=>c.remove());
 
   dynamischeFaecher.forEach(f=>{
-    // Gruppe prüfen
     if(f.gruppen && !f.gruppen.includes(gruppe)) return;
 
-    const zsNummern=f.zeitschiene.split(',').map(Number);
+    const zsNummern=(f.zeitschiene||'1').split(',').map(Number);
     const isDoppel=f.isDoppelstunde && zsNummern.length>1;
     const istEinzeln=f.isEinzelnWaehlbar && zsNummern.length>1;
 
     zsNummern.forEach((zs,idx)=>{
-      // Bei echter Doppelstunde nur den ersten ZS-Chip anzeigen (zweiter wird automatisch mitgesetzt)
-      // Bei "einzeln wählbar" JEDEN Chip separat anzeigen
       if(isDoppel && idx>0) return;
 
       const container=document.getElementById('chips-'+zs);
       if(!container) return;
 
-      // Prüfen ob Chip bereits existiert (pro Zeitschiene eindeutig, da bei "einzeln" mehrere Chips entstehen)
       const chipKey=f.id+'-'+zs;
-      if(container.querySelector(`[data-fach-id="${chipKey}"]`)) return;
-
       const btn=document.createElement('button');
       btn.className='fach-chip fach-chip-dyn';
       btn.setAttribute('data-fach-id',chipKey);
       btn.setAttribute('data-fach-bg',f.bg||'#FAECE7');
       btn.setAttribute('data-fach-color',f.color||'#4A1B0C');
-      // Im Grundzustand genau wie statische Chips aussehen (weiß, grauer Rand)
-      // Die Fachfarbe erscheint nur wenn der Chip ausgewählt wird (via selected-Klasse + JS)
+      // Grundzustand: wie statische Chips (weiß, grauer Rand) – KEIN Inline-Style
       btn.textContent=(f.icon||'📌')+' '+f.name+(isDoppel?' 🔁':'');
       btn.onclick=()=>{
         waehlen(zs, f.name, f.sel||'sel-custom', f.icon||'📌', f.bg||'#FAECE7', f.color||'#4A1B0C', f.id);
-        // Bei echter Doppelstunde: zweite Zeitschiene automatisch mitsetzen
-        // Bei "einzeln wählbar": NICHTS automatisch setzen, jede Stunde bleibt unabhängig
         if(isDoppel){
           const zsZwei=zsNummern[1];
           gewahlt[zsZwei]={name:f.name,sel:f.sel||'sel-custom',icon:f.icon||'📌',bg:f.bg||'#FAECE7',color:f.color||'#4A1B0C',fachId:f.id};
@@ -3419,9 +3411,8 @@ function loadAngebotMitAnwesenheit(tag,meineAngebote){
         teilnehmer.forEach((s,idx)=>{
           const plan=planMap[s.uid]||{};
           const zsNr=[1,2,3,4].find(zs=>plan['zs'+zs]&&plan['zs'+zs].name===angebot);
-          const status=anwData[s.uid]||'anwesend';
-          const btnBase='padding:5px 11px;border-radius:99px;border:1.5px solid;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;';
-          const st=(s,activeStyle,inactiveStyle)=>status===s?activeStyle:inactiveStyle;
+          const status=anwData[s.uid]||null; // null = noch nicht markiert
+          const btnBase='padding:6px 14px;border-radius:99px;border:1.5px solid;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;';
 
           html+=`<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--gray-bg);border-radius:10px;border:0.5px solid var(--gray-border);flex-wrap:wrap;" id="anw-row-${s.uid}">
             <span style="width:22px;height:22px;border-radius:50%;background:var(--orange-light);color:var(--orange-dark);font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0;">${idx+1}</span>
@@ -3429,22 +3420,14 @@ function loadAngebotMitAnwesenheit(tag,meineAngebote){
               <div style="font-size:13px;font-weight:600;">${s.vorname} ${s.nachname}</div>
               <div style="font-size:11px;color:var(--text-soft);">${s.klasse}${zsNr?' · '+zsLabels[zsNr]:''}</div>
             </div>
-            <div style="display:flex;gap:5px;flex-wrap:wrap;">
+            <div style="display:flex;gap:6px;">
               <button onclick="setAnwesenheit('${s.uid}','${tag}','anwesend')" class="anw-btn" data-uid="${s.uid}" data-status="anwesend"
-                style="${btnBase}${st('anwesend','background:#E1F5EE;border-color:#1D9E75;color:#085041;','background:#fff;border-color:var(--gray-border);color:var(--text-soft);')}">
+                style="${btnBase}${status==='anwesend'?'background:#E1F5EE;border-color:#1D9E75;color:#085041;':'background:#fff;border-color:var(--gray-border);color:var(--text-soft);'}">
                 ✓ Anwesend
               </button>
-              <button onclick="setAnwesenheit('${s.uid}','${tag}','unentschuldigt')" class="anw-btn" data-uid="${s.uid}" data-status="unentschuldigt"
-                style="${btnBase}${st('unentschuldigt','background:#FCEBEB;border-color:#A32D2D;color:#A32D2D;','background:#fff;border-color:var(--gray-border);color:var(--text-soft);')}">
-                ✗ Fehlt
-              </button>
-              <button onclick="setAnwesenheit('${s.uid}','${tag}','entschuldigt_stunde')" class="anw-btn" data-uid="${s.uid}" data-status="entschuldigt_stunde"
-                style="${btnBase}${st('entschuldigt_stunde','background:#FFF7ED;border-color:#EA580C;color:#7C2D12;','background:#fff;border-color:var(--gray-border);color:var(--text-soft);')}">
-                E-Std.
-              </button>
-              <button onclick="setAnwesenheit('${s.uid}','${tag}','entschuldigt_tag')" class="anw-btn" data-uid="${s.uid}" data-status="entschuldigt_tag"
-                style="${btnBase}${st('entschuldigt_tag','background:#FFF7ED;border-color:#EA580C;color:#7C2D12;','background:#fff;border-color:var(--gray-border);color:var(--text-soft);')}">
-                E-Tag
+              <button onclick="setAnwesenheit('${s.uid}','${tag}','abwesend')" class="anw-btn" data-uid="${s.uid}" data-status="abwesend"
+                style="${btnBase}${status==='abwesend'?'background:#FCEBEB;border-color:#A32D2D;color:#A32D2D;':'background:#fff;border-color:var(--gray-border);color:var(--text-soft);'}">
+                ✗ Nicht anwesend
               </button>
             </div>
           </div>`;
@@ -3783,28 +3766,35 @@ function loadSpielausleiheUebersicht(startMontag){
     userSnaps.forEach(s=>{if(s.data().role==='schueler')alleSchueler.push({uid:s.id,...s.data()});});
     alleSchueler.sort((a,b)=>(a.klasse+a.nachname).localeCompare(b.klasse+b.nachname));
 
-    const planSnaps=await getDocs(collection(db,'plans'));
+    const planSnaps=await getDocsFromServer(collection(db,'plans'));
     const allePlans=[];planSnaps.forEach(p=>allePlans.push(p.data()));
 
-    // Mo–Do dieser Woche (kein Fr für Spielausleihe)
+    // Mo–Fr dieser Woche (Ausleihe kann jeden Tag stattfinden)
     const tage=[];
-    const tagNamen=['Mo','Di','Mi','Do'];
-    for(let i=0;i<4;i++){
+    const tagNamen=['Mo','Di','Mi','Do','Fr'];
+    for(let i=0;i<5;i++){
       const d=new Date(mo);d.setDate(mo.getDate()+i);
       const key=isoDate(d);
       const ausserhalbSchuljahr=(sjBeginn&&key<sjBeginn)||(sjEnde&&key>sjEnde);
-      tage.push({key,label:tagNamen[i]+' '+d.getDate()+'.'+String(d.getMonth()+1).padStart(2,'0')+'.',ausserhalbSchuljahr});
+      // Freitags kein Nachmittagsprogramm
+      const istFreitag=d.getDay()===5;
+      tage.push({key,label:tagNamen[i]+' '+d.getDate()+'.'+String(d.getMonth()+1).padStart(2,'0')+'.',ausserhalbSchuljahr,istFreitag});
     }
 
-    let html='<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;">';
+    // Beide Ausleihe-Kategorien
+    const kategorien=[
+      {name:'Spielausleihe',    icon:'🎲', bg:'#F3E8FF', border:'#DDD6FE', color:'#4C1D95', numColor:'#6D28D9'},
+      {name:'Sportgeräteausleihe', icon:'⚽', bg:'#E0F2FE', border:'#BAE6FD', color:'#0C4A6E', numColor:'#0369A1'},
+    ];
 
-    tage.forEach(({key,label,ausserhalbSchuljahr})=>{
-      if(ausserhalbSchuljahr){
-        html+=`<div style="border:0.5px solid var(--gray-border);border-radius:10px;overflow:hidden;opacity:.4;">
-          <div style="background:var(--gray-bg);padding:8px 12px;">
-            <div style="font-weight:600;font-size:13px;color:var(--text-lighter);">🎲 Spielausleihe · ${label}</div>
-            <div style="font-size:11px;color:var(--text-lighter);margin-top:2px;">Außerhalb des Schuljahres</div>
-          </div>
+    let html='';
+
+    tage.forEach(({key,label,ausserhalbSchuljahr,istFreitag})=>{
+      if(ausserhalbSchuljahr||istFreitag){
+        const grund=istFreitag?'Schulschluss 12:55 Uhr':'Außerhalb des Schuljahres';
+        html+=`<div style="border:0.5px solid var(--gray-border);border-radius:10px;padding:10px 12px;opacity:.4;margin-bottom:8px;">
+          <div style="font-weight:600;font-size:13px;color:var(--text-lighter);">${label}</div>
+          <div style="font-size:11px;color:var(--text-lighter);">${grund}</div>
         </div>`;
         return;
       }
@@ -3812,41 +3802,49 @@ function loadSpielausleiheUebersicht(startMontag){
       const planMap={};
       allePlans.filter(p=>p.tag===key).forEach(p=>planMap[p.uid]=p);
 
-      const spieler=alleSchueler.filter(s=>{
-        const plan=planMap[s.uid];
-        if(!plan)return false;
-        return [1,2].some(zs=>plan['zs'+zs]&&plan['zs'+zs].name==='Spielausleihe');
+      html+=`<div style="border:0.5px solid var(--gray-border);border-radius:10px;overflow:hidden;margin-bottom:12px;">
+        <div style="background:var(--gray-bg);padding:8px 14px;border-bottom:0.5px solid var(--gray-border);">
+          <div style="font-weight:700;font-size:14px;color:var(--text);">${label}</div>
+        </div>
+        <div style="padding:10px 12px;display:grid;grid-template-columns:1fr 1fr;gap:10px;">`;
+
+      kategorien.forEach(kat=>{
+        const teilnehmer=alleSchueler.filter(s=>{
+          const plan=planMap[s.uid];
+          if(!plan)return false;
+          return [1,2,3,4].some(zs=>plan['zs'+zs]&&plan['zs'+zs].name===kat.name);
+        });
+
+        html+=`<div style="border:1px solid ${kat.border};border-radius:8px;overflow:hidden;">
+          <div style="background:${kat.bg};padding:6px 10px;border-bottom:1px solid ${kat.border};">
+            <div style="font-weight:600;font-size:12px;color:${kat.color};">${kat.icon} ${kat.name}</div>
+            <div style="font-size:11px;color:${kat.numColor};">${teilnehmer.length} Schüler</div>
+          </div>
+          <div style="padding:6px 10px;">`;
+
+        if(!teilnehmer.length){
+          html+=`<p style="font-size:11px;color:var(--text-lighter);font-style:italic;margin:4px 0;">Keine Anmeldungen.</p>`;
+        } else {
+          teilnehmer.forEach((s,idx)=>{
+            const plan=planMap[s.uid]||{};
+            const stunden=[1,2,3,4].filter(zs=>plan['zs'+zs]&&plan['zs'+zs].name===kat.name)
+              .map(zs=>({1:'7.',2:'8.',3:'9.',4:'10.'}[zs]+' Std.'));
+            html+=`<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:0.5px solid var(--gray-border);">
+              <span style="font-size:10px;font-weight:700;color:${kat.numColor};width:16px;flex-shrink:0;">${idx+1}</span>
+              <div style="flex:1;min-width:0;">
+                <div style="font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${s.vorname} ${s.nachname}</div>
+                <div style="font-size:10px;color:var(--text-soft);">${s.klasse} · ${stunden.join('+')}</div>
+              </div>
+            </div>`;
+          });
+        }
+        html+='</div></div>';
       });
 
-      html+=`<div style="border:0.5px solid var(--gray-border);border-radius:10px;overflow:hidden;">
-        <div style="background:#F3E8FF;padding:8px 12px;border-bottom:0.5px solid #DDD6FE;">
-          <div style="font-weight:600;font-size:13px;color:#4C1D95;">🎲 Spielausleihe · ${label}</div>
-          <div style="font-size:11px;color:#6D28D9;margin-top:2px;">${spieler.length} Schüler</div>
-        </div>
-        <div style="padding:8px 12px;">`;
-
-      if(!spieler.length){
-        html+='<p style="font-size:12px;color:var(--text-lighter);font-style:italic;">Noch keine Anmeldungen.</p>';
-      } else {
-        spieler.forEach((s,idx)=>{
-          const plan=planMap[s.uid]||{};
-          const stunden=[];
-          if(plan.zs1&&plan.zs1.name==='Spielausleihe')stunden.push('7. Std.');
-          if(plan.zs2&&plan.zs2.name==='Spielausleihe')stunden.push('8. Std.');
-          html+=`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:0.5px solid var(--gray-border);">
-            <span style="font-size:11px;font-weight:600;color:#6D28D9;width:18px;">${idx+1}</span>
-            <div style="flex:1;">
-              <div style="font-size:13px;font-weight:500;">${s.vorname} ${s.nachname}</div>
-              <div style="font-size:11px;color:var(--text-soft);">${s.klasse} · ${stunden.join(' + ')}</div>
-            </div>
-          </div>`;
-        });
-      }
       html+='</div></div>';
     });
 
-    html+='</div>';
-    cont.innerHTML=html;
+    cont.innerHTML=html||'<p class="text-sm text-soft">Keine Daten.</p>';
   });
 }
 
