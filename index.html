@@ -1634,13 +1634,19 @@ function savePlan(){
         gruppeSnapshot: currentUserData.gruppe||'durchstarter'
       };
       [1,2,3,4].forEach(zs=>{data['zs'+zs]=gewahlt[zs]||null;});
-      await setDoc(doc(db,'plans',currentUser.uid+'_'+activeTag),data);
+      const docId=currentUser.uid+'_'+activeTag;
+      console.log('Speichere Plan:', docId, data);
+      await setDoc(doc(db,'plans',docId),data);
       // Klare Bestätigung mit Datum
       const d=new Date(activeTag);
       toast('✅ Plan für '+WOCHENTAGE[d.getDay()]+' '+d.getDate()+'.'+(d.getMonth()+1)+'. gespeichert!');
     }catch(err){
       console.error('Fehler beim Speichern:',err);
-      toast('❌ Speichern fehlgeschlagen: '+(err.message||err.code||'Unbekannter Fehler'));
+      // Zeige vollständige Fehlermeldung rot und lange sichtbar
+      const msg=err.code==='permission-denied'
+        ? '❌ Keine Berechtigung! Firestore-Regel blockiert. Bitte Schulleitung informieren.'
+        : '❌ Speichern fehlgeschlagen: '+(err.message||err.code||'Unbekannter Fehler');
+      toast(msg, true);
     }
   });
 }
@@ -2122,7 +2128,7 @@ function saveSchueler(){
       if(e.code==='auth/email-already-in-use') showErr(err,'Diese E-Mail ist bereits registriert.');
       else if(e.code==='auth/invalid-email')   showErr(err,'Ungueltige E-Mail-Adresse.');
       else if(e.code==='auth/weak-password')   showErr(err,'Passwort zu schwach - mindestens 6 Zeichen.');
-      else showErr(err,'Fehler: '+e.message);
+      else showErr(err,'Fehler: '+e.message);toast('❌ Fach konnte nicht gespeichert werden: '+e.message, true);
     }finally{
       if(saveBtn){saveBtn.disabled=false;saveBtn.textContent='Speichern';}
     }
@@ -2231,7 +2237,7 @@ function changePassword(currentId,newId,confirmId,errId){
       [currentId,newId,confirmId].forEach(id=>document.getElementById(id).value='');
     }catch(e){
       if(e.code==='auth/wrong-password'||e.code==='auth/invalid-credential')showErr(err,'Aktuelles Passwort falsch.');
-      else showErr(err,'Fehler: '+e.message);
+      else showErr(err,'Fehler: '+e.message);toast('❌ Fach konnte nicht gespeichert werden: '+e.message, true);
     }
   });
 }
@@ -2330,7 +2336,7 @@ function saveEinstellungen(){
       await setDoc(doc(db,'config','schuljahr'),{schulname,sjBeginn,sjEnde,hj2Beginn,bundesland,ferien:schuljahrConfig.ferien||[],updatedAt:new Date().toISOString()});
       ok.textContent='✓ Einstellungen gespeichert!';ok.style.display='block';
       setTimeout(()=>ok.style.display='none',3000);
-    }catch(e){showErr(err,'Fehler: '+e.message);}
+    }catch(e){showErr(err,'Fehler: '+e.message);toast('❌ Fach konnte nicht gespeichert werden: '+e.message, true);}
   });
 }
 
@@ -2797,7 +2803,7 @@ function saveFach(){
       loadFaecherListe();
       // Dynamische Fächer neu laden
       ladeDynamischeFaecher();
-    }catch(e){showErr(err,'Fehler: '+e.message);}
+    }catch(e){showErr(err,'Fehler: '+e.message);toast('❌ Fach konnte nicht gespeichert werden: '+e.message, true);}
   });
 }
 
@@ -3670,7 +3676,14 @@ function closeNicoInfo(e){
   }
 }
 
-function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2800);}
+function toast(msg,isError){
+  const t=document.getElementById('toast');
+  t.textContent=msg;
+  t.classList.add('show');
+  if(isError){t.style.background='#A32D2D';}else{t.style.background='';}
+  clearTimeout(window._toastTimer);
+  window._toastTimer=setTimeout(()=>{t.classList.remove('show');t.style.background='';},isError?6000:2800);
+}
 
 // ═══ PASSWORT ZURÜCKSETZEN (Schüler & Lehrer) ═══
 let pwResetUid=null;
@@ -3720,7 +3733,7 @@ function savePwReset(){
       toast('✓ Passwort zurückgesetzt. '+label+' muss beim nächsten Login ein neues Passwort setzen.');
       closePwResetModal();
     }catch(e){
-      showErr(err,'Fehler: '+e.message);
+      showErr(err,'Fehler: '+e.message);toast('❌ Fach konnte nicht gespeichert werden: '+e.message, true);
     }finally{
       btn.disabled=false; btn.textContent='Passwort setzen';
     }
