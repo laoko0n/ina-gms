@@ -1633,16 +1633,28 @@ function savePlan(){
         tag:activeTag,
         gruppeSnapshot: currentUserData.gruppe||'durchstarter'
       };
-      [1,2,3,4].forEach(zs=>{data['zs'+zs]=gewahlt[zs]||null;});
+      [1,2,3,4].forEach(zs=>{
+        const g=gewahlt[zs];
+        if(g){
+          // undefined-Felder entfernen – Firestore akzeptiert nur null, nicht undefined
+          data['zs'+zs]={
+            name:  g.name  || null,
+            sel:   g.sel   || null,
+            icon:  g.icon  || null,
+            bg:    g.bg    || null,
+            color: g.color || null,
+            fachId:g.fachId!==undefined ? g.fachId : null
+          };
+        } else {
+          data['zs'+zs]=null;
+        }
+      });
       const docId=currentUser.uid+'_'+activeTag;
-      console.log('Speichere Plan:', docId, data);
       await setDoc(doc(db,'plans',docId),data);
-      // Klare Bestätigung mit Datum
       const d=new Date(activeTag);
       toast('✅ Plan für '+WOCHENTAGE[d.getDay()]+' '+d.getDate()+'.'+(d.getMonth()+1)+'. gespeichert!');
     }catch(err){
       console.error('Fehler beim Speichern:',err);
-      // Zeige vollständige Fehlermeldung rot und lange sichtbar
       const msg=err.code==='permission-denied'
         ? '❌ Keine Berechtigung! Firestore-Regel blockiert. Bitte Schulleitung informieren.'
         : '❌ Speichern fehlgeschlagen: '+(err.message||err.code||'Unbekannter Fehler');
@@ -2707,30 +2719,43 @@ function openFachModal(id){
   document.getElementById('fm-error').style.display='none';
   if(id){
     document.getElementById('modal-fach-title').textContent='Fach bearbeiten';
+    // Erst laden, dann Modal öffnen – verhindert dass alte Daten im Formular stehen
     withFirebase(async({db,doc,getDoc})=>{
       const snap=await getDoc(doc(db,'faecher',id));
-      if(snap.exists()){
-        const d=snap.data();
-        document.getElementById('fm-name').value=d.name||'';
-        document.getElementById('fm-icon').value=d.icon||'';
-        document.getElementById('fm-max').value=d.maxTeilnehmer||'';
-        document.getElementById('fm-beschreibung').value=d.beschreibung||'';
-        if(document.getElementById('fm-aktiv'))
-          document.getElementById('fm-aktiv').checked=d.aktiv!==false;
-        // Zeitschiene
-        const zsRohWert=d.isEinzelnWaehlbar?('einzeln:'+(d.zeitschiene||'')):(d.zeitschiene||'');
-        const zsR=document.querySelector('input[name="fm-zs"][value="'+zsRohWert+'"]');
-        if(zsR)zsR.checked=true;
-        // Farbe
-        const fVal=(d.bg||'')+'|'+(d.color||'');
-        const fR=document.querySelector('input[name="fm-farbe"][value="'+fVal+'"]');
-        if(fR)fR.checked=true;
-        // Gruppen
-        ['fruehstarter','starter','durchstarter'].forEach(g=>{
-          const cb=document.getElementById('fm-gruppe-'+g);
-          if(cb)cb.checked=(d.gruppen||[]).includes(g);
-        });
+      if(!snap.exists()){toast('❌ Fach nicht gefunden.',true);return;}
+      const d=snap.data();
+      document.getElementById('fm-name').value=d.name||'';
+      document.getElementById('fm-icon').value=d.icon||'';
+      document.getElementById('fm-max').value=d.maxTeilnehmer||'';
+      document.getElementById('fm-beschreibung').value=d.beschreibung||'';
+      if(document.getElementById('fm-aktiv'))
+        document.getElementById('fm-aktiv').checked=d.aktiv!==false;
+      // Zeitschiene – alle erst abwählen, dann richtige setzen
+      document.querySelectorAll('input[name="fm-zs"]').forEach(r=>r.checked=false);
+      const zsRohWert=d.isEinzelnWaehlbar?('einzeln:'+(d.zeitschiene||'')):(d.zeitschiene||'');
+      const zsR=document.querySelector('input[name="fm-zs"][value="'+zsRohWert+'"]');
+      if(zsR) zsR.checked=true;
+      else {
+        // Fallback: erste Option wählen damit Validierung nicht bricht
+        const firstZs=document.querySelector('input[name="fm-zs"]');
+        if(firstZs)firstZs.checked=true;
       }
+      // Farbe – alle erst abwählen, dann richtige setzen
+      document.querySelectorAll('input[name="fm-farbe"]').forEach(r=>r.checked=false);
+      const fVal=(d.bg||'')+'|'+(d.color||'');
+      const fR=document.querySelector('input[name="fm-farbe"][value="'+fVal+'"]');
+      if(fR) fR.checked=true;
+      else {
+        const firstF=document.querySelector('input[name="fm-farbe"]');
+        if(firstF)firstF.checked=true;
+      }
+      // Gruppen
+      ['fruehstarter','starter','durchstarter'].forEach(g=>{
+        const cb=document.getElementById('fm-gruppe-'+g);
+        if(cb)cb.checked=(d.gruppen||[]).includes(g);
+      });
+      // Jetzt erst Modal öffnen – alle Felder sind befüllt
+      document.getElementById('modal-fach').classList.remove('hidden');
     });
   } else {
     document.getElementById('modal-fach-title').textContent='Neues Fach anlegen';
@@ -2746,8 +2771,8 @@ function openFachModal(id){
     if(firstZs)firstZs.checked=true;
     const firstF=document.querySelector('input[name="fm-farbe"]');
     if(firstF)firstF.checked=true;
+    document.getElementById('modal-fach').classList.remove('hidden');
   }
-  document.getElementById('modal-fach').classList.remove('hidden');
 }
 function closeFachModal(){document.getElementById('modal-fach').classList.add('hidden');editFachId=null;}
 
@@ -2763,9 +2788,9 @@ function saveFach(){
 
   // Zeitschiene auslesen
   const zsRadio=document.querySelector('input[name="fm-zs"]:checked');
-  if(!name){showErr(err,'Bitte einen Namen eingeben.');return;}
-  if(!zsRadio){showErr(err,'Bitte eine Zeitschiene auswählen.');return;}
-  if(gruppen.length===0){showErr(err,'Bitte mindestens eine Schülergruppe auswählen.');return;}
+  if(!name){showErr(err,'Bitte einen Namen eingeben.');toast('⚠️ Bitte einen Namen eingeben.',true);return;}
+  if(!zsRadio){showErr(err,'Bitte eine Zeitschiene auswählen.');toast('⚠️ Bitte eine Zeitschiene auswählen – die aktuelle Auswahl wurde nicht erkannt.',true);return;}
+  if(gruppen.length===0){showErr(err,'Bitte mindestens eine Schülergruppe auswählen.');toast('⚠️ Bitte mindestens eine Gruppe auswählen.',true);return;}
 
   const zsRoh=zsRadio.value; // z.B. "1", "1,2", "einzeln:1,2"
   const istEinzelnWaehlbar=zsRoh.startsWith('einzeln:');
