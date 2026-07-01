@@ -524,7 +524,7 @@
 
     <div id="l-tab-spielausleihe" class="hidden">
       <div class="card">
-        <div class="card-title"><i class="ti ti-puzzle"></i> Ausleihe – Wochenübersicht</div>
+        <div class="card-title"><i class="ti ti-hand-stop"></i> Ausleihe – Wochenübersicht</div>
         <p class="text-sm text-soft" style="margin-bottom:.75rem;">Wer hat sich diese Woche für Spiel- oder Sportgeräteausleihe eingetragen?</p>
         <div id="l-spielausleihe-woche"></div>
         <div id="l-spielausleihe-inhalt"><p class="text-sm text-soft">Lade…</p></div>
@@ -544,7 +544,7 @@
   <nav class="bottom-nav" style="flex-wrap:nowrap;overflow-x:auto;justify-content:flex-start;">
     <button class="nav-btn active" id="l-nav-uebersicht" onclick="lShowTab('uebersicht')"><i class="ti ti-list-check"></i>Übersicht</button>
     <button class="nav-btn" id="l-nav-angebot" onclick="lShowTab('angebot')"><i class="ti ti-clipboard-check"></i>INA-Angebot</button>
-    <button class="nav-btn" id="l-nav-spielausleihe" onclick="lShowTab('spielausleihe')"><i class="ti ti-puzzle"></i>Ausleihe</button>
+    <button class="nav-btn" id="l-nav-spielausleihe" onclick="lShowTab('spielausleihe')"><i class="ti ti-hand-stop"></i>Ausleihe</button>
     <button class="nav-btn" id="l-nav-stats" onclick="lShowTab('stats')"><i class="ti ti-chart-bar"></i>Statistik</button>
     <button class="nav-btn" id="l-nav-schueler" onclick="lShowTab('schueler')"><i class="ti ti-users"></i>Schüler</button>
     <button class="nav-btn" id="l-nav-fehlzeiten" onclick="lShowTab('fehlzeiten')"><i class="ti ti-clipboard-x"></i>Fehlzeiten</button>
@@ -1294,9 +1294,6 @@ function loadPlanFuerTag(tag){
   }
 
   if(istFreitag)return; // Nicht weiter laden – kein Plan nötig
-
-  // Dynamische Chips bei jedem Tagwechsel neu aufbauen (sonst bleibt alter Zustand)
-  renderDynamischeChips();
 
   withFirebase(async({db,doc,getDoc,getDocFromServer})=>{
     try{
@@ -3087,11 +3084,9 @@ async function loadFehlzeitenUebersicht(rolle){
   cont.innerHTML='<p class="text-sm text-soft">Lade…</p>';
 
   withFirebase(async({db,getDocs,collection})=>{
-    // Alle Anwesenheits-Dokumente laden
     const anwSnaps=await getDocs(collection(db,'anwesenheit'));
     const alleAnw=[];anwSnaps.forEach(s=>alleAnw.push(s.data()));
 
-    // Schüler bestimmen
     let schueler=[];
     if(rolle==='s'){
       schueler=[{uid:currentUser.uid,...currentUserData}];
@@ -3105,7 +3100,6 @@ async function loadFehlzeitenUebersicht(rolle){
     }
     schueler.sort((a,b)=>(a.klasse+a.nachname).localeCompare(b.klasse+b.nachname));
 
-    // Halbjahr-Filter
     const hj2Beginn=schuljahrConfig.hj2Beginn||null;
     function filterZeitraum(tag){
       if(zeitraum==='all')return true;
@@ -3115,45 +3109,36 @@ async function loadFehlzeitenUebersicht(rolle){
       return true;
     }
 
-    // Pro Schüler auswerten
-    let html='<div style="display:flex;flex-direction:column;gap:8px;">';
+    // Pro Schüler: jedes "abwesend" = 1 Std. (45 min)
+    let html='<div style="display:flex;flex-direction:column;gap:6px;">';
+    let irgendwer=false;
+
     schueler.forEach(s=>{
-      let unentsch=0, entschStd=0, entschTag=0;
+      let stunden=0;
       alleAnw.forEach(a=>{
         if(!filterZeitraum(a.tag))return;
         const status=(a.schueler||{})[s.uid];
-        if(status==='unentschuldigt')     unentsch++;
-        else if(status==='entschuldigt_stunde') entschStd++;
-        else if(status==='entschuldigt_tag')    entschTag++;
+        if(status==='abwesend'||status==='unentschuldigt'||
+           status==='entschuldigt_stunde'||status==='entschuldigt_tag') stunden++;
       });
 
-      const hatFehlzeiten=unentsch>0||entschStd>0||entschTag>0;
-      const bg=unentsch>3?'#FCEBEB':hatFehlzeiten?'#FFF7ED':'var(--gray-bg)';
-      const border=unentsch>3?'#A32D2D':hatFehlzeiten?'#EA580C':'var(--gray-border)';
+      if(stunden===0)return; // Nur Schüler mit Fehlzeiten anzeigen
+      irgendwer=true;
 
-      html+=`<div style="border:0.5px solid ${border};border-radius:10px;overflow:hidden;background:${bg};">
-        <div style="padding:10px 14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-          <div style="flex:1;">
-            <div style="font-size:14px;font-weight:600;">${s.vorname} ${s.nachname}</div>
-            <div style="font-size:11px;color:var(--text-soft);">${s.klasse||''}</div>
-          </div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <div style="text-align:center;padding:4px 10px;background:${unentsch>0?'#FCEBEB':'#fff'};border-radius:8px;border:0.5px solid ${unentsch>0?'#A32D2D':'var(--gray-border)'};">
-              <div style="font-size:18px;font-weight:700;color:${unentsch>0?'#A32D2D':'var(--text-lighter)'};">${unentsch}</div>
-              <div style="font-size:10px;color:var(--text-soft);">Unentsch.</div>
-            </div>
-            <div style="text-align:center;padding:4px 10px;background:${entschStd>0?'#FFF7ED':'#fff'};border-radius:8px;border:0.5px solid ${entschStd>0?'#EA580C':'var(--gray-border)'};">
-              <div style="font-size:18px;font-weight:700;color:${entschStd>0?'#7C2D12':'var(--text-lighter)'};">${entschStd}</div>
-              <div style="font-size:10px;color:var(--text-soft);">E-Stunden</div>
-            </div>
-            <div style="text-align:center;padding:4px 10px;background:${entschTag>0?'#FFF7ED':'#fff'};border-radius:8px;border:0.5px solid ${entschTag>0?'#EA580C':'var(--gray-border)'};">
-              <div style="font-size:18px;font-weight:700;color:${entschTag>0?'#7C2D12':'var(--text-lighter)'};">${entschTag}</div>
-              <div style="font-size:10px;color:var(--text-soft);">E-Tage</div>
-            </div>
-          </div>
+      html+=`<div style="border:0.5px solid ${stunden>3?'#A32D2D':'var(--gray-border)'};border-radius:10px;padding:10px 14px;background:${stunden>3?'#FCEBEB':'var(--gray-bg)'};display:flex;align-items:center;gap:10px;">
+        <div style="flex:1;">
+          <div style="font-size:14px;font-weight:600;">${s.vorname} ${s.nachname}</div>
+          <div style="font-size:11px;color:var(--text-soft);">${s.klasse||''}</div>
         </div>
-        ${unentsch>3?'<div style="padding:4px 14px 8px;font-size:12px;color:#A32D2D;font-weight:500;">⚠️ Mehr als 3 unentschuldigte Fehlzeiten!</div>':''}</div>`;
+        <div style="font-size:15px;font-weight:700;color:${stunden>3?'#A32D2D':'var(--text)'};white-space:nowrap;">
+          ${stunden} Std.${stunden>3?' ⚠️':''}
+        </div>
+      </div>`;
     });
+
+    if(!irgendwer){
+      html+='<p class="text-sm text-soft">Keine Fehlzeiten erfasst.</p>';
+    }
     html+='</div>';
     cont.innerHTML=html;
   });
@@ -3181,7 +3166,7 @@ function ladeDynamischeFaecher(){
 
 function renderDynamischeChips(){
   const gruppe=currentUserData?.gruppe||'durchstarter';
-  // ALLE alten dynamischen Chips entfernen (erzwingt sauberen Neuaufbau ohne alten Zustand)
+  // ALLE alten dynamischen Chips entfernen bevor neue erstellt werden
   document.querySelectorAll('.fach-chip-dyn').forEach(c=>c.remove());
 
   dynamischeFaecher.forEach(f=>{
@@ -3189,7 +3174,6 @@ function renderDynamischeChips(){
 
     const zsNummern=(f.zeitschiene||'1').split(',').map(Number);
     const isDoppel=f.isDoppelstunde && zsNummern.length>1;
-    const istEinzeln=f.isEinzelnWaehlbar && zsNummern.length>1;
 
     zsNummern.forEach((zs,idx)=>{
       if(isDoppel && idx>0) return;
@@ -3198,12 +3182,14 @@ function renderDynamischeChips(){
       if(!container) return;
 
       const chipKey=f.id+'-'+zs;
+      // Doppelten Chip verhindern (extra Absicherung)
+      if(container.querySelector(`[data-fach-id="${chipKey}"]`)) return;
+
       const btn=document.createElement('button');
       btn.className='fach-chip fach-chip-dyn';
       btn.setAttribute('data-fach-id',chipKey);
       btn.setAttribute('data-fach-bg',f.bg||'#FAECE7');
       btn.setAttribute('data-fach-color',f.color||'#4A1B0C');
-      // Grundzustand: wie statische Chips (weiß, grauer Rand) – KEIN Inline-Style
       btn.textContent=(f.icon||'📌')+' '+f.name+(isDoppel?' 🔁':'');
       btn.onclick=()=>{
         waehlen(zs, f.name, f.sel||'sel-custom', f.icon||'📌', f.bg||'#FAECE7', f.color||'#4A1B0C', f.id);
