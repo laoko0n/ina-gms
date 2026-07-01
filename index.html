@@ -1004,7 +1004,10 @@ function applyGruppenRegeln(){
     const chips=document.querySelectorAll('#chips-'+zs+' .fach-chip:not(.fach-chip-dyn)');
     chips.forEach(c=>{
       if(!erlaubt){ c.style.display=''; return; }
-      const sichtbar=erlaubt.some(name=>c.textContent.trim().startsWith(name.slice(0,6))||c.textContent.includes(name));
+      // Vergleich über onclick-Attribut (enthält exakten Namen) statt textContent
+      const onclick=c.getAttribute('onclick')||'';
+      const chipName=onclick.match(/waehlen\(\d+,'([^']+)'/)?.[1]||c.textContent.trim();
+      const sichtbar=erlaubt.includes(chipName);
       c.style.display=sichtbar?'':'none';
     });
   });
