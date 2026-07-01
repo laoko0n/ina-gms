@@ -1329,23 +1329,27 @@ function loadPlanFuerTag(tag){
         if(val && val.icon && val.name) gewahlt[n]=val;
       });
 
-      // Gespeicherte Tageswahlen – nur wenn Dokument existiert
-      if(snap.exists()){
-        const d=snap.data();
-        // Sicherheitscheck: Tag muss übereinstimmen!
-        if(d.tag === tag){
-          (cfg.freiZS||[1,2,3,4]).forEach(zs=>{
-            // Am AG-Tag dürfen ZS3/ZS4 NIE durch gespeicherte Daten überschrieben werden -
-            // diese Stunden gehören exklusiv der Festen AG, unabhängig davon was früher
-            // (z.B. vor Eintragung der AG) dort gespeichert wurde.
-            if(agHeute && (zs===3||zs===4)) return;
-            const val=d['zs'+zs];
-            if(val && val.icon && val.name && val.sel && val.bg && val.color){
-              gewahlt[zs]=val;
+          // Gespeicherte Tageswahlen laden – nur name ist Pflicht
+          if(snap.exists()){
+            const d=snap.data();
+            if(d.tag === tag){
+              (cfg.freiZS||[1,2,3,4]).forEach(zs=>{
+                if(agHeute && (zs===3||zs===4)) return;
+                const val=d['zs'+zs];
+                if(val && val.name){
+                  // Fehlende Felder mit Defaults auffüllen
+                  gewahlt[zs]={
+                    name: val.name,
+                    sel:  val.sel  || 'sel-default',
+                    icon: val.icon || '📌',
+                    bg:   val.bg   || '#F5F4F1',
+                    color:val.color|| '#1a1a1a',
+                    fachId: val.fachId||null
+                  };
+                }
+              });
             }
-          });
-        }
-      }
+          }
     }catch(loadErr){
       console.warn('Fehler beim Laden:',loadErr);
       gewahlt={1:null,2:null,3:null,4:null};
@@ -1617,21 +1621,27 @@ function savePlan(){
     return;
   }
 
-  // Bestätigung wenn nicht heute (aber Zukunft erlaubt)
-  if(activeTag!==heute){
-    const d=new Date(activeTag);
-    const tagName=WOCHENTAGE[d.getDay()]+' '+d.getDate()+'.'+(d.getMonth()+1)+'.';
-    if(!confirm('Du speicherst den Plan für '+tagName+' – ist das richtig?'))return;
+  // Vergangene Tage dürfen nicht gespeichert werden
+  if(activeTag<heute){
+    toast('⛔ Vergangene Tage können nicht mehr gespeichert werden.');
+    return;
   }
   withFirebase(async({db,doc,setDoc})=>{
-    const data={
-      uid:currentUser.uid,
-      tag:activeTag,
-      gruppeSnapshot: currentUserData.gruppe||'durchstarter' // für Verlaufshistorie
-    };
-    [1,2,3,4].forEach(zs=>{data['zs'+zs]=gewahlt[zs]||null;});
-    await setDoc(doc(db,'plans',currentUser.uid+'_'+activeTag),data);
-    toast('Plan gespeichert ✓');
+    try{
+      const data={
+        uid:currentUser.uid,
+        tag:activeTag,
+        gruppeSnapshot: currentUserData.gruppe||'durchstarter'
+      };
+      [1,2,3,4].forEach(zs=>{data['zs'+zs]=gewahlt[zs]||null;});
+      await setDoc(doc(db,'plans',currentUser.uid+'_'+activeTag),data);
+      // Klare Bestätigung mit Datum
+      const d=new Date(activeTag);
+      toast('✅ Plan für '+WOCHENTAGE[d.getDay()]+' '+d.getDate()+'.'+(d.getMonth()+1)+'. gespeichert!');
+    }catch(err){
+      console.error('Fehler beim Speichern:',err);
+      toast('❌ Speichern fehlgeschlagen: '+(err.message||err.code||'Unbekannter Fehler'));
+    }
   });
 }
 
@@ -1825,8 +1835,20 @@ async function renderLehrerPlan(tag){
     schueler.sort((a,b)=>(a.klasse+a.nachname).localeCompare(b.klasse+b.nachname));
     // Pläne immer frisch vom Server holen (kein Cache)
     const planSnaps=await getDocsFromServer(collection(db,'plans'));
-    const planMap={};planSnaps.forEach(p=>{const d=p.data();if(d.tag===tag)planMap[d.uid]=d;});
-    renderPlanTabelle(cont,schueler,planMap,tag);
+    const planMap={};
+    let allePlaene=[];
+    planSnaps.forEach(p=>{
+      const d=p.data();
+      allePlaene.push(d.tag+'|'+d.uid?.slice(0,8));
+      if(d.tag===tag)planMap[d.uid]=d;
+    });
+    // Debug-Info direkt anzeigen
+    const gefunden=Object.keys(planMap).length;
+    cont.innerHTML=`<p class="text-sm text-soft" style="color:#6b6b6b;margin-bottom:.5rem;">
+      🔍 Debug: Suche Pläne für <b>${tag}</b> · ${planSnaps.size} Pläne in DB gefunden · ${gefunden} für diesen Tag<br>
+      Alle Pläne: ${allePlaene.join(', ')||'keine'}
+    </p>`;
+    setTimeout(()=>renderPlanTabelle(cont,schueler,planMap,tag),100);
   });
 }
 async function renderLeitungPlan(tag){
