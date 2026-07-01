@@ -8,7 +8,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
     import { getAuth, signInWithEmailAndPassword, signOut, updatePassword, reauthenticateWithCredential, EmailAuthProvider, onAuthStateChanged, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-    import { getFirestore, doc, setDoc, getDoc, getDocFromServer, getDocs, collection, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+    import { getFirestore, doc, setDoc, getDoc, getDocFromServer, getDocs, getDocsFromServer, collection, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
     const firebaseConfig = {
       apiKey: "AIzaSyCiTypgkT58vMvLH9b33Oo3XC3sFLB58iI",
       authDomain: "ina-gms-stwend-7345a.firebaseapp.com",
@@ -20,7 +20,7 @@
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getFirestore(app);
-    window._firebase = { auth, db, signInWithEmailAndPassword, signOut, updatePassword, reauthenticateWithCredential, EmailAuthProvider, onAuthStateChanged, createUserWithEmailAndPassword, doc, setDoc, getDoc, getDocFromServer, getDocs, collection, updateDoc, deleteDoc };
+    window._firebase = { auth, db, signInWithEmailAndPassword, signOut, updatePassword, reauthenticateWithCredential, EmailAuthProvider, onAuthStateChanged, createUserWithEmailAndPassword, doc, setDoc, getDoc, getDocFromServer, getDocs, getDocsFromServer, collection, updateDoc, deleteDoc };
     window._firebaseReady = true;
     document.dispatchEvent(new Event("firebaseReady"));
   </script>
@@ -1244,8 +1244,14 @@ function loadPlanFuerTag(tag){
   const saveBtn=document.getElementById('save-btn');
   if(saveBtn){saveBtn.disabled=true;saveBtn.style.opacity='0.5';}
 
-  // Sofort visuell leeren
+  // Freitags: kein Nachmittagsprogramm – alle ZS ausblenden
+  const [jahr,monat,tagNr]=tag.split('-').map(Number);
+  const wochentag=new Date(jahr,monat-1,tagNr).getDay(); // 5 = Freitag
+  const istFreitag=wochentag===5;
+
   [1,2,3,4].forEach(zs=>{
+    const wrap=document.getElementById('zs-wrap-'+zs);
+    if(wrap)wrap.style.display=istFreitag?'none':'';
     const sumEl=document.getElementById('sum-'+zs);
     if(sumEl){sumEl.className='sum-empty';sumEl.style.cssText='';sumEl.textContent='nicht gewählt';}
     const hintEl=document.getElementById('hint-'+zs);
@@ -1253,6 +1259,39 @@ function loadPlanFuerTag(tag){
     const chips=document.querySelectorAll('#chips-'+zs+' .fach-chip');
     chips.forEach(c=>{const d=c.style.display;c.className='fach-chip';c.style.display=d;});
   });
+
+  // Freitags-Hinweis anzeigen / ausblenden
+  let frHinweis=document.getElementById('freitag-hinweis');
+  if(!frHinweis){
+    frHinweis=document.createElement('div');
+    frHinweis.id='freitag-hinweis';
+    frHinweis.style.cssText='background:#E1F5EE;border:1.5px solid #1D9E75;border-radius:12px;padding:1rem 1.25rem;margin-bottom:.75rem;text-align:center;';
+    frHinweis.innerHTML='<div style="font-size:20px;margin-bottom:.25rem;">🏠</div>'
+      +'<div style="font-weight:600;color:#085041;">Schulschluss um 12:55 Uhr</div>'
+      +'<div style="font-size:13px;color:#0F6E56;margin-top:2px;">Freitags gibt es kein Nachmittagsprogramm.</div>';
+    // Vor den ZS-Wraps einfügen
+    const zs1=document.getElementById('zs-wrap-1');
+    if(zs1&&zs1.parentNode)zs1.parentNode.insertBefore(frHinweis,zs1);
+  }
+  frHinweis.style.display=istFreitag?'block':'none';
+
+  // AG-Block und Hinweise ebenfalls ausblenden freitags
+  ['halbag-block','halbag-hinweis-andere-tage','halbag-hinweis-eintragen'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el&&istFreitag)el.style.display='none';
+  });
+
+  // Speichern-Button freitags dauerhaft sperren
+  if(saveBtn){
+    if(istFreitag){
+      saveBtn.disabled=true;
+      saveBtn.style.opacity='0.4';
+      const lbl=document.getElementById('save-datum-label');
+      if(lbl)lbl.textContent='kein Nachmittagsprogramm';
+    }
+  }
+
+  if(istFreitag)return; // Nicht weiter laden – kein Plan nötig
 
   withFirebase(async({db,doc,getDoc,getDocFromServer})=>{
     try{
@@ -1353,6 +1392,14 @@ const ALLE_ANGEBOTE = [
 const DOPPELSTUNDEN_FRUEH = ['Freizeit mit Nico']; // Doppelstunde 7. Std.+2
 
 function waehlen(zs,name,sel,icon,bg,color,fachId){
+  // Freitags kein Nachmittagsprogramm
+  if(activeTag){
+    const [j,m,t]=activeTag.split('-').map(Number);
+    if(new Date(j,m-1,t).getDay()===5){
+      toast('Freitags gibt es kein Nachmittagsprogramm.');
+      return;
+    }
+  }
   // Harte Sperre: außerhalb des Schuljahres keine Wahl möglich
   const sjBeginn=schuljahrConfig.sjBeginn;
   const sjEnde=schuljahrConfig.sjEnde;
@@ -1544,6 +1591,13 @@ function renderGewahlt(){
 function savePlan(){
   if(!activeTag)return;
   const heute=isoDate(new Date());
+
+  // Freitags kein Speichern
+  const [jj,mm,tt]=activeTag.split('-').map(Number);
+  if(new Date(jj,mm-1,tt).getDay()===5){
+    toast('Freitags gibt es kein Nachmittagsprogramm.');
+    return;
+  }
 
   // Harte Sperre: außerhalb des Schuljahres darf NIE gespeichert werden
   const sjBeginn=schuljahrConfig.sjBeginn;
@@ -1765,22 +1819,24 @@ function buildPlanTagLeiste(containerId,renderFn,startMontag){
 }
 async function renderLehrerPlan(tag){
   const cont=document.getElementById('l-plan-inhalt');cont.innerHTML='<p class="text-sm text-soft">Lade…</p>';
-  withFirebase(async({db,getDocs,collection})=>{
+  withFirebase(async({db,getDocs,getDocsFromServer,collection})=>{
     const snaps=await getDocs(collection(db,'users'));
     const schueler=[];snaps.forEach(s=>{if(s.data().role==='schueler')schueler.push({uid:s.id,...s.data()});});
     schueler.sort((a,b)=>(a.klasse+a.nachname).localeCompare(b.klasse+b.nachname));
-    const planSnaps=await getDocs(collection(db,'plans'));
+    // Pläne immer frisch vom Server holen (kein Cache)
+    const planSnaps=await getDocsFromServer(collection(db,'plans'));
     const planMap={};planSnaps.forEach(p=>{const d=p.data();if(d.tag===tag)planMap[d.uid]=d;});
     renderPlanTabelle(cont,schueler,planMap,tag);
   });
 }
 async function renderLeitungPlan(tag){
   const cont=document.getElementById('sl-plan-inhalt');cont.innerHTML='<p class="text-sm text-soft">Lade…</p>';
-  withFirebase(async({db,getDocs,collection})=>{
+  withFirebase(async({db,getDocs,getDocsFromServer,collection})=>{
     const snaps=await getDocs(collection(db,'users'));
     const schueler=[];snaps.forEach(s=>{if(s.data().role==='schueler')schueler.push({uid:s.id,...s.data()});});
     schueler.sort((a,b)=>(a.klasse+a.nachname).localeCompare(b.klasse+b.nachname));
-    const planSnaps=await getDocs(collection(db,'plans'));
+    // Pläne immer frisch vom Server holen (kein Cache)
+    const planSnaps=await getDocsFromServer(collection(db,'plans'));
     const planMap={};planSnaps.forEach(p=>{const d=p.data();if(d.tag===tag)planMap[d.uid]=d;});
     renderPlanTabelle(cont,schueler,planMap,tag);
   });
