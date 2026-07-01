@@ -524,7 +524,7 @@
 
     <div id="l-tab-spielausleihe" class="hidden">
       <div class="card">
-        <div class="card-title"><i class="ti ti-hand-stop"></i> Ausleihe – Wochenübersicht</div>
+        <div class="card-title"><i class="ti ti-hand-move"></i> Ausleihe – Wochenübersicht</div>
         <p class="text-sm text-soft" style="margin-bottom:.75rem;">Wer hat sich diese Woche für Spiel- oder Sportgeräteausleihe eingetragen?</p>
         <div id="l-spielausleihe-woche"></div>
         <div id="l-spielausleihe-inhalt"><p class="text-sm text-soft">Lade…</p></div>
@@ -544,7 +544,7 @@
   <nav class="bottom-nav" style="flex-wrap:nowrap;overflow-x:auto;justify-content:flex-start;">
     <button class="nav-btn active" id="l-nav-uebersicht" onclick="lShowTab('uebersicht')"><i class="ti ti-list-check"></i>Übersicht</button>
     <button class="nav-btn" id="l-nav-angebot" onclick="lShowTab('angebot')"><i class="ti ti-clipboard-check"></i>INA-Angebot</button>
-    <button class="nav-btn" id="l-nav-spielausleihe" onclick="lShowTab('spielausleihe')"><i class="ti ti-hand-stop"></i>Ausleihe</button>
+    <button class="nav-btn" id="l-nav-spielausleihe" onclick="lShowTab('spielausleihe')"><i class="ti ti-hand-move"></i>Ausleihe</button>
     <button class="nav-btn" id="l-nav-stats" onclick="lShowTab('stats')"><i class="ti ti-chart-bar"></i>Statistik</button>
     <button class="nav-btn" id="l-nav-schueler" onclick="lShowTab('schueler')"><i class="ti ti-users"></i>Schüler</button>
     <button class="nav-btn" id="l-nav-fehlzeiten" onclick="lShowTab('fehlzeiten')"><i class="ti ti-clipboard-x"></i>Fehlzeiten</button>
@@ -3083,9 +3083,14 @@ async function loadFehlzeitenUebersicht(rolle){
   const cont=document.getElementById(rolle+'-fehlzeiten-inhalt');
   cont.innerHTML='<p class="text-sm text-soft">Lade…</p>';
 
-  withFirebase(async({db,getDocs,collection})=>{
+  withFirebase(async({db,getDocs,getDocsFromServer,collection})=>{
     const anwSnaps=await getDocs(collection(db,'anwesenheit'));
     const alleAnw=[];anwSnaps.forEach(s=>alleAnw.push(s.data()));
+
+    // Pläne laden um Fach zu ermitteln
+    const planSnaps=await getDocsFromServer(collection(db,'plans'));
+    const planMap={};
+    planSnaps.forEach(p=>{const d=p.data();planMap[d.uid+'_'+d.tag]=d;});
 
     let schueler=[];
     if(rolle==='s'){
@@ -3109,31 +3114,67 @@ async function loadFehlzeitenUebersicht(rolle){
       return true;
     }
 
-    // Pro Schüler: jedes "abwesend" = 1 Std. (45 min)
-    let html='<div style="display:flex;flex-direction:column;gap:6px;">';
+    // Zeitschiene → Uhrzeit
+    const ZS_ZEITEN={1:'12:55 Uhr',2:'13:30 Uhr',3:'14:15 Uhr',4:'15:00 Uhr'};
+
+    let html='<div style="display:flex;flex-direction:column;gap:8px;">';
     let irgendwer=false;
 
     schueler.forEach(s=>{
-      let stunden=0;
+      // Alle Fehleinträge für diesen Schüler sammeln
+      const eintraege=[];
       alleAnw.forEach(a=>{
         if(!filterZeitraum(a.tag))return;
         const status=(a.schueler||{})[s.uid];
         if(status==='abwesend'||status==='unentschuldigt'||
-           status==='entschuldigt_stunde'||status==='entschuldigt_tag') stunden++;
+           status==='entschuldigt_stunde'||status==='entschuldigt_tag'){
+          // Fach aus Plan ermitteln
+          const plan=planMap[s.uid+'_'+a.tag];
+          let fach='–';
+          let zsNr=null;
+          if(plan){
+            // Suche erstes nicht-null-Fach
+            [1,2,3,4].forEach(zs=>{
+              if(!zsNr && plan['zs'+zs]&&plan['zs'+zs].name){
+                fach=plan['zs'+zs].name;
+                zsNr=zs;
+              }
+            });
+          }
+          // Datum formatieren
+          const [j,m,t]=a.tag.split('-').map(Number);
+          const d=new Date(j,m-1,t);
+          const tagLabel=WOCHENTAGE[d.getDay()]+' '+t+'.'+m+'.'+j;
+          const uhrzeit=zsNr?ZS_ZEITEN[zsNr]:'–';
+          eintraege.push({tag:a.tag,tagLabel,fach,uhrzeit});
+        }
       });
-
-      if(stunden===0)return; // Nur Schüler mit Fehlzeiten anzeigen
+      if(!eintraege.length)return;
+      eintraege.sort((a,b)=>a.tag.localeCompare(b.tag));
       irgendwer=true;
 
-      html+=`<div style="border:0.5px solid ${stunden>3?'#A32D2D':'var(--gray-border)'};border-radius:10px;padding:10px 14px;background:${stunden>3?'#FCEBEB':'var(--gray-bg)'};display:flex;align-items:center;gap:10px;">
-        <div style="flex:1;">
-          <div style="font-size:14px;font-weight:600;">${s.vorname} ${s.nachname}</div>
-          <div style="font-size:11px;color:var(--text-soft);">${s.klasse||''}</div>
+      const stunden=eintraege.length;
+      html+=`<div style="border:0.5px solid ${stunden>3?'#A32D2D':'var(--gray-border)'};border-radius:10px;overflow:hidden;background:${stunden>3?'#FCEBEB':'var(--gray-bg)'};">
+        <div style="padding:10px 14px;display:flex;align-items:center;gap:10px;">
+          <div style="flex:1;">
+            <div style="font-size:14px;font-weight:600;">${s.vorname} ${s.nachname}</div>
+            <div style="font-size:11px;color:var(--text-soft);">${s.klasse||''}</div>
+          </div>
+          <div style="font-size:15px;font-weight:700;color:${stunden>3?'#A32D2D':'var(--text)'};white-space:nowrap;">
+            ${stunden} Std.${stunden>3?' ⚠️':''}
+          </div>
         </div>
-        <div style="font-size:15px;font-weight:700;color:${stunden>3?'#A32D2D':'var(--text)'};white-space:nowrap;">
-          ${stunden} Std.${stunden>3?' ⚠️':''}
-        </div>
-      </div>`;
+        <div style="border-top:0.5px solid var(--gray-border);">`;
+
+      eintraege.forEach(e=>{
+        html+=`<div style="display:flex;align-items:center;gap:0;padding:7px 14px;border-bottom:0.5px solid var(--gray-border);font-size:12px;flex-wrap:wrap;gap:8px;">
+          <span style="flex:1;font-weight:500;color:var(--text);">${e.fach}</span>
+          <span style="color:var(--text-soft);white-space:nowrap;">${e.tagLabel}</span>
+          <span style="color:var(--text-soft);white-space:nowrap;min-width:60px;text-align:right;">${e.uhrzeit}</span>
+        </div>`;
+      });
+
+      html+='</div></div>';
     });
 
     if(!irgendwer){
@@ -3152,13 +3193,16 @@ function ladeDynamischeFaecher(){
     try{
       const snaps=await getDocs(collection(db,'faecher'));
       dynamischeFaecher=[];
+      const bereitsGeladen=new Set(); // Deduplizierung nach Name
       snaps.forEach(s=>{
         const d={id:s.id,...s.data()};
         if(d.aktiv!==false && d.name && d.zeitschiene && d.gruppen && d.gruppen.length>0){
-          dynamischeFaecher.push(d);
+          if(!bereitsGeladen.has(d.name)){
+            bereitsGeladen.add(d.name);
+            dynamischeFaecher.push(d);
+          }
         }
       });
-      // Chips in Zeitschienen einfügen
       renderDynamischeChips();
     }catch(e){console.warn('Dynamische Fächer konnten nicht geladen werden:',e);}
   });
@@ -3746,7 +3790,7 @@ function loadSpielausleiheUebersicht(startMontag){
   navCont.appendChild(navWrap);
 
   // ── Daten für diese Woche laden ──
-  withFirebase(async({db,getDocs,collection})=>{
+  withFirebase(async({db,getDocs,getDocsFromServer,collection})=>{
     const userSnaps=await getDocs(collection(db,'users'));
     const alleSchueler=[];
     userSnaps.forEach(s=>{if(s.data().role==='schueler')alleSchueler.push({uid:s.id,...s.data()});});
