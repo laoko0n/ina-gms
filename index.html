@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>INA – Individueller Nachmittag · GMS St. Wendel</title>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.0.0/dist/tabler-icons.min.css" />
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
@@ -487,14 +488,7 @@
       </div>
     </div>
 
-    <div id="l-tab-anwesenheit" class="hidden">
-      <div class="card">
-        <div class="card-title"><i class="ti ti-user-check"></i> Anwesenheit erfassen</div>
-        <p class="text-sm text-soft" style="margin-bottom:.75rem;">Hake für dein Angebot ab, wer anwesend war, oder trage Fehlzeiten ein.</p>
-        <div class="plan-tag-grid" id="l-anw-tage"></div>
-        <div id="l-anw-inhalt"><p class="text-sm text-soft">Wähle einen Tag.</p></div>
-      </div>
-    </div>
+    <div id="l-tab-anwesenheit" class="hidden"><!-- zusammengeführt in l-tab-angebot --></div>
 
     <div id="l-tab-fehlzeiten" class="hidden">
       <div class="card">
@@ -539,9 +533,9 @@
 
     <div id="l-tab-angebot" class="hidden">
       <div class="card">
-        <div class="card-title"><i class="ti ti-clipboard-check"></i> Mein Angebot – Teilnehmerliste</div>
-        <p class="text-sm text-soft" style="margin-bottom:.75rem;" id="l-angebot-beschreibung">Dein zugewiesenes Angebot wird hier angezeigt.</p>
-        <div class="plan-tag-grid" id="l-angebot-tage"></div>
+        <div class="card-title"><i class="ti ti-clipboard-check"></i> Mein Angebot</div>
+        <div id="l-angebot-header" style="margin-bottom:.75rem;"></div>
+        <div id="l-angebot-tage"></div>
         <div id="l-angebot-inhalt"><p class="text-sm text-soft">Wähle einen Tag.</p></div>
       </div>
     </div>
@@ -550,7 +544,6 @@
   <nav class="bottom-nav" style="flex-wrap:nowrap;overflow-x:auto;justify-content:flex-start;">
     <button class="nav-btn active" id="l-nav-uebersicht" onclick="lShowTab('uebersicht')"><i class="ti ti-list-check"></i>Übersicht</button>
     <button class="nav-btn" id="l-nav-angebot" onclick="lShowTab('angebot')"><i class="ti ti-clipboard-check"></i>Angebot</button>
-    <button class="nav-btn" id="l-nav-anwesenheit" onclick="lShowTab('anwesenheit')"><i class="ti ti-user-check"></i>Anwesenh.</button>
     <button class="nav-btn" id="l-nav-spielausleihe" onclick="lShowTab('spielausleihe')"><i class="ti ti-puzzle"></i>Ausleihe</button>
     <button class="nav-btn" id="l-nav-stats" onclick="lShowTab('stats')"><i class="ti ti-chart-bar"></i>Statistik</button>
     <button class="nav-btn" id="l-nav-schueler" onclick="lShowTab('schueler')"><i class="ti ti-users"></i>Schüler</button>
@@ -578,7 +571,13 @@
 
     <div id="sl-tab-schueler" class="hidden">
       <div class="card">
-        <div class="card-title flex-row"><i class="ti ti-users"></i> Alle Schüler<span class="spacer"></span><button class="btn btn-primary btn-sm" onclick="openSchuelerModal()"><i class="ti ti-plus"></i> Hinzufügen</button></div>
+        <div class="card-title flex-row">
+          <i class="ti ti-users"></i> Alle Schüler
+          <span class="spacer"></span>
+          <button class="btn btn-secondary btn-sm" onclick="zeigePasswortliste()" style="margin-right:6px;"><i class="ti ti-key"></i> Passwörter</button>
+          <button class="btn btn-primary btn-sm" onclick="openSchuelerModal()"><i class="ti ti-plus"></i> Hinzufügen</button>
+        </div>
+        <div id="sl-passwort-liste" style="display:none;margin-bottom:.75rem;"></div>
         <div id="sl-schueler-liste"><p class="text-sm text-soft">Lade…</p></div>
       </div>
     </div>
@@ -1672,9 +1671,8 @@ function lShowTab(tab){
     if(ne)ne.classList.toggle('active',t===tab);
   });
   if(tab==='stats')         loadLehrerStats();
-  if(tab==='angebot')       initAngebotTab();
+  if(tab==='angebot'||tab==='anwesenheit') initAngebotTab();
   if(tab==='spielausleihe') loadSpielausleiheUebersicht();
-  if(tab==='anwesenheit')   initAnwesenheitTab();
   if(tab==='fehlzeiten')    loadFehlzeitenUebersicht('l');
 }
 function slShowTab(tab){
@@ -1966,7 +1964,75 @@ function lehrerDarfBearbeiten(schuelerKlasse){
   const meineKlassen=currentUserData.klassen||[];
   return meineKlassen.includes(schuelerKlasse);
 }
-function loadSchuelerListe(containerId){
+function zeigePasswortliste(){
+  const box=document.getElementById('sl-passwort-liste');
+  if(box.style.display!=='none'){box.style.display='none';return;}
+  box.innerHTML='<p class="text-sm text-soft">Lade…</p>';
+  box.style.display='block';
+
+  withFirebase(async({db,getDocs,collection})=>{
+    const snaps=await getDocs(collection(db,'users'));
+    const schueler=[];
+    snaps.forEach(s=>{if(s.data().role==='schueler')schueler.push({...s.data()});});
+    schueler.sort((a,b)=>(a.klasse+a.nachname).localeCompare(b.klasse+b.nachname));
+
+    if(!schueler.length){box.innerHTML='<p class="text-sm text-soft">Keine Schüler vorhanden.</p>';return;}
+
+    let html=`
+      <div style="border:1.5px solid var(--gray-border);border-radius:10px;overflow:hidden;">
+        <div style="background:var(--gray-bg);padding:10px 14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;border-bottom:0.5px solid var(--gray-border);">
+          <span style="font-size:13px;font-weight:600;"><i class="ti ti-key"></i> Startpasswörter aller Schüler</span>
+          <div style="display:flex;gap:6px;">
+            <button class="btn btn-secondary btn-sm" onclick="window.print()">🖨️ Drucken</button>
+            <button class="btn btn-secondary btn-sm" onclick="exportPasswoerter()">📥 Excel</button>
+            <button class="btn btn-secondary btn-sm" onclick="document.getElementById('sl-passwort-liste').style.display='none'">✕ Schließen</button>
+          </div>
+        </div>
+        <div style="overflow-x:auto;max-height:350px;overflow-y:auto;">
+          <table style="width:100%;border-collapse:collapse;font-size:13px;">
+            <thead>
+              <tr style="border-bottom:0.5px solid var(--gray-border);">
+                <th style="text-align:left;padding:8px 12px;font-size:11px;color:var(--text-soft);font-weight:600;text-transform:uppercase;">Klasse</th>
+                <th style="text-align:left;padding:8px 12px;font-size:11px;color:var(--text-soft);font-weight:600;text-transform:uppercase;">Vorname</th>
+                <th style="text-align:left;padding:8px 12px;font-size:11px;color:var(--text-soft);font-weight:600;text-transform:uppercase;">Nachname</th>
+                <th style="text-align:left;padding:8px 12px;font-size:11px;color:var(--text-soft);font-weight:600;text-transform:uppercase;">E-Mail</th>
+                <th style="text-align:left;padding:8px 12px;font-size:11px;color:var(--text-soft);font-weight:600;text-transform:uppercase;">Passwort</th>
+              </tr>
+            </thead>
+            <tbody>`;
+
+    schueler.forEach(s=>{
+      const pw=s.passwort||(s.klasse+s.nachname); // Fallback auf altes Schema
+      html+=`<tr style="border-bottom:0.5px solid var(--gray-border);">
+        <td style="padding:7px 12px;"><span style="background:#FAECE7;color:#4A1B0C;font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;">${s.klasse||'–'}</span></td>
+        <td style="padding:7px 12px;">${s.vorname||''}</td>
+        <td style="padding:7px 12px;font-weight:500;">${s.nachname||''}</td>
+        <td style="padding:7px 12px;font-size:12px;color:var(--text-soft);">${s.email||''}</td>
+        <td style="padding:7px 12px;font-family:monospace;font-weight:600;color:#085041;">${pw}</td>
+      </tr>`;
+    });
+
+    html+='</tbody></table></div></div>';
+    box.innerHTML=html;
+  });
+}
+
+// Passwortliste als Excel exportieren
+function exportPasswoerter(){
+  withFirebase(async({db,getDocs,collection})=>{
+    const snaps=await getDocs(collection(db,'users'));
+    const schueler=[];
+    snaps.forEach(s=>{if(s.data().role==='schueler')schueler.push({...s.data()});});
+    schueler.sort((a,b)=>(a.klasse+a.nachname).localeCompare(b.klasse+b.nachname));
+    const rows=[['Klasse','Vorname','Nachname','E-Mail','Passwort']];
+    schueler.forEach(s=>rows.push([s.klasse||'',s.vorname||'',s.nachname||'',s.email||'',s.passwort||(s.klasse+s.nachname)]));
+    const wb=XLSX.utils.book_new();
+    const ws=XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols']=[{wch:8},{wch:15},{wch:15},{wch:30},{wch:18}];
+    XLSX.utils.book_append_sheet(wb,ws,'Passwörter');
+    XLSX.writeFile(wb,'ina-schueler-passwoerter.xlsx');
+  });
+}
   withFirebase(async({db,getDocs,collection})=>{
     const snaps=await getDocs(collection(db,'users'));
     const liste=[];snaps.forEach(s=>{if(s.data().role==='schueler')liste.push({uid:s.id,...s.data()});});
@@ -3235,39 +3301,50 @@ function saveAngebote(){
 // ═══ LEHRER: ANGEBOT-TAB (Teilnehmerliste) ═══
 function initAngebotTab(){
   const meineAngebote=currentUserData.angebote||[];
-  const beschr=document.getElementById('l-angebot-beschreibung');
+  const header=document.getElementById('l-angebot-header');
   const inhalt=document.getElementById('l-angebot-inhalt');
 
   if(!meineAngebote.length){
-    beschr.textContent='Dir wurde noch kein Angebot zugewiesen. Bitte die Schulleitung informieren.';
+    header.innerHTML='<p class="text-sm" style="color:#A32D2D;">Dir wurde noch kein Angebot zugewiesen. Bitte die Schulleitung informieren.</p>';
     inhalt.innerHTML='';
     return;
   }
 
-  beschr.innerHTML='Dein Angebot: '+meineAngebote.map(a=>`<span style="background:var(--teal-light);color:#085041;font-size:12px;font-weight:600;padding:2px 9px;border-radius:99px;">${a}</span>`).join(' ');
+  // Angebots-Name prominent anzeigen
+  header.innerHTML=`
+    <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+      ${meineAngebote.map(a=>`
+        <span style="display:inline-flex;align-items:center;gap:6px;background:#E1F5EE;border:1.5px solid #1D9E75;color:#085041;font-size:14px;font-weight:600;padding:6px 14px;border-radius:99px;">
+          <i class="ti ti-clipboard-check"></i> ${a}
+        </span>`).join('')}
+    </div>
+    <p class="text-sm text-soft" style="margin-top:8px;">Wähle einen Tag um die Teilnehmer zu sehen und die Anwesenheit zu erfassen.</p>`;
 
   // Tagesleiste aufbauen
-  buildPlanTagLeiste('l-angebot-tage',(tag)=>loadAngebotTeilnehmer(tag,meineAngebote));
+  buildPlanTagLeiste('l-angebot-tage',(tag)=>loadAngebotMitAnwesenheit(tag,meineAngebote));
 }
 
-function loadAngebotTeilnehmer(tag,meineAngebote){
+function loadAngebotMitAnwesenheit(tag,meineAngebote){
   const cont=document.getElementById('l-angebot-inhalt');
   cont.innerHTML='<p class="text-sm text-soft">Lade…</p>';
 
-  withFirebase(async({db,getDocs,collection})=>{
-    // Alle Schüler laden
+  withFirebase(async({db,getDocs,getDocsFromServer,collection,doc,getDoc})=>{
     const userSnaps=await getDocs(collection(db,'users'));
     const alleSchueler=[];
     userSnaps.forEach(s=>{if(s.data().role==='schueler')alleSchueler.push({uid:s.id,...s.data()});});
     alleSchueler.sort((a,b)=>(a.klasse+a.nachname).localeCompare(b.klasse+b.nachname));
 
-    // Pläne für diesen Tag laden
-    const planSnaps=await getDocs(collection(db,'plans'));
+    const planSnaps=await getDocsFromServer(collection(db,'plans'));
     const planMap={};
     planSnaps.forEach(p=>{const d=p.data();if(d.tag===tag)planMap[d.uid]=d;});
 
-    // Pro Angebot: Teilnehmer filtern
+    // Bereits gespeicherte Anwesenheit laden
+    const anwSnap=await getDoc(doc(db,'anwesenheit',tag+'_'+currentUser.uid));
+    const anwData=anwSnap.exists()?anwSnap.data().schueler:{};
+    window._anwCache={...anwData};
+
     let html='';
+
     meineAngebote.forEach(angebot=>{
       const teilnehmer=alleSchueler.filter(s=>{
         const plan=planMap[s.uid];
@@ -3275,26 +3352,48 @@ function loadAngebotTeilnehmer(tag,meineAngebote){
         return [1,2,3,4].some(zs=>plan['zs'+zs]&&plan['zs'+zs].name===angebot);
       });
 
-      html+=`<div style="margin-bottom:1rem;">
-        <div style="font-size:13px;font-weight:600;color:var(--text-soft);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">
+      const zsLabels={1:'7. Std.',2:'8. Std.',3:'9. Std.',4:'10. Std.'};
+
+      html+=`<div style="margin-bottom:1.25rem;">
+        <div style="font-size:12px;font-weight:700;color:var(--text-soft);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px;">
           ${angebot} · ${teilnehmer.length} Schüler
         </div>`;
 
       if(!teilnehmer.length){
-        html+='<p class="text-sm text-soft">Noch kein Schüler hat dieses Angebot für diesen Tag gewählt.</p>';
+        html+=`<p class="text-sm text-soft" style="padding:10px 12px;background:var(--gray-bg);border-radius:8px;">
+          Noch kein Schüler hat dieses Angebot für diesen Tag gewählt.</p>`;
       } else {
-        // 2-spaltige Liste für Vollzähligkeitskontrolle
-        html+='<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:6px;">';
+        html+='<div style="display:flex;flex-direction:column;gap:6px;">';
         teilnehmer.forEach((s,idx)=>{
-          // Zeitschiene des Angebots ermitteln
           const plan=planMap[s.uid]||{};
           const zsNr=[1,2,3,4].find(zs=>plan['zs'+zs]&&plan['zs'+zs].name===angebot);
-          const zsLabels={1:'7. Std.',2:'8. Std.',3:'9. Std.',4:'10. Std.'};
-          html+=`<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--gray-bg);border-radius:8px;border:0.5px solid var(--gray-border);">
+          const status=anwData[s.uid]||'anwesend';
+          const btnBase='padding:5px 11px;border-radius:99px;border:1.5px solid;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;';
+          const st=(s,activeStyle,inactiveStyle)=>status===s?activeStyle:inactiveStyle;
+
+          html+=`<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--gray-bg);border-radius:10px;border:0.5px solid var(--gray-border);flex-wrap:wrap;" id="anw-row-${s.uid}">
             <span style="width:22px;height:22px;border-radius:50%;background:var(--orange-light);color:var(--orange-dark);font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0;">${idx+1}</span>
-            <div style="flex:1;min-width:0;">
-              <div style="font-size:13px;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${s.vorname} ${s.nachname}</div>
-              <div style="font-size:11px;color:var(--text-soft);">${s.klasse} · ${zsNr?zsLabels[zsNr]:''}</div>
+            <div style="flex:1;min-width:100px;">
+              <div style="font-size:13px;font-weight:600;">${s.vorname} ${s.nachname}</div>
+              <div style="font-size:11px;color:var(--text-soft);">${s.klasse}${zsNr?' · '+zsLabels[zsNr]:''}</div>
+            </div>
+            <div style="display:flex;gap:5px;flex-wrap:wrap;">
+              <button onclick="setAnwesenheit('${s.uid}','${tag}','anwesend')" class="anw-btn" data-uid="${s.uid}" data-status="anwesend"
+                style="${btnBase}${st('anwesend','background:#E1F5EE;border-color:#1D9E75;color:#085041;','background:#fff;border-color:var(--gray-border);color:var(--text-soft);')}">
+                ✓ Anwesend
+              </button>
+              <button onclick="setAnwesenheit('${s.uid}','${tag}','unentschuldigt')" class="anw-btn" data-uid="${s.uid}" data-status="unentschuldigt"
+                style="${btnBase}${st('unentschuldigt','background:#FCEBEB;border-color:#A32D2D;color:#A32D2D;','background:#fff;border-color:var(--gray-border);color:var(--text-soft);')}">
+                ✗ Fehlt
+              </button>
+              <button onclick="setAnwesenheit('${s.uid}','${tag}','entschuldigt_stunde')" class="anw-btn" data-uid="${s.uid}" data-status="entschuldigt_stunde"
+                style="${btnBase}${st('entschuldigt_stunde','background:#FFF7ED;border-color:#EA580C;color:#7C2D12;','background:#fff;border-color:var(--gray-border);color:var(--text-soft);')}">
+                E-Std.
+              </button>
+              <button onclick="setAnwesenheit('${s.uid}','${tag}','entschuldigt_tag')" class="anw-btn" data-uid="${s.uid}" data-status="entschuldigt_tag"
+                style="${btnBase}${st('entschuldigt_tag','background:#FFF7ED;border-color:#EA580C;color:#7C2D12;','background:#fff;border-color:var(--gray-border);color:var(--text-soft);')}">
+                E-Tag
+              </button>
             </div>
           </div>`;
         });
@@ -3303,8 +3402,16 @@ function loadAngebotTeilnehmer(tag,meineAngebote){
       html+='</div>';
     });
 
+    html+=`<button class="btn btn-primary btn-full" style="margin-top:.5rem;" onclick="saveAnwesenheit('${tag}')">
+      <i class="ti ti-device-floppy"></i> Anwesenheit speichern
+    </button>`;
+
     cont.innerHTML=html||'<p class="text-sm text-soft">Keine Daten.</p>';
   });
+}
+
+function loadAngebotTeilnehmer(tag,meineAngebote){
+  loadAngebotMitAnwesenheit(tag,meineAngebote);
 }
 
 // ═══ FESTE HALBJAHRES-AG (an einem bestimmten Wochentag) ═══
