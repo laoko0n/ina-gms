@@ -732,8 +732,11 @@
     <div class="form-group"><label class="form-label">E-Mail (Login)</label><input type="email" id="ms-email" class="form-control" placeholder="anna.mueller@schule.de" /></div>
     <div class="form-group" id="ms-pw-group">
       <label class="form-label">Startpasswort</label>
-      <input type="text" id="ms-pw" class="form-control" placeholder="Mind. 6 Zeichen – z. B. Klasse+Nachname" />
-      <p class="text-sm text-soft" style="margin-top:4px;">Der Schüler ändert es beim ersten Login selbst.</p>
+      <div style="display:flex;gap:8px;">
+        <input type="text" id="ms-pw" class="form-control" readonly style="font-family:monospace;background:var(--gray-bg);" />
+        <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('ms-pw').value=genTierPasswort()" title="Neues Passwort würfeln">🎲</button>
+      </div>
+      <p class="text-sm text-soft" style="margin-top:4px;">Automatisch generiertes Tier-Passwort · klicke 🎲 für ein anderes.</p>
     </div>
     <div class="form-group" id="ms-halbag-group" style="display:none;background:#FFF7ED;border:1.5px solid #EA580C;border-radius:10px;padding:12px 14px;">
       <label class="form-label" style="color:#7C2D12;">⭐ Feste AG (9.+10. Std.) – Halbjahr</label>
@@ -2118,7 +2121,8 @@ function openSchuelerModal(uid){
     document.getElementById('ms-pw-group').style.display='';
     document.getElementById('ms-halbag-group').style.display='none';
     document.getElementById('ms-email').disabled=false;
-    ['ms-vorname','ms-nachname','ms-klasse','ms-email','ms-pw'].forEach(id=>document.getElementById(id).value='');
+    ['ms-vorname','ms-nachname','ms-klasse','ms-email'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('ms-pw').value=genTierPasswort(); // automatisch generieren
     document.getElementById('ms-gruppe').value='durchstarter';
     document.querySelectorAll('input[name="ms-halbag-tag"]').forEach(r=>{r.checked=false;});
   }
@@ -2187,19 +2191,20 @@ function saveSchueler(){
     }
 
     // NEU ANLEGEN: Firebase Auth + Firestore in einem Schritt
-    if(!pw||pw.length<6){showErr(err,'Startpasswort mindestens 6 Zeichen.');return;}
+    if(!pw||pw.length<4){showErr(err,'Bitte Passwort generieren lassen.');return;}
     const saveBtn=document.getElementById('ms-save-btn');
     if(saveBtn){saveBtn.disabled=true;saveBtn.textContent='Wird angelegt...';}
     try{
       // 1. Auth-Konto anlegen
       const cred=await createUserWithEmailAndPassword(auth,email,pw);
-      // 2. Firestore-Dokument mit echter UID
+      // 2. Firestore-Dokument mit Passwort mitspeichern (für Passwortliste + Re-Import)
       await setDoc(doc(db,'users',cred.user.uid),{
         vorname,nachname,klasse,gruppe,email,
         role:'schueler',mustSetPassword:false,
+        passwort:pw, // gespeichert für Schulleitung-Passwortliste
         createdAt:new Date().toISOString()
       });
-      toast('Schüler ' + vorname + ' ' + nachname + ' erfolgreich angelegt!');
+      toast('✓ '+vorname+' '+nachname+' angelegt · Passwort: '+pw);
       closeSchuelerModal();
       loadSchuelerListe(currentRole==='lehrer'?'l-schueler-liste':'sl-schueler-liste');
     }catch(e){
@@ -2791,7 +2796,7 @@ function openFachModal(id){
       if(!snap.exists()){toast('❌ Fach nicht gefunden.',true);return;}
       const d=snap.data();
       document.getElementById('fm-name').value=d.name||'';
-      document.getElementById('fm-icon').value=d.icon||'';
+      selectIcon(d.icon||'📌'); // Icon korrekt setzen inkl. Vorschau und Palette-Highlight
       document.getElementById('fm-max').value=d.maxTeilnehmer||'';
       document.getElementById('fm-beschreibung').value=d.beschreibung||'';
       if(document.getElementById('fm-aktiv'))
@@ -2826,7 +2831,7 @@ function openFachModal(id){
   } else {
     document.getElementById('modal-fach-title').textContent='Neues Fach anlegen';
     document.getElementById('fm-name').value='';
-    document.getElementById('fm-icon').value='';
+    selectIcon('📌'); // Icon zurücksetzen
     document.getElementById('fm-max').value='';
     document.getElementById('fm-beschreibung').value='';
     if(document.getElementById('fm-aktiv')) document.getElementById('fm-aktiv').checked=true;
@@ -2840,6 +2845,18 @@ function openFachModal(id){
     document.getElementById('modal-fach').classList.remove('hidden');
   }
 }
+function selectIcon(icon){
+  document.getElementById('fm-icon').value=icon;
+  const prev=document.getElementById('fm-icon-preview');
+  if(prev)prev.textContent=icon;
+  // Palette: aktives Icon hervorheben
+  document.querySelectorAll('#fm-icon-palette button').forEach(b=>{
+    const active=b.getAttribute('data-icon')===icon;
+    b.style.background=active?'var(--orange-light)':'#fff';
+    b.style.borderColor=active?'var(--orange-dark)':'var(--gray-border)';
+  });
+}
+
 function closeFachModal(){document.getElementById('modal-fach').classList.add('hidden');editFachId=null;}
 
 function saveFach(){
@@ -3184,6 +3201,18 @@ function renderDynamischeChips(){
       container.appendChild(btn);
     });
   });
+}
+
+// ═══ TIER-PASSWORT-GENERATOR ═══
+const TIERE=['Adler','Affe','Ameise','Bär','Biber','Biene','Büffel','Dachs','Delfin',
+  'Eichhorn','Elch','Elefant','Ente','Falke','Fisch','Flamingo','Fuchs',
+  'Giraffe','Hamster','Hase','Igel','Jaguar','Kamel','Katze','Koala',
+  'Krokodil','Kuh','Leopard','Löwe','Luchs','Marder','Maus','Möwe',
+  'Nashorn','Otter','Panda','Papagei','Pferd','Pinguin','Rabe','Reh',
+  'Salamander','Schaf','Schildkröte','Seehund','Specht','Storch',
+  'Tiger','Vogel','Waschbär','Wolf','Zebra','Ziege'];
+function genTierPasswort(){
+  return TIERE[Math.floor(Math.random()*TIERE.length)]+Math.floor(Math.random()*90+10);
 }
 
 function showErr(el,msg){el.textContent=msg;el.style.display='block';}
@@ -4024,7 +4053,23 @@ function savePwReset(){
       </div>
       <div class="form-group">
         <label class="form-label">Symbol</label>
-        <input type="text" id="fm-icon" class="form-control" placeholder="⚽" style="text-align:center;font-size:18px;" />
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;" id="fm-icon-palette">
+          <script>
+          (function(){
+            const icons=['⚽','🏀','🏐','🎾','🏓','🎨','🎭','🎬','📚','📖','🔬','🔭','🎵','🎸','🎺','🎻','🥁','🎤','🖌️','✂️','🧵','🧶','💻','🤸','🏃','🧘','⛹️','🎯','🎲','🃏','♟️','🌱','🌍','🎪','🎠','🔧','🛠️','🍳','🧁','🌟','❤️','🌈','🦁','🐯','🐻','🦊','🐼','🐧','🦋','🌸'];
+            icons.forEach(ic=>{
+              document.write('<button type="button" onclick="selectIcon(\''+ic+'\')" data-icon="'+ic+'" style="width:36px;height:36px;border-radius:8px;border:1.5px solid var(--gray-border);background:#fff;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;" title="'+ic+'">'+ic+'</button>');
+            });
+          })();
+          </script>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:8px;">
+          <span style="font-size:13px;color:var(--text-soft);">Gewählt:</span>
+          <span id="fm-icon-preview" style="font-size:24px;width:36px;height:36px;display:flex;align-items:center;justify-content:center;background:var(--gray-bg);border-radius:8px;border:1.5px solid var(--gray-border);">📌</span>
+          <input type="hidden" id="fm-icon" value="📌" />
+          <span class="text-sm text-soft">oder eigenes Symbol eintippen:</span>
+          <input type="text" id="fm-icon-custom" class="form-control" placeholder="z.B. 🏆" style="width:60px;text-align:center;font-size:18px;" oninput="selectIcon(this.value.trim()||'📌')" />
+        </div>
       </div>
     </div>
 
