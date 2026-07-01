@@ -1409,8 +1409,8 @@ function waehlen(zs,name,sel,icon,bg,color,fachId){
     }
   }
 
-  // Max-Teilnehmer prüfen für Ausleihe-Fächer (max 2 pro Stunde)
-  const AUSLEIHE_MAX={'Spielausleihe':2,'Sportgeräteausleihe':2};
+  // Max-Teilnehmer prüfen für Ausleihe-Fächer (max 1 pro Stunde)
+  const AUSLEIHE_MAX={'Spielausleihe':1,'Sportgeräteausleihe':1};
   if(AUSLEIHE_MAX[name] && activeTag){
     const max=AUSLEIHE_MAX[name];
     withFirebase(async({db,getDocs,collection,getDocsFromServer})=>{
@@ -1422,7 +1422,13 @@ function waehlen(zs,name,sel,icon,bg,color,fachId){
         if(d['zs'+zs]&&d['zs'+zs].name===name) belegt++;
       });
       if(belegt>=max){
-        toast('⛔ '+name+' in der '+zs+'. Stunde ist leider voll (max. '+max+' Plätze).',true);
+        // Fehlermeldung direkt unter dem Chip sichtbar
+        const hintEl=document.getElementById('hint-'+zs);
+        if(hintEl){
+          hintEl.innerHTML='<span style="color:#A32D2D;font-weight:600;">⛔ '+name+' ist für die '+(zs===1?'7.':'8.')+' Stunde heute bereits vergeben – nur 1 Schüler pro Stunde möglich. Bitte wähle ein anderes Angebot.</span>';
+          setTimeout(()=>{if(hintEl)hintEl.innerHTML='Tippe auf ein Angebot um es zu wählen.';},6000);
+        }
+        toast('⛔ '+name+' – nur 1 Platz pro Stunde, bereits belegt.',true);
         return;
       }
       // Platz frei → normal weiterbuchen
@@ -3222,11 +3228,13 @@ function ladeDynamischeFaecher(){
     try{
       const snaps=await getDocs(collection(db,'faecher'));
       dynamischeFaecher=[];
-      const bereitsGeladen=new Set(); // Deduplizierung nach Name
+      // Statische Fächer die bereits als feste Chips im HTML sind – nicht nochmal dynamisch laden
+      const STATISCHE_FAECHER=new Set(['Spielausleihe','Sportgeräteausleihe','Mittagessen','Frühe Freizeit','Frühe AG','Frühe Lernzeit','Freizeit mit Nico']);
+      const bereitsGeladen=new Set();
       snaps.forEach(s=>{
         const d={id:s.id,...s.data()};
         if(d.aktiv!==false && d.name && d.zeitschiene && d.gruppen && d.gruppen.length>0){
-          if(!bereitsGeladen.has(d.name)){
+          if(!STATISCHE_FAECHER.has(d.name) && !bereitsGeladen.has(d.name)){
             bereitsGeladen.add(d.name);
             dynamischeFaecher.push(d);
           }
