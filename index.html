@@ -2036,6 +2036,7 @@ function exportPasswoerter(){
     XLSX.writeFile(wb,'ina-schueler-passwoerter.xlsx');
   });
 }
+function loadSchuelerListe(containerId){
   withFirebase(async({db,getDocs,collection})=>{
     const snaps=await getDocs(collection(db,'users'));
     const liste=[];snaps.forEach(s=>{if(s.data().role==='schueler')liste.push({uid:s.id,...s.data()});});
@@ -2826,7 +2827,7 @@ function openFachModal(id){
         if(cb)cb.checked=(d.gruppen||[]).includes(g);
       });
       // Jetzt erst Modal öffnen – alle Felder sind befüllt
-      document.getElementById('modal-fach').classList.remove('hidden');
+      document.getElementById('modal-fach').classList.remove('hidden'); initIconPalette();
     });
   } else {
     document.getElementById('modal-fach-title').textContent='Neues Fach anlegen';
@@ -2842,14 +2843,36 @@ function openFachModal(id){
     if(firstZs)firstZs.checked=true;
     const firstF=document.querySelector('input[name="fm-farbe"]');
     if(firstF)firstF.checked=true;
-    document.getElementById('modal-fach').classList.remove('hidden');
+    document.getElementById('modal-fach').classList.remove('hidden'); initIconPalette();
   }
 }
+// ═══ ICON-PALETTE FÜR FACH-MODAL ═══
+const FM_ICONS=['⚽','🏀','🏐','🎾','🏓','🎨','🎭','🎬','📚','📖','🔬','🔭','🎵','🎸',
+  '🎺','🎻','🥁','🎤','🖌️','✂️','🧵','🧶','💻','🤸','🏃','🧘','⛹️','🎯','🎲','🃏',
+  '♟️','🌱','🌍','🎪','🎠','🔧','🛠️','🍳','🧁','🌟','❤️','🌈','🦁','🐯','🐻','🦊',
+  '🐼','🐧','🦋','🌸','📌'];
+
+function initIconPalette(){
+  const palette=document.getElementById('fm-icon-palette');
+  if(!palette||palette.children.length>0)return; // bereits befüllt
+  FM_ICONS.forEach(ic=>{
+    const btn=document.createElement('button');
+    btn.type='button';
+    btn.textContent=ic;
+    btn.setAttribute('data-icon',ic);
+    btn.setAttribute('title',ic);
+    btn.style.cssText='width:36px;height:36px;border-radius:8px;border:1.5px solid var(--gray-border);background:#fff;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;';
+    btn.onclick=()=>selectIcon(ic);
+    palette.appendChild(btn);
+  });
+}
+
 function selectIcon(icon){
+  if(!icon)return;
+  initIconPalette(); // sicherstellen dass Palette existiert
   document.getElementById('fm-icon').value=icon;
   const prev=document.getElementById('fm-icon-preview');
   if(prev)prev.textContent=icon;
-  // Palette: aktives Icon hervorheben
   document.querySelectorAll('#fm-icon-palette button').forEach(b=>{
     const active=b.getAttribute('data-icon')===icon;
     b.style.background=active?'var(--orange-light)':'#fff';
@@ -4053,16 +4076,7 @@ function savePwReset(){
       </div>
       <div class="form-group">
         <label class="form-label">Symbol</label>
-        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;" id="fm-icon-palette">
-          <script>
-          (function(){
-            const icons=['⚽','🏀','🏐','🎾','🏓','🎨','🎭','🎬','📚','📖','🔬','🔭','🎵','🎸','🎺','🎻','🥁','🎤','🖌️','✂️','🧵','🧶','💻','🤸','🏃','🧘','⛹️','🎯','🎲','🃏','♟️','🌱','🌍','🎪','🎠','🔧','🛠️','🍳','🧁','🌟','❤️','🌈','🦁','🐯','🐻','🦊','🐼','🐧','🦋','🌸'];
-            icons.forEach(ic=>{
-              document.write('<button type="button" onclick="selectIcon(\''+ic+'\')" data-icon="'+ic+'" style="width:36px;height:36px;border-radius:8px;border:1.5px solid var(--gray-border);background:#fff;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;" title="'+ic+'">'+ic+'</button>');
-            });
-          })();
-          </script>
-        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;" id="fm-icon-palette"></div>
         <div style="display:flex;align-items:center;gap:8px;margin-top:8px;">
           <span style="font-size:13px;color:var(--text-soft);">Gewählt:</span>
           <span id="fm-icon-preview" style="font-size:24px;width:36px;height:36px;display:flex;align-items:center;justify-content:center;background:var(--gray-bg);border-radius:8px;border:1.5px solid var(--gray-border);">📌</span>
