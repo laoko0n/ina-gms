@@ -1263,9 +1263,16 @@ function loadPlanFuerTag(tag){
     const sumEl=document.getElementById('sum-'+zs);
     if(sumEl){sumEl.className='sum-empty';sumEl.style.cssText='';sumEl.textContent='nicht gewählt';}
     const hintEl=document.getElementById('hint-'+zs);
-    if(hintEl)hintEl.textContent='Tippe auf ein Angebot, um es zu wählen.';
+    if(hintEl)hintEl.innerHTML='Tippe auf ein Angebot, um es zu wählen.';
+    // Alle Chips vollständig zurücksetzen – Klassen UND Inline-Styles entfernen
     const chips=document.querySelectorAll('#chips-'+zs+' .fach-chip');
-    chips.forEach(c=>{const d=c.style.display;c.className='fach-chip';c.style.display=d;});
+    chips.forEach(c=>{
+      const disp=c.style.display; // display merken (manche Chips sind ausgeblendet)
+      const isDyn=c.classList.contains('fach-chip-dyn');
+      c.className='fach-chip'+(isDyn?' fach-chip-dyn':''); // Klassen zurücksetzen
+      c.style.cssText=''; // ALLE Inline-Styles löschen
+      c.style.display=disp; // display wiederherstellen
+    });
   });
 
   // Freitags-Hinweis anzeigen / ausblenden
@@ -1411,6 +1418,8 @@ function waehlen(zs,name,sel,icon,bg,color,fachId){
       return;
     }
   }
+  // DEBUG: kurz anzeigen was los ist
+  console.log('waehlen aufgerufen:', zs, name, 'activeTag:', activeTag, 'gruppe:', currentUserData?.gruppe, 'freiZS:', GRUPPEN[currentUserData?.gruppe||'durchstarter']?.freiZS);
 
   // Max-Teilnehmer prüfen für Ausleihe-Fächer (max 1 pro Stunde)
   const AUSLEIHE_MAX={'Spielausleihe':1,'Sportgeräteausleihe':1};
@@ -1443,22 +1452,22 @@ function waehlen(zs,name,sel,icon,bg,color,fachId){
 }
 
 function _waehlenAusfuehren(zs,name,sel,icon,bg,color,fachId){
-  // Harte Sperre: außerhalb des Schuljahres keine Wahl möglich
-  const sjBeginn=schuljahrConfig.sjBeginn;
-  const sjEnde=schuljahrConfig.sjEnde;
-  if(sjBeginn && activeTag && activeTag<sjBeginn){
-    toast('⛔ Dieser Tag liegt vor Schuljahresbeginn und kann nicht gewählt werden.');
-    return;
-  }
-  if(sjEnde && activeTag && activeTag>sjEnde){
-    toast('⛔ Dieser Tag liegt nach Schuljahresende und kann nicht gewählt werden.');
-    return;
-  }
-
   // Vergangene Tage sind nur zum Ansehen, keine Änderung möglich
   const heute=isoDate(new Date());
   if(activeTag && activeTag<heute){
     toast('Vergangene Tage können nicht mehr geändert werden.');
+    return;
+  }
+
+  // Tage außerhalb des Schuljahres können nicht gewählt werden
+  const sjBeginn=schuljahrConfig.sjBeginn;
+  const sjEnde=schuljahrConfig.sjEnde;
+  if(sjEnde && activeTag && activeTag>sjEnde){
+    toast('⛔ Dieser Tag liegt nach Schuljahresende.');
+    return;
+  }
+  if(sjBeginn && activeTag && activeTag<sjBeginn){
+    toast('⛔ Dieser Tag liegt vor Schuljahresbeginn ('+sjBeginn+'). Wähle einen Tag ab dem '+new Date(sjBeginn).getDate()+'.'+(new Date(sjBeginn).getMonth()+1)+'.');
     return;
   }
 
@@ -1561,17 +1570,12 @@ function renderGewahlt(){
     if(cfg.freiZS.includes(zs)){
       const chips=document.querySelectorAll('#chips-'+zs+' .fach-chip');
       chips.forEach(c=>{
-        // Stil zurücksetzen (außer display für ausgeblendete)
+        // Stil vollständig zurücksetzen – ALLE Inline-Styles löschen
         const disp=c.style.display;
         const isDyn=c.classList.contains('fach-chip-dyn');
         c.className='fach-chip'+(isDyn?' fach-chip-dyn':'');
-        if(isDyn){
-          // Dynamischer Chip: Fachfarbe entfernen (nur bei Auswahl gesetzt)
-          c.style.cssText='';
-          c.style.display=disp;
-        } else {
-          c.style.display=disp;
-        }
+        c.style.cssText=''; // Alle Inline-Styles weg (gilt für statische UND dynamische)
+        c.style.display=disp; // display-Wert wiederherstellen
         // Abgleich über eindeutige Kennung: für statische Chips der sel-Wert in der CSS-Klasse,
         // für dynamische Chips das data-fach-id Attribut (NICHT über Icon/Text, da mehrere
         // Fächer dasselbe Icon teilen können und das sonst fälschlich mehrere Chips markiert!)
