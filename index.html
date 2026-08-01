@@ -333,8 +333,8 @@
               <button class="fach-chip" id="chip-nico-1" onclick="waehlen(1,'Freizeit mit Nico','sel-nico','🤸','#E1F5EE','#085041')">🤸 Freizeit mit Nico 🔁</button>
               <button class="fach-chip-info" onclick="openNicoInfo()" title="Was ist Freizeit mit Nico?">i</button>
             </span>
-            <button class="fach-chip" id="chip-spielausleihe-1" onclick="waehlen(1,'Spielausleihe','sel-spielausleihe','🎲','#F3E8FF','#5B21B6')">🎲 Spielausleihe</button>
-            <button class="fach-chip" id="chip-sportausleihe-1" onclick="waehlen(1,'Sportgeräteausleihe','sel-sportausleihe','⚽','#E0F2FE','#0C4A6E')">⚽ Sportgeräteausleihe</button>
+            <button class="fach-chip" id="chip-spielausleihe-1" onclick="openAusleiheModal('Spielausleihe',1)">🎲 Spielausleihe</button>
+            <button class="fach-chip" id="chip-sportausleihe-1" onclick="openAusleiheModal('Sportgeräteausleihe',1)">⚽ Sportgeräteausleihe</button>
           </div>
           <div class="zs-hint" id="hint-1">Tippe auf ein Angebot um es zu wählen.</div>
         </div>
@@ -357,8 +357,8 @@
               <button class="fach-chip" id="chip-nico-2" onclick="waehlen(2,'Freizeit mit Nico','sel-nico','🤸','#E1F5EE','#085041')">🤸 Freizeit mit Nico</button>
               <button class="fach-chip-info" onclick="openNicoInfo()" title="Was ist Freizeit mit Nico?">i</button>
             </span>
-            <button class="fach-chip" id="chip-spielausleihe-2" onclick="waehlen(2,'Spielausleihe','sel-spielausleihe','🎲','#F3E8FF','#5B21B6')">🎲 Spielausleihe</button>
-            <button class="fach-chip" id="chip-sportausleihe-2" onclick="waehlen(2,'Sportgeräteausleihe','sel-sportausleihe','⚽','#E0F2FE','#0C4A6E')">⚽ Sportgeräteausleihe</button>
+            <button class="fach-chip" id="chip-spielausleihe-2" onclick="openAusleiheModal('Spielausleihe',2)">🎲 Spielausleihe</button>
+            <button class="fach-chip" id="chip-sportausleihe-2" onclick="openAusleiheModal('Sportgeräteausleihe',2)">⚽ Sportgeräteausleihe</button>
           </div>
           <div class="zs-hint" id="hint-2">Tippe auf ein Angebot um es zu wählen.</div>
         </div>
@@ -587,7 +587,11 @@
 
     <div id="sl-tab-lehrer" class="hidden">
       <div class="card">
-        <div class="card-title"><i class="ti ti-chalkboard"></i> Lehrkräfte – Klassenzuordnung</div>
+        <div class="card-title flex-row">
+          <i class="ti ti-chalkboard"></i> Lehrkräfte – Klassenzuordnung
+          <span class="spacer"></span>
+          <button class="btn btn-primary btn-sm" onclick="openLehrerModal()"><i class="ti ti-plus"></i> Hinzufügen</button>
+        </div>
         <p class="text-sm text-soft" style="margin-bottom:.75rem;">Lege fest, welche Klassen jede Lehrkraft betreut. Lehrer können nur Schüler ihrer eigenen Klassen bearbeiten.</p>
         <div id="sl-lehrer-liste"><p class="text-sm text-soft">Lade…</p></div>
       </div>
@@ -715,6 +719,60 @@
     <button class="nav-btn" id="sl-nav-pw" onclick="slShowTab('pw')"><i class="ti ti-lock"></i>Passwort</button>
   </nav>
 </div>
+</div>
+
+<!-- ═══ MODAL: LEHRER ANLEGEN/BEARBEITEN ═══ -->
+<div id="modal-lehrer" class="modal-backdrop hidden">
+  <div class="modal" style="max-width:460px;">
+    <div class="modal-title" id="modal-lehrer-title">Lehrkraft hinzufügen</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:.75rem;">
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">Vorname *</label>
+        <input type="text" id="ml-vorname" class="form-control" placeholder="z. B. Maria" />
+      </div>
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">Nachname *</label>
+        <input type="text" id="ml-nachname" class="form-control" placeholder="z. B. Müller" />
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">E-Mail *</label>
+      <input type="email" id="ml-email" class="form-control" placeholder="m.mueller@gms-stwend.de" />
+    </div>
+    <div class="form-group" id="ml-pw-group">
+      <label class="form-label">Startpasswort</label>
+      <div style="display:flex;gap:8px;">
+        <input type="text" id="ml-pw" class="form-control" readonly
+          style="font-family:monospace;background:var(--gray-bg);" />
+        <button type="button" class="btn btn-secondary btn-sm"
+          onclick="document.getElementById('ml-pw').value=genBeruehmtheitPasswort()"
+          title="Neues Passwort würfeln">🎲</button>
+      </div>
+      <p class="text-sm text-soft" style="margin-top:4px;">
+        Berühmtheit + Zahl · die Lehrkraft muss es beim ersten Login ändern.
+      </p>
+    </div>
+    <div id="ml-error" class="text-sm" style="color:#A32D2D;display:none;margin-bottom:.5rem;"></div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-secondary" style="flex:1;" onclick="closeLehrerModal()">Abbrechen</button>
+      <button class="btn btn-primary" style="flex:1;" id="ml-save-btn" onclick="saveLehrer()">
+        <i class="ti ti-check"></i> Speichern
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL: AUSLEIHE-BUCHUNG ═══ -->
+<div id="modal-ausleihe" class="modal-backdrop hidden">
+  <div class="modal" style="max-width:520px;">
+    <div class="modal-title" id="ausleihe-modal-title">🎲 Spielausleihe – Platz buchen</div>
+    <p class="text-sm text-soft" style="margin-bottom:.75rem;" id="ausleihe-modal-desc"></p>
+    <div id="ausleihe-slot-liste" style="display:flex;flex-direction:column;gap:8px;margin-bottom:1rem;"></div>
+    <div id="ausleihe-modal-error" class="text-sm" style="color:#A32D2D;display:none;margin-bottom:.5rem;"></div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-secondary" style="flex:1;" onclick="document.getElementById('modal-ausleihe').classList.add('hidden')">Abbrechen</button>
+    </div>
+  </div>
 </div>
 
 <!-- ═══ MODAL: SCHÜLER ═══ -->
@@ -1422,7 +1480,7 @@ function waehlen(zs,name,sel,icon,bg,color,fachId){
   console.log('waehlen aufgerufen:', zs, name, 'activeTag:', activeTag, 'gruppe:', currentUserData?.gruppe, 'freiZS:', GRUPPEN[currentUserData?.gruppe||'durchstarter']?.freiZS);
 
   // Max-Teilnehmer prüfen für Ausleihe-Fächer (max 1 pro Stunde)
-  const AUSLEIHE_MAX={'Spielausleihe':1,'Sportgeräteausleihe':1};
+  const AUSLEIHE_MAX={'Spielausleihe':2,'Sportgeräteausleihe':2};
   if(AUSLEIHE_MAX[name] && activeTag){
     const max=AUSLEIHE_MAX[name];
     withFirebase(async({db,getDocs,collection,getDocsFromServer})=>{
@@ -2268,6 +2326,99 @@ function deleteSchueler(uid,name){
 }
 
 // ═══ LEHRER KLASSENZUORDNUNG (nur Schulleitung) ═══
+// ═══ LEHRER MANUELL ANLEGEN ═══
+let editLehrerModalUid=null;
+
+function openLehrerModal(uid){
+  editLehrerModalUid=uid||null;
+  const title=document.getElementById('modal-lehrer-title');
+  const err=document.getElementById('ml-error');
+  err.style.display='none';
+
+  if(uid){
+    title.textContent='Lehrkraft bearbeiten';
+    document.getElementById('ml-pw-group').style.display='none';
+    withFirebase(async({db,doc,getDoc})=>{
+      const snap=await getDoc(doc(db,'users',uid));
+      if(snap.exists()){
+        const d=snap.data();
+        document.getElementById('ml-vorname').value=d.vorname||'';
+        document.getElementById('ml-nachname').value=d.nachname||'';
+        document.getElementById('ml-email').value=d.email||'';
+        document.getElementById('ml-email').disabled=true;
+      }
+      document.getElementById('modal-lehrer').classList.remove('hidden');
+    });
+  } else {
+    title.textContent='Lehrkraft hinzufügen';
+    document.getElementById('ml-pw-group').style.display='';
+    document.getElementById('ml-email').disabled=false;
+    document.getElementById('ml-vorname').value='';
+    document.getElementById('ml-nachname').value='';
+    document.getElementById('ml-email').value='';
+    document.getElementById('ml-pw').value=genBeruehmtheitPasswort();
+    document.getElementById('modal-lehrer').classList.remove('hidden');
+  }
+}
+
+function closeLehrerModal(){
+  document.getElementById('modal-lehrer').classList.add('hidden');
+  editLehrerModalUid=null;
+  document.getElementById('ml-email').disabled=false;
+}
+
+function saveLehrer(){
+  const vorname=document.getElementById('ml-vorname').value.trim();
+  const nachname=document.getElementById('ml-nachname').value.trim();
+  const email=document.getElementById('ml-email').value.trim().toLowerCase();
+  const pw=document.getElementById('ml-pw').value.trim();
+  const err=document.getElementById('ml-error');
+  err.style.display='none';
+
+  if(!vorname||!nachname){showErr(err,'Bitte Vor- und Nachname eingeben.');return;}
+  if(!email||!email.includes('@')){showErr(err,'Bitte eine gültige E-Mail-Adresse eingeben.');return;}
+
+  const saveBtn=document.getElementById('ml-save-btn');
+  saveBtn.disabled=true;saveBtn.textContent='Wird gespeichert…';
+
+  withFirebase(async({db,doc,setDoc,updateDoc,createUserWithEmailAndPassword,auth})=>{
+    try{
+      if(editLehrerModalUid){
+        // Bearbeiten: nur Firestore aktualisieren
+        await updateDoc(doc(db,'users',editLehrerModalUid),{vorname,nachname});
+        toast('✓ Lehrkraft aktualisiert.');
+        closeLehrerModal();
+        loadLehrerKlassenListe();
+      } else {
+        // Neu anlegen: Auth + Firestore
+        if(!pw||pw.length<6){showErr(err,'Bitte Passwort generieren.');saveBtn.disabled=false;saveBtn.innerHTML='<i class="ti ti-check"></i> Speichern';return;}
+        const cred=await createUserWithEmailAndPassword(auth,email,pw);
+        await setDoc(doc(db,'users',cred.user.uid),{
+          vorname,nachname,email,
+          role:'lehrer',
+          klassen:[],
+          angebote:[],
+          mustSetPassword:true, // Lehrer muss PW beim ersten Login ändern
+          passwort:pw,
+          createdAt:new Date().toISOString()
+        });
+        toast('✓ '+vorname+' '+nachname+' angelegt · Passwort: '+pw);
+        closeLehrerModal();
+        loadLehrerKlassenListe();
+      }
+    }catch(e){
+      console.error('Fehler:',e);
+      const msg=e.code==='auth/email-already-in-use'
+        ? 'Diese E-Mail-Adresse ist bereits vergeben.'
+        : (e.message||e.code||'Unbekannter Fehler');
+      showErr(err,msg);
+    } finally {
+      saveBtn.disabled=false;
+      saveBtn.innerHTML='<i class="ti ti-check"></i> Speichern';
+    }
+  });
+}
+
 function loadLehrerKlassenListe(){
   withFirebase(async({db,getDocs,collection})=>{
     const snaps=await getDocs(collection(db,'users'));
@@ -2294,6 +2445,7 @@ function renderLehrerKlassenListe(lehrer){
       <td><div style="display:flex;flex-wrap:wrap;gap:3px;">${angeboteHtml}</div></td>
       <td>
         <div class="flex-row" style="gap:6px;justify-content:flex-end;">
+          <button class="btn btn-secondary btn-sm" title="Name bearbeiten" onclick="openLehrerModal('${l.uid}')"><i class="ti ti-edit"></i></button>
           <button class="btn btn-secondary btn-sm" title="Klassen bearbeiten" onclick="openKlassenModal('${l.uid}','${l.vorname} ${l.nachname}',${JSON.stringify(klassen)})"><i class="ti ti-edit"></i> Klassen</button>
           <button class="btn btn-secondary btn-sm" title="Angebote zuweisen" onclick="openAngeboteModal('${l.uid}','${l.vorname} ${l.nachname}',${JSON.stringify(angebote)})"><i class="ti ti-target"></i> Angebote</button>
           <button class="btn btn-secondary btn-sm" title="Passwort zurücksetzen" onclick="openPwResetModal('${l.uid}','${l.vorname} ${l.nachname}','lehrer')"><i class="ti ti-key"></i></button>
@@ -2908,6 +3060,247 @@ function initIconPalette(){
   });
 }
 
+// ═══ AUSLEIHE-BUCHUNGSSYSTEM ═══
+// Berechnet alle buchbaren Tage (Mo-Do) vom aktiven Tag bis zu den nächsten Ferien
+function getAusleiheZeitraum(){
+  if(!activeTag) return [];
+  const ferien=schuljahrConfig.ferien||[];
+  const sjEnde=schuljahrConfig.sjEnde||'2027-07-09';
+
+  // Nächste Ferien nach activeTag finden
+  let bisStr=sjEnde;
+  ferien.forEach(f=>{
+    if(f.von && f.von>activeTag && (!bisStr||f.von<bisStr)){
+      bisStr=f.von;
+    }
+  });
+
+  // Alle Mo-Do zwischen activeTag und bisStr sammeln
+  const tage=[];
+  const start=new Date(activeTag);
+  const ende=new Date(bisStr);
+  const d=new Date(start);
+  while(d<ende){
+    const dow=d.getDay();
+    if(dow>=1&&dow<=4){ // Mo=1, Di=2, Mi=3, Do=4
+      tage.push(isoDate(d));
+    }
+    d.setDate(d.getDate()+1);
+  }
+  return tage;
+}
+
+async function openAusleiheModal(fachName, zs){
+  const modal=document.getElementById('modal-ausleihe');
+  const title=document.getElementById('ausleihe-modal-title');
+  const desc=document.getElementById('ausleihe-modal-desc');
+  const liste=document.getElementById('ausleihe-slot-liste');
+  const err=document.getElementById('ausleihe-modal-error');
+
+  const icon=fachName==='Spielausleihe'?'🎲':'⚽';
+  const farbe=fachName==='Spielausleihe'?'#5B21B6':'#0C4A6E';
+  const bg=fachName==='Spielausleihe'?'#F3E8FF':'#E0F2FE';
+  const zsLabel=zs===1?'7. Stunde (12:55–13:30)':'8. Stunde (13:30–14:15)';
+
+  title.textContent=icon+' '+fachName+' – '+zsLabel;
+  err.style.display='none';
+  liste.innerHTML='<p class="text-sm text-soft">Lade verfügbare Plätze…</p>';
+  modal.classList.remove('hidden');
+
+  const tage=getAusleiheZeitraum();
+  if(!tage.length){
+    liste.innerHTML='<p class="text-sm" style="color:#A32D2D;">Keine buchbaren Tage bis zu den nächsten Ferien gefunden.</p>';
+    return;
+  }
+
+  // Ferien-Bezeichnung ermitteln
+  const ferien=schuljahrConfig.ferien||[];
+  let naechsteFerien='Schuljahresende';
+  const refDate=activeTag;
+  ferien.forEach(f=>{
+    if(f.von&&f.von>refDate){
+      const d=new Date(f.von);
+      const label=f.name||('Ferien ab '+f.von);
+      if(!naechsteFerien||f.von<(ferien.find(x=>x.name===naechsteFerien)||{von:'9999'}).von){
+        naechsteFerien=label;
+      }
+    }
+  });
+
+  desc.textContent='Buche deinen festen Platz für '+fachName+' in der '+zsLabel+' – bis zu den '+naechsteFerien+'. Die Buchung gilt für alle Mo–Do bis dahin.';
+
+  withFirebase(async({db,getDocsFromServer,collection})=>{
+    // Alle vorhandenen Buchungen für dieses Fach+ZS laden
+    const planSnaps=await getDocsFromServer(collection(db,'plans'));
+    const buchungen={}; // tag → Anzahl Buchungen
+    const meineUid=currentUser.uid;
+    let ichHabeBereitsGebucht=false;
+
+    planSnaps.forEach(p=>{
+      const d=p.data();
+      if(!tage.includes(d.tag))return;
+      if(d['zs'+zs]&&d['zs'+zs].name===fachName){
+        buchungen[d.tag]=(buchungen[d.tag]||0)+1;
+        if(d.uid===meineUid) ichHabeBereitsGebucht=true;
+      }
+    });
+
+    const MAX=2;
+    const alleFrei=tage.every(t=>(buchungen[t]||0)<MAX);
+    const alleBelegt=tage.every(t=>(buchungen[t]||0)>=MAX);
+
+    let html='';
+
+    if(ichHabeBereitsGebucht){
+      html+=`<div style="background:#E1F5EE;border:1.5px solid #1D9E75;border-radius:10px;padding:12px 14px;margin-bottom:8px;">
+        <div style="font-weight:600;color:#085041;">✓ Du hast diesen Platz bereits gebucht!</div>
+        <p class="text-sm" style="color:#0F6E56;margin-top:4px;">Deine Buchung gilt für alle Mo–Do bis zu den nächsten Ferien.</p>
+        <button class="btn btn-secondary btn-sm" style="margin-top:8px;" onclick="storniereAusleihe('${fachName}',${zs})">Buchung stornieren</button>
+      </div>`;
+    } else if(alleBelegt){
+      html+=`<div style="background:#FCEBEB;border:1.5px solid #A32D2D;border-radius:10px;padding:12px 14px;">
+        <div style="font-weight:600;color:#A32D2D;">⛔ Leider alle Plätze belegt</div>
+        <p class="text-sm" style="color:#7C2D12;margin-top:4px;">Für diesen Zeitraum sind alle ${MAX} Plätze vergeben. Versuche es nach den Ferien erneut.</p>
+      </div>`;
+    } else {
+      // Verfügbare Slots anzeigen und Buchung ermöglichen
+      html+=`<div style="background:${bg};border:1.5px solid ${farbe}33;border-radius:10px;padding:12px 14px;margin-bottom:8px;">
+        <div style="font-weight:600;color:${farbe};">${icon} Plätze verfügbar!</div>
+        <div style="font-size:13px;color:${farbe};margin-top:4px;">
+          ${tage.length} Tage · max. ${MAX} Plätze/Tag/Stunde
+        </div>
+        <div style="margin-top:10px;display:grid;grid-template-columns:repeat(2,1fr);gap:6px;max-height:200px;overflow-y:auto;">`;
+
+      tage.forEach(t=>{
+        const bel=buchungen[t]||0;
+        const frei=MAX-bel;
+        const [j,m,d]=t.split('-').map(Number);
+        const datum=new Date(j,m-1,d);
+        const label=WOCHENTAGE[datum.getDay()]+' '+d+'.'+m+'.';
+        html+=`<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 8px;background:${frei>0?'#fff':'#FCEBEB'};border-radius:6px;border:0.5px solid ${frei>0?'var(--gray-border)':'#A32D2D'};">
+          <span style="font-size:12px;">${label}</span>
+          <span style="font-size:11px;font-weight:600;color:${frei>0?'#085041':'#A32D2D'};">${frei>0?frei+' frei':'voll'}</span>
+        </div>`;
+      });
+
+      html+=`</div>
+        <button class="btn btn-primary btn-full" style="margin-top:12px;background:${farbe};" 
+          onclick="buecheAusleihe('${fachName}',${zs})">
+          ${icon} Jetzt für alle Mo–Do bis zu den Ferien buchen
+        </button>
+      </div>`;
+    }
+
+    // Übersicht aller Tage
+    html+=`<details style="margin-top:4px;">
+      <summary style="font-size:12px;color:var(--text-soft);cursor:pointer;">Alle Tage anzeigen (${tage.length})</summary>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-top:8px;">`;
+    tage.forEach(t=>{
+      const bel=buchungen[t]||0;
+      const [j,m,d]=t.split('-').map(Number);
+      const datum=new Date(j,m-1,d);
+      const label=WOCHENTAGE[datum.getDay()]+' '+d+'.'+m+'.';
+      const voll=bel>=MAX;
+      html+=`<div style="font-size:11px;padding:4px 6px;border-radius:5px;background:${voll?'#FCEBEB':'#E1F5EE'};color:${voll?'#A32D2D':'#085041'};text-align:center;">
+        ${label}<br><b>${voll?'voll':bel+'/'+MAX}</b>
+      </div>`;
+    });
+    html+='</div></details>';
+
+    liste.innerHTML=html;
+  });
+}
+
+async function buecheAusleihe(fachName, zs){
+  const liste=document.getElementById('ausleihe-slot-liste');
+  const icon=fachName==='Spielausleihe'?'🎲':'⚽';
+  const sel=fachName==='Spielausleihe'?'sel-spielausleihe':'sel-sportausleihe';
+  const bg=fachName==='Spielausleihe'?'#F3E8FF':'#E0F2FE';
+  const color=fachName==='Spielausleihe'?'#5B21B6':'#0C4A6E';
+
+  liste.innerHTML='<p class="text-sm text-soft">Buche Plätze…</p>';
+
+  const tage=getAusleiheZeitraum();
+  const MAX=2;
+  let gespeichert=0, uebersprungen=0;
+
+  withFirebase(async({db,doc,setDoc,getDocsFromServer,collection})=>{
+    try{
+      // Aktuelle Belegung laden
+      const planSnaps=await getDocsFromServer(collection(db,'plans'));
+      const buchungen={};
+      planSnaps.forEach(p=>{
+        const d=p.data();
+        if(tage.includes(d.tag)&&d['zs'+zs]&&d['zs'+zs].name===fachName){
+          buchungen[d.tag]=(buchungen[d.tag]||0)+1;
+        }
+      });
+
+      // Pro Tag prüfen und buchen
+      for(const tag of tage){
+        const bel=buchungen[tag]||0;
+        if(bel>=MAX){uebersprungen++;continue;}
+        // Bestehenden Plan laden oder neu erstellen
+        const planRef=doc(db,'plans',currentUser.uid+'_'+tag);
+        // Nur ZS setzen, andere bestehende Einträge behalten
+        const updateData={
+          uid:currentUser.uid, tag,
+          gruppeSnapshot:currentUserData.gruppe||'durchstarter'
+        };
+        // Bestehende ZS-Werte lesen
+        const snap=planSnaps.docs?.find?.(p=>p.id===currentUser.uid+'_'+tag);
+        if(snap&&snap.exists()){
+          const existing=snap.data();
+          [1,2,3,4].forEach(z=>{if(z!==zs&&existing['zs'+z])updateData['zs'+z]=existing['zs'+z];});
+        }
+        updateData['zs'+zs]={name:fachName,sel,icon,bg,color,fachId:null};
+        // undefined-Werte bereinigen
+        Object.keys(updateData).forEach(k=>{if(updateData[k]===undefined)updateData[k]=null;});
+        await setDoc(planRef,updateData);
+        gespeichert++;
+      }
+
+      // Lokalen Zustand für aktiven Tag aktualisieren
+      if(tage.includes(activeTag)){
+        gewahlt[zs]={name:fachName,sel,icon,bg,color,fachId:null};
+        renderGewahlt();
+      }
+
+      const d=new Date(tage[tage.length-1]);
+      const bisLabel=WOCHENTAGE[d.getDay()]+' '+d.getDate()+'.'+(d.getMonth()+1)+'.';
+      toast('✅ '+fachName+' gebucht für '+gespeichert+' Tage'+(uebersprungen?' ('+uebersprungen+' Tage bereits voll)':'')+'!');
+      document.getElementById('modal-ausleihe').classList.add('hidden');
+    }catch(e){
+      console.error('Buchungsfehler:',e);
+      toast('❌ Fehler: '+(e.message||e),true);
+    }
+  });
+}
+
+async function storniereAusleihe(fachName,zs){
+  if(!confirm('Buchung für '+fachName+' in der '+(zs===1?'7.':'8.')+' Stunde wirklich für alle Tage stornieren?'))return;
+  const tage=getAusleiheZeitraum();
+
+  withFirebase(async({db,doc,getDocFromServer,setDoc,updateDoc})=>{
+    try{
+      for(const tag of tage){
+        const planRef=doc(db,'plans',currentUser.uid+'_'+tag);
+        const snap=await getDocFromServer(planRef);
+        if(!snap.exists())continue;
+        const d=snap.data();
+        if(d['zs'+zs]&&d['zs'+zs].name===fachName){
+          const update={...d};
+          update['zs'+zs]=null;
+          await setDoc(planRef,update);
+        }
+      }
+      if(tage.includes(activeTag)){gewahlt[zs]=null;renderGewahlt();}
+      toast('✓ Buchung storniert.');
+      document.getElementById('modal-ausleihe').classList.add('hidden');
+    }catch(e){toast('❌ Fehler: '+(e.message||e),true);}
+  });
+}
+
 function selectIcon(icon){
   if(!icon)return;
   initIconPalette(); // sicherstellen dass Palette existiert
@@ -3302,6 +3695,23 @@ const TIERE=['Adler','Affe','Ameise','Bär','Biber','Biene','Büffel','Dachs','D
   'Tiger','Vogel','Waschbär','Wolf','Zebra','Ziege'];
 function genTierPasswort(){
   return TIERE[Math.floor(Math.random()*TIERE.length)]+Math.floor(Math.random()*90+10);
+}
+
+// Berühmtheiten-Passwörter für Lehrkräfte
+const BERUEHMTHEITEN=[
+  'Einstein','Mozart','Beethoven','Schiller','Goethe','Bach','Brecht',
+  'Kafka','Hesse','Mann','Rilke','Böll','Grass','Dürer','Cranach',
+  'Kepler','Humboldt','Gauss','Planck','Heisenberg','Röntgen','Koch',
+  'Gutenberg','Zeppelin','Diesel','Benz','Siemens','Bosch','Porsche',
+  'Luther','Bismarck','Friedrich','Adenauer','Brandt','Schmidt',
+  'Newton','Darwin','Curie','Pasteur','Edison','Tesla','Faraday',
+  'Shakespeare','Dickens','Hugo','Voltaire','Rousseau','Descartes',
+  'Sokrates','Aristoteles','Platon','Archimedes','Pythagoras',
+  'Leonardo','Michelangelo','Raffael','Rembrandt','Monet','Picasso',
+  'Chaplin','Hitchcock','Mozart','Schubert','Brahms','Wagner','Liszt'
+];
+function genBeruehmtheitPasswort(){
+  return BERUEHMTHEITEN[Math.floor(Math.random()*BERUEHMTHEITEN.length)]+Math.floor(Math.random()*90+10);
 }
 
 function showErr(el,msg){el.textContent=msg;el.style.display='block';}
@@ -3861,6 +4271,18 @@ function loadSpielausleiheUebersicht(startMontag){
       {name:'Sportgeräteausleihe', icon:'⚽', bg:'#E0F2FE', border:'#BAE6FD', color:'#0C4A6E', numColor:'#0369A1'},
     ];
 
+    // Anwesenheits-Cache für Ausleihe pro Tag
+    const anwCache={};
+
+    // Vorhandene Anwesenheits-Daten laden
+    const {getDocs:getD2,collection:col2}=await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js').catch(()=>({}));
+    const anwSnaps=await getDocs(collection(db,'anwesenheit'));
+    anwSnaps.forEach(a=>{
+      const d=a.data();
+      if(!anwCache[d.tag])anwCache[d.tag]={};
+      Object.assign(anwCache[d.tag],d.schueler||{});
+    });
+
     let html='';
 
     tage.forEach(({key,label,ausserhalbSchuljahr,istFreitag})=>{
@@ -3875,50 +4297,103 @@ function loadSpielausleiheUebersicht(startMontag){
 
       const planMap={};
       allePlans.filter(p=>p.tag===key).forEach(p=>planMap[p.uid]=p);
+      const tagAnw=anwCache[key]||{};
 
       html+=`<div style="border:0.5px solid var(--gray-border);border-radius:10px;overflow:hidden;margin-bottom:12px;">
-        <div style="background:var(--gray-bg);padding:8px 14px;border-bottom:0.5px solid var(--gray-border);">
+        <div style="background:var(--gray-bg);padding:8px 14px;border-bottom:0.5px solid var(--gray-border);display:flex;align-items:center;justify-content:space-between;">
           <div style="font-weight:700;font-size:14px;color:var(--text);">${label}</div>
+          <button class="btn btn-primary btn-sm" onclick="speichereAusleiheAnwesenheit('${key}')"><i class="ti ti-device-floppy"></i> Speichern</button>
         </div>
         <div style="padding:10px 12px;display:grid;grid-template-columns:1fr 1fr;gap:10px;">`;
 
       kategorien.forEach(kat=>{
-        const teilnehmer=alleSchueler.filter(s=>{
-          const plan=planMap[s.uid];
-          if(!plan)return false;
-          return [1,2,3,4].some(zs=>plan['zs'+zs]&&plan['zs'+zs].name===kat.name);
-        });
+        // Nach ZS getrennt anzeigen (7. Std. und 8. Std. separat)
+        [1,2].forEach(zs=>{
+          const zsLabel=zs===1?'7. Std.':'8. Std.';
+          const teilnehmer=alleSchueler.filter(s=>{
+            const plan=planMap[s.uid];
+            if(!plan)return false;
+            return plan['zs'+zs]&&plan['zs'+zs].name===kat.name;
+          });
+          if(!teilnehmer.length)return;
 
-        html+=`<div style="border:1px solid ${kat.border};border-radius:8px;overflow:hidden;">
-          <div style="background:${kat.bg};padding:6px 10px;border-bottom:1px solid ${kat.border};">
-            <div style="font-weight:600;font-size:12px;color:${kat.color};">${kat.icon} ${kat.name}</div>
-            <div style="font-size:11px;color:${kat.numColor};">${teilnehmer.length} Schüler</div>
-          </div>
-          <div style="padding:6px 10px;">`;
+          html+=`<div style="border:1px solid ${kat.border};border-radius:8px;overflow:hidden;">
+            <div style="background:${kat.bg};padding:5px 10px;border-bottom:1px solid ${kat.border};">
+              <div style="font-weight:600;font-size:11px;color:${kat.color};">${kat.icon} ${kat.name} · ${zsLabel}</div>
+            </div>
+            <div style="padding:6px 8px;display:flex;flex-direction:column;gap:5px;">`;
 
-        if(!teilnehmer.length){
-          html+=`<p style="font-size:11px;color:var(--text-lighter);font-style:italic;margin:4px 0;">Keine Anmeldungen.</p>`;
-        } else {
-          teilnehmer.forEach((s,idx)=>{
-            const plan=planMap[s.uid]||{};
-            const stunden=[1,2,3,4].filter(zs=>plan['zs'+zs]&&plan['zs'+zs].name===kat.name)
-              .map(zs=>({1:'7.',2:'8.',3:'9.',4:'10.'}[zs]+' Std.'));
-            html+=`<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:0.5px solid var(--gray-border);">
-              <span style="font-size:10px;font-weight:700;color:${kat.numColor};width:16px;flex-shrink:0;">${idx+1}</span>
+          teilnehmer.forEach(s=>{
+            const anwKey='ausleihe_'+kat.name.replace(/[^a-z]/gi,'')+'_zs'+zs+'_'+s.uid;
+            const status=tagAnw[anwKey]||null;
+            const btnBase='padding:3px 8px;border-radius:99px;border:1px solid;font-size:10px;font-weight:600;cursor:pointer;font-family:inherit;';
+            html+=`<div style="display:flex;align-items:center;gap:6px;" id="ausl-row-${key}-${anwKey}">
               <div style="flex:1;min-width:0;">
-                <div style="font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${s.vorname} ${s.nachname}</div>
-                <div style="font-size:10px;color:var(--text-soft);">${s.klasse} · ${stunden.join('+')}</div>
+                <div style="font-size:11px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${s.vorname} ${s.nachname}</div>
+                <div style="font-size:10px;color:var(--text-soft);">${s.klasse}</div>
+              </div>
+              <div style="display:flex;gap:3px;flex-shrink:0;">
+                <button onclick="setAusleiheAnw('${key}','${anwKey}','anwesend',this)"
+                  style="${btnBase}${status==='anwesend'?'background:#E1F5EE;border-color:#1D9E75;color:#085041;':'background:#fff;border-color:var(--gray-border);color:var(--text-soft);'}">✓</button>
+                <button onclick="setAusleiheAnw('${key}','${anwKey}','abwesend',this)"
+                  style="${btnBase}${status==='abwesend'?'background:#FCEBEB;border-color:#A32D2D;color:#A32D2D;':'background:#fff;border-color:var(--gray-border);color:var(--text-soft);'}">✗</button>
               </div>
             </div>`;
           });
-        }
-        html+='</div></div>';
+          html+='</div></div>';
+        });
       });
 
       html+='</div></div>';
     });
 
     cont.innerHTML=html||'<p class="text-sm text-soft">Keine Daten.</p>';
+  });
+}
+
+// ═══ AUSLEIHE-ANWESENHEIT ═══
+// Lokaler Cache: { tag: { anwKey: status } }
+if(!window._ausleiheAnwCache) window._ausleiheAnwCache={};
+
+function setAusleiheAnw(tag,anwKey,status,btn){
+  if(!window._ausleiheAnwCache[tag]) window._ausleiheAnwCache[tag]={};
+  window._ausleiheAnwCache[tag][anwKey]=status;
+  // Buttons in dieser Zeile aktualisieren
+  const row=btn.closest('div[id^="ausl-row-"]');
+  if(row){
+    row.querySelectorAll('button').forEach(b=>{
+      const bs=b.getAttribute('onclick').includes("'anwesend'");
+      const active=bs?(status==='anwesend'):(status==='abwesend');
+      if(bs){
+        b.style.background=active?'#E1F5EE':'#fff';
+        b.style.borderColor=active?'#1D9E75':'var(--gray-border)';
+        b.style.color=active?'#085041':'var(--text-soft)';
+      } else {
+        b.style.background=active?'#FCEBEB':'#fff';
+        b.style.borderColor=active?'#A32D2D':'var(--gray-border)';
+        b.style.color=active?'#A32D2D':'var(--text-soft)';
+      }
+    });
+  }
+}
+
+function speichereAusleiheAnwesenheit(tag){
+  const daten=window._ausleiheAnwCache[tag];
+  if(!daten||!Object.keys(daten).length){
+    toast('Keine Änderungen zum Speichern.');
+    return;
+  }
+  withFirebase(async({db,doc,setDoc,getDoc})=>{
+    try{
+      const ref=doc(db,'anwesenheit','ausleihe_'+tag);
+      const snap=await getDoc(ref);
+      const existing=snap.exists()?(snap.data().schueler||{}):{};
+      const merged={...existing,...daten};
+      await setDoc(ref,{tag,lehrerUid:currentUser.uid,schueler:merged,updatedAt:new Date().toISOString()});
+      toast('✅ Anwesenheit Ausleihe gespeichert.');
+    }catch(e){
+      toast('❌ Fehler: '+(e.message||e),true);
+    }
   });
 }
 
