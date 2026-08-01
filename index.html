@@ -1429,6 +1429,8 @@ function loadPlanFuerTag(tag){
 
     try{renderGewahlt();}catch(e){console.warn('renderGewahlt:',e);}
     try{updateHalbAGAnzeige();}catch(e){}
+    // Ausleihe-Chips auf Verfügbarkeit prüfen (ausblenden wenn voll)
+    setTimeout(()=>pruefeAusleiheChips(),500);
 
     // Speichern-Button: gesperrt bei vergangenen Tagen
     const sb=document.getElementById('save-btn');
@@ -3062,29 +3064,44 @@ function initIconPalette(){
 
 // ═══ AUSLEIHE-BUCHUNGSSYSTEM ═══
 // Berechnet alle buchbaren Tage (Mo-Do) vom aktiven Tag bis zu den nächsten Ferien
-function getAusleiheZeitraum(){
-  if(!activeTag) return [];
+// Echte Schulferien = mindestens 3 Tage lang (keine Feiertage)
+function getNaechsteEchteFerien(){
   const ferien=schuljahrConfig.ferien||[];
   const sjEnde=schuljahrConfig.sjEnde||'2027-07-09';
+  if(!activeTag) return {bis:sjEnde, name:'Schuljahresende'};
 
-  // Nächste Ferien nach activeTag finden
-  let bisStr=sjEnde;
-  ferien.forEach(f=>{
-    if(f.von && f.von>activeTag && (!bisStr||f.von<bisStr)){
-      bisStr=f.von;
+  // Nur mehrtägige Ferienblöcke (min. 3 Tage = echte Ferien, keine Feiertage)
+  const echteFerien=ferien.filter(f=>{
+    if(!f.von||!f.bis) return false;
+    const von=new Date(f.von), bis=new Date(f.bis);
+    const tage=(bis-von)/(1000*60*60*24)+1;
+    return tage>=3;
+  });
+
+  // Nächste echte Ferien nach activeTag
+  let naechste=null;
+  echteFerien.forEach(f=>{
+    if(f.von>activeTag && (!naechste||f.von<naechste.von)){
+      naechste=f;
     }
   });
 
-  // Alle Mo-Do zwischen activeTag und bisStr sammeln
+  return naechste
+    ? {bis:naechste.von, name:naechste.name||'Ferien'}
+    : {bis:sjEnde, name:'Schuljahresende'};
+}
+
+function getAusleiheZeitraum(){
+  if(!activeTag) return [];
+  const {bis}=getNaechsteEchteFerien();
+
+  // Alle Mo-Do zwischen activeTag (inkl.) und Ferienstart (exkl.) sammeln
   const tage=[];
-  const start=new Date(activeTag);
-  const ende=new Date(bisStr);
-  const d=new Date(start);
+  const d=new Date(activeTag);
+  const ende=new Date(bis);
   while(d<ende){
     const dow=d.getDay();
-    if(dow>=1&&dow<=4){ // Mo=1, Di=2, Mi=3, Do=4
-      tage.push(isoDate(d));
-    }
+    if(dow>=1&&dow<=4) tage.push(isoDate(d));
     d.setDate(d.getDate()+1);
   }
   return tage;
@@ -3108,106 +3125,152 @@ async function openAusleiheModal(fachName, zs){
   modal.classList.remove('hidden');
 
   const tage=getAusleiheZeitraum();
+  const {name:ferienName}=getNaechsteEchteFerien();
+
   if(!tage.length){
     liste.innerHTML='<p class="text-sm" style="color:#A32D2D;">Keine buchbaren Tage bis zu den nächsten Ferien gefunden.</p>';
     return;
   }
 
-  // Ferien-Bezeichnung ermitteln
-  const ferien=schuljahrConfig.ferien||[];
-  let naechsteFerien='Schuljahresende';
-  const refDate=activeTag;
-  ferien.forEach(f=>{
-    if(f.von&&f.von>refDate){
-      const d=new Date(f.von);
-      const label=f.name||('Ferien ab '+f.von);
-      if(!naechsteFerien||f.von<(ferien.find(x=>x.name===naechsteFerien)||{von:'9999'}).von){
-        naechsteFerien=label;
+  desc.textContent='Buche deinen festen Platz für '+fachName+' in der '+zsLabel+' – bis zu den '+ferienName+'. Die Buchung gilt für alle Mo–Do bis dahin.';
+
+  withFirebase(async({db,getDocs,getDocsFromServer,collection})=>{
+    try{
+      const planSnaps=await getDocsFromServer(collection(db,'plans'));
+      const buchungen={};
+      const meineUid=currentUser.uid;
+      let ichHabeBereitsGebucht=false;
+
+      planSnaps.forEach(p=>{
+        const d=p.data();
+        if(!tage.includes(d.tag))return;
+        if(d['zs'+zs]&&d['zs'+zs].name===fachName){
+          buchungen[d.tag]=(buchungen[d.tag]||0)+1;
+          if(d.uid===meineUid) ichHabeBereitsGebucht=true;
+        }
+      });
+
+      const MAX=2;
+      const alleBelegt=tage.every(t=>(buchungen[t]||0)>=MAX);
+
+      let html='';
+
+      if(ichHabeBereitsGebucht){
+        html+=`<div style="background:#E1F5EE;border:1.5px solid #1D9E75;border-radius:10px;padding:12px 14px;margin-bottom:8px;">
+          <div style="font-weight:600;color:#085041;">✓ Du hast diesen Platz bereits gebucht!</div>
+          <p class="text-sm" style="color:#0F6E56;margin-top:4px;">Deine Buchung gilt für alle Mo–Do bis zu den ${ferienName}.</p>
+          <button class="btn btn-secondary btn-sm" style="margin-top:8px;" onclick="storniereAusleihe('${fachName}',${zs})">Buchung stornieren</button>
+        </div>`;
+      } else if(alleBelegt){
+        html+=`<div style="background:#FCEBEB;border:1.5px solid #A32D2D;border-radius:10px;padding:12px 14px;">
+          <div style="font-weight:600;color:#A32D2D;">⛔ Leider alle Plätze belegt</div>
+          <p class="text-sm" style="color:#7C2D12;margin-top:4px;">Für diesen Zeitraum (bis ${ferienName}) sind alle ${MAX} Plätze vergeben. Nach den Ferien gibt es wieder freie Plätze.</p>
+        </div>`;
+      } else {
+        const freieSlots=tage.filter(t=>(buchungen[t]||0)<MAX).length;
+        html+=`<div style="background:${bg};border:1.5px solid ${farbe}33;border-radius:10px;padding:12px 14px;margin-bottom:8px;">
+          <div style="font-weight:600;color:${farbe};">${icon} ${freieSlots} von ${tage.length} Tagen noch frei!</div>
+          <div style="font-size:13px;color:${farbe};margin-top:4px;">Gilt für alle Mo–Do bis zu den ${ferienName} · max. ${MAX} Schüler/Tag/Stunde</div>
+          <div style="margin-top:10px;display:grid;grid-template-columns:repeat(3,1fr);gap:5px;max-height:180px;overflow-y:auto;">`;
+
+        tage.forEach(t=>{
+          const bel=buchungen[t]||0;
+          const frei=MAX-bel;
+          const [j,m,d]=t.split('-').map(Number);
+          const datum=new Date(j,m-1,d);
+          const label=WOCHENTAGE[datum.getDay()]+' '+d+'.'+m+'.';
+          html+=`<div style="font-size:11px;padding:4px 6px;border-radius:6px;text-align:center;background:${frei>0?'#fff':'#FCEBEB'};border:1px solid ${frei>0?'var(--gray-border)':'#A32D2D'};">
+            <div>${label}</div>
+            <div style="font-weight:700;color:${frei>0?'#085041':'#A32D2D'};">${frei>0?frei+' frei':'voll'}</div>
+          </div>`;
+        });
+
+        html+=`</div>
+          <button class="btn btn-primary btn-full" style="margin-top:12px;background:${farbe};"
+            onclick="buecheAusleihe('${fachName}',${zs})">
+            ${icon} Jetzt für alle Mo–Do bis zu den ${ferienName} buchen
+          </button>
+        </div>`;
       }
-    }
-  });
 
-  desc.textContent='Buche deinen festen Platz für '+fachName+' in der '+zsLabel+' – bis zu den '+naechsteFerien+'. Die Buchung gilt für alle Mo–Do bis dahin.';
-
-  withFirebase(async({db,getDocsFromServer,collection})=>{
-    // Alle vorhandenen Buchungen für dieses Fach+ZS laden
-    const planSnaps=await getDocsFromServer(collection(db,'plans'));
-    const buchungen={}; // tag → Anzahl Buchungen
-    const meineUid=currentUser.uid;
-    let ichHabeBereitsGebucht=false;
-
-    planSnaps.forEach(p=>{
-      const d=p.data();
-      if(!tage.includes(d.tag))return;
-      if(d['zs'+zs]&&d['zs'+zs].name===fachName){
-        buchungen[d.tag]=(buchungen[d.tag]||0)+1;
-        if(d.uid===meineUid) ichHabeBereitsGebucht=true;
-      }
-    });
-
-    const MAX=2;
-    const alleFrei=tage.every(t=>(buchungen[t]||0)<MAX);
-    const alleBelegt=tage.every(t=>(buchungen[t]||0)>=MAX);
-
-    let html='';
-
-    if(ichHabeBereitsGebucht){
-      html+=`<div style="background:#E1F5EE;border:1.5px solid #1D9E75;border-radius:10px;padding:12px 14px;margin-bottom:8px;">
-        <div style="font-weight:600;color:#085041;">✓ Du hast diesen Platz bereits gebucht!</div>
-        <p class="text-sm" style="color:#0F6E56;margin-top:4px;">Deine Buchung gilt für alle Mo–Do bis zu den nächsten Ferien.</p>
-        <button class="btn btn-secondary btn-sm" style="margin-top:8px;" onclick="storniereAusleihe('${fachName}',${zs})">Buchung stornieren</button>
-      </div>`;
-    } else if(alleBelegt){
-      html+=`<div style="background:#FCEBEB;border:1.5px solid #A32D2D;border-radius:10px;padding:12px 14px;">
-        <div style="font-weight:600;color:#A32D2D;">⛔ Leider alle Plätze belegt</div>
-        <p class="text-sm" style="color:#7C2D12;margin-top:4px;">Für diesen Zeitraum sind alle ${MAX} Plätze vergeben. Versuche es nach den Ferien erneut.</p>
-      </div>`;
-    } else {
-      // Verfügbare Slots anzeigen und Buchung ermöglichen
-      html+=`<div style="background:${bg};border:1.5px solid ${farbe}33;border-radius:10px;padding:12px 14px;margin-bottom:8px;">
-        <div style="font-weight:600;color:${farbe};">${icon} Plätze verfügbar!</div>
-        <div style="font-size:13px;color:${farbe};margin-top:4px;">
-          ${tage.length} Tage · max. ${MAX} Plätze/Tag/Stunde
-        </div>
-        <div style="margin-top:10px;display:grid;grid-template-columns:repeat(2,1fr);gap:6px;max-height:200px;overflow-y:auto;">`;
-
+      // Übersicht aller Tage aufklappbar
+      html+=`<details style="margin-top:4px;">
+        <summary style="font-size:12px;color:var(--text-soft);cursor:pointer;">Alle ${tage.length} Tage anzeigen</summary>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-top:8px;">`;
       tage.forEach(t=>{
         const bel=buchungen[t]||0;
-        const frei=MAX-bel;
         const [j,m,d]=t.split('-').map(Number);
         const datum=new Date(j,m-1,d);
         const label=WOCHENTAGE[datum.getDay()]+' '+d+'.'+m+'.';
-        html+=`<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 8px;background:${frei>0?'#fff':'#FCEBEB'};border-radius:6px;border:0.5px solid ${frei>0?'var(--gray-border)':'#A32D2D'};">
-          <span style="font-size:12px;">${label}</span>
-          <span style="font-size:11px;font-weight:600;color:${frei>0?'#085041':'#A32D2D'};">${frei>0?frei+' frei':'voll'}</span>
+        const voll=bel>=MAX;
+        html+=`<div style="font-size:11px;padding:4px 6px;border-radius:5px;background:${voll?'#FCEBEB':'#E1F5EE'};color:${voll?'#A32D2D':'#085041'};text-align:center;">
+          ${label}<br><b>${voll?'voll':bel+'/'+MAX}</b>
         </div>`;
       });
+      html+='</div></details>';
 
-      html+=`</div>
-        <button class="btn btn-primary btn-full" style="margin-top:12px;background:${farbe};" 
-          onclick="buecheAusleihe('${fachName}',${zs})">
-          ${icon} Jetzt für alle Mo–Do bis zu den Ferien buchen
-        </button>
-      </div>`;
+      liste.innerHTML=html;
+
+      // Chips ausblenden wenn komplett voll, wieder einblenden wenn Plätze frei
+      _aktualisiereAusleiheChips(fachName, zs, buchungen, tage, MAX, ichHabeBereitsGebucht);
+
+    }catch(e){
+      console.error('Ausleihe Modal Fehler:',e);
+      liste.innerHTML='<p class="text-sm" style="color:#A32D2D;">Fehler beim Laden: '+(e.message||e)+'</p>';
     }
+  });
+}
 
-    // Übersicht aller Tage
-    html+=`<details style="margin-top:4px;">
-      <summary style="font-size:12px;color:var(--text-soft);cursor:pointer;">Alle Tage anzeigen (${tage.length})</summary>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-top:8px;">`;
-    tage.forEach(t=>{
-      const bel=buchungen[t]||0;
-      const [j,m,d]=t.split('-').map(Number);
-      const datum=new Date(j,m-1,d);
-      const label=WOCHENTAGE[datum.getDay()]+' '+d+'.'+m+'.';
-      const voll=bel>=MAX;
-      html+=`<div style="font-size:11px;padding:4px 6px;border-radius:5px;background:${voll?'#FCEBEB':'#E1F5EE'};color:${voll?'#A32D2D':'#085041'};text-align:center;">
-        ${label}<br><b>${voll?'voll':bel+'/'+MAX}</b>
-      </div>`;
-    });
-    html+='</div></details>';
+// Ausleihe-Chips ausblenden wenn komplett voll, einblenden wenn frei
+function _aktualisiereAusleiheChips(fachName, zs, buchungen, tage, MAX, ichGebucht){
+  const chipId=fachName==='Spielausleihe'?'chip-spielausleihe-':'chip-sportausleihe-';
+  const chip=document.getElementById(chipId+zs);
+  if(!chip) return;
 
-    liste.innerHTML=html;
+  // Chip anzeigen wenn: ich selbst gebucht habe, oder noch Plätze frei sind
+  const nochFrei=tage.some(t=>(buchungen[t]||0)<MAX);
+  if(ichGebucht || nochFrei){
+    chip.style.display='';
+    chip.style.opacity='';
+    // Wenn ich gebucht habe: grün markieren
+    if(ichGebucht){
+      chip.style.background=fachName==='Spielausleihe'?'#F3E8FF':'#E0F2FE';
+      chip.style.borderColor=fachName==='Spielausleihe'?'#7C3AED':'#0284C7';
+      chip.style.color=fachName==='Spielausleihe'?'#4C1D95':'#0C4A6E';
+    }
+  } else {
+    // Komplett voll → ausblenden
+    chip.style.display='none';
+  }
+}
+
+// Beim Laden eines Tages: Ausleihe-Chips auf Verfügbarkeit prüfen
+async function pruefeAusleiheChips(){
+  if(!activeTag||!currentUser) return;
+  const tage=getAusleiheZeitraum();
+  if(!tage.length) return;
+
+  withFirebase(async({db,getDocsFromServer,collection})=>{
+    try{
+      const planSnaps=await getDocsFromServer(collection(db,'plans'));
+      const MAX=2;
+
+      ['Spielausleihe','Sportgeräteausleihe'].forEach(fachName=>{
+        [1,2].forEach(zs=>{
+          const buchungen={};
+          let ichGebucht=false;
+          planSnaps.forEach(p=>{
+            const d=p.data();
+            if(!tage.includes(d.tag))return;
+            if(d['zs'+zs]&&d['zs'+zs].name===fachName){
+              buchungen[d.tag]=(buchungen[d.tag]||0)+1;
+              if(d.uid===currentUser.uid) ichGebucht=true;
+            }
+          });
+          _aktualisiereAusleiheChips(fachName,zs,buchungen,tage,MAX,ichGebucht);
+        });
+      });
+    }catch(e){console.warn('pruefeAusleiheChips Fehler:',e);}
   });
 }
 
@@ -3762,25 +3825,26 @@ async function addNeuesAngebot(){
   if(!zeitschiene){showErr(err,'Bitte eine Zeitschiene auswählen – sonst erscheint das Angebot nicht bei den Schülern.');return;}
   if(gruppen.length===0){showErr(err,'Bitte mindestens eine Schülergruppe auswählen.');return;}
 
-  const zsNummern=zeitschiene.split(',').map(Number);
-  const isDoppel=zsNummern.length>1;
+  const istEinzeln=zeitschiene.startsWith('einzeln:');
+  const zsWert=istEinzeln?zeitschiene.slice(8):zeitschiene;
+  const zsNummern=zsWert.split(',').map(Number).filter(n=>!isNaN(n));
+  const isDoppel=!istEinzeln && zsNummern.length>1;
   const sel='sel-custom-'+name.toLowerCase().replace(/[^a-z0-9]/g,'-').slice(0,20);
 
   // Sofort zur Auswahl hinzufügen
   if(!ALLE_ANGEBOTE.includes(name)) ALLE_ANGEBOTE.push(name);
   if(!editAngeboteAuswahl.includes(name)) editAngeboteAuswahl.push(name);
 
-  // Vollständig in Firestore-Fächerliste speichern – mit allen Pflichtfeldern,
-  // damit es als Chip bei Schülern erscheint (siehe renderDynamischeChips)
   withFirebase(async({db,collection})=>{
     try{
       const {addDoc}=await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
       await addDoc(collection(db,'faecher'),{
         name, icon:'📌', sel,
         bg:'#FAECE7', color:'#4A1B0C',
-        zeitschiene,
-        zeitschieneName:zsNummern.map(z=>({1:'7. Std.',2:'8. Std.',3:'9. Std.',4:'10. Std.'}[z])).join('+'),
+        zeitschiene:zsWert,
+        zeitschieneName:zsNummern.map(z=>({1:'7. Std.',2:'8. Std.',3:'9. Std.',4:'10. Std.'}[z])).join(istEinzeln?' + ':'+'),
         isDoppelstunde:isDoppel,
+        isEinzelnWaehlbar:istEinzeln,
         maxTeilnehmer:null, beschreibung:'', gruppen, aktiv:true,
         createdAt:new Date().toISOString()
       });
@@ -4579,9 +4643,11 @@ function savePwReset(){
         <option value="1">7. Std. (12:55–13:30)</option>
         <option value="2">8. Std. (13:30–14:15)</option>
         <option value="1,2">7.+8. Std. 🔁 Doppelstunde</option>
+        <option value="einzeln:1,2">7. + 8. Std. – einzeln wählbar ✓</option>
         <option value="3">9. Std. (14:15–15:00)</option>
         <option value="4">10. Std. (15:00–15:45)</option>
         <option value="3,4">9.+10. Std. 🔁 Doppelstunde</option>
+        <option value="einzeln:3,4">9. + 10. Std. – einzeln wählbar ✓</option>
       </select>
 
       <label class="form-label" style="font-size:12px;">Für welche Gruppen? *</label>
