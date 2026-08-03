@@ -473,7 +473,12 @@
 
     <div id="l-tab-uebersicht">
       <div class="card">
-        <div class="card-title"><i class="ti ti-list-check"></i> Schülerübersicht – INA-Pläne</div>
+        <div class="card-title flex-row">
+          <span><i class="ti ti-list-check"></i> Schülerübersicht – INA-Pläne</span>
+          <select id="l-klassen-filter" class="form-control" style="max-width:160px;font-size:13px;padding:6px 10px;" onchange="lAktualisiereKlassenFilter()">
+            <option value="">Alle Klassen</option>
+          </select>
+        </div>
         <div class="plan-tag-grid" id="l-plan-tage"></div>
         <div id="l-plan-inhalt"><p class="text-sm text-soft">Wähle einen Tag.</p></div>
       </div>
@@ -566,7 +571,12 @@
 
     <div id="sl-tab-uebersicht">
       <div class="card">
-        <div class="card-title"><i class="ti ti-layout-grid"></i> Alle INA-Pläne</div>
+        <div class="card-title flex-row">
+          <span><i class="ti ti-layout-grid"></i> Alle INA-Pläne</span>
+          <select id="sl-klassen-filter" class="form-control" style="max-width:160px;font-size:13px;padding:6px 10px;" onchange="slAktualisiereKlassenFilter()">
+            <option value="">Alle Klassen</option>
+          </select>
+        </div>
         <div class="plan-tag-grid" id="sl-plan-tage"></div>
         <div id="sl-plan-inhalt"><p class="text-sm text-soft">Wähle einen Tag.</p></div>
       </div>
@@ -1429,6 +1439,8 @@ function loadPlanFuerTag(tag){
 
     try{renderGewahlt();}catch(e){console.warn('renderGewahlt:',e);}
     try{updateHalbAGAnzeige();}catch(e){}
+    // Dynamische Chips neu rendern (Wochentag-Filter anwenden)
+    renderDynamischeChips();
     // Ausleihe-Chips auf Verfügbarkeit prüfen (ausblenden wenn voll)
     setTimeout(()=>pruefeAusleiheChips(),500);
 
@@ -1947,37 +1959,55 @@ function buildPlanTagLeiste(containerId,renderFn,startMontag){
 
   bar.appendChild(tagGrid);
 }
+// ═══ KLASSEN-FILTER FÜR PLÄNE-ÜBERSICHT ═══
+function befuelleKlassenFilter(selectId, schueler){
+  const sel=document.getElementById(selectId);
+  if(!sel) return;
+  const aktuellerWert=sel.value;
+  const klassen=[...new Set(schueler.map(s=>s.klasse).filter(Boolean))].sort((a,b)=>{
+    const numA=parseInt(a), numB=parseInt(b);
+    if(numA!==numB) return numA-numB;
+    return a.localeCompare(b);
+  });
+  sel.innerHTML='<option value="">Alle Klassen</option>';
+  klassen.forEach(k=>{
+    const opt=document.createElement('option');
+    opt.value=k; opt.textContent='Klasse '+k;
+    if(k===aktuellerWert) opt.selected=true;
+    sel.appendChild(opt);
+  });
+}
+function lAktualisiereKlassenFilter(){
+  const aktivBtn=document.querySelector('#l-plan-tage .plan-tag-btn.active');
+  if(aktivBtn) aktivBtn.click();
+}
+function slAktualisiereKlassenFilter(){
+  const aktivBtn=document.querySelector('#sl-plan-tage .plan-tag-btn.active');
+  if(aktivBtn) aktivBtn.click();
+}
 async function renderLehrerPlan(tag){
   const cont=document.getElementById('l-plan-inhalt');cont.innerHTML='<p class="text-sm text-soft">Lade…</p>';
   withFirebase(async({db,getDocs,getDocsFromServer,collection})=>{
     const snaps=await getDocs(collection(db,'users'));
-    const schueler=[];snaps.forEach(s=>{if(s.data().role==='schueler')schueler.push({uid:s.id,...s.data()});});
+    let schueler=[];snaps.forEach(s=>{if(s.data().role==='schueler')schueler.push({uid:s.id,...s.data()});});
     schueler.sort((a,b)=>(a.klasse+a.nachname).localeCompare(b.klasse+b.nachname));
-    // Pläne immer frisch vom Server holen (kein Cache)
+    befuelleKlassenFilter('l-klassen-filter', schueler);
+    const filter=document.getElementById('l-klassen-filter')?.value||'';
+    if(filter) schueler=schueler.filter(s=>s.klasse===filter);
     const planSnaps=await getDocsFromServer(collection(db,'plans'));
-    const planMap={};
-    let allePlaene=[];
-    planSnaps.forEach(p=>{
-      const d=p.data();
-      allePlaene.push(d.tag+'|'+d.uid?.slice(0,8));
-      if(d.tag===tag)planMap[d.uid]=d;
-    });
-    // Debug-Info direkt anzeigen
-    const gefunden=Object.keys(planMap).length;
-    cont.innerHTML=`<p class="text-sm text-soft" style="color:#6b6b6b;margin-bottom:.5rem;">
-      🔍 Debug: Suche Pläne für <b>${tag}</b> · ${planSnaps.size} Pläne in DB gefunden · ${gefunden} für diesen Tag<br>
-      Alle Pläne: ${allePlaene.join(', ')||'keine'}
-    </p>`;
-    setTimeout(()=>renderPlanTabelle(cont,schueler,planMap,tag),100);
+    const planMap={};planSnaps.forEach(p=>{const d=p.data();if(d.tag===tag)planMap[d.uid]=d;});
+    renderPlanTabelle(cont,schueler,planMap,tag);
   });
 }
 async function renderLeitungPlan(tag){
   const cont=document.getElementById('sl-plan-inhalt');cont.innerHTML='<p class="text-sm text-soft">Lade…</p>';
   withFirebase(async({db,getDocs,getDocsFromServer,collection})=>{
     const snaps=await getDocs(collection(db,'users'));
-    const schueler=[];snaps.forEach(s=>{if(s.data().role==='schueler')schueler.push({uid:s.id,...s.data()});});
+    let schueler=[];snaps.forEach(s=>{if(s.data().role==='schueler')schueler.push({uid:s.id,...s.data()});});
     schueler.sort((a,b)=>(a.klasse+a.nachname).localeCompare(b.klasse+b.nachname));
-    // Pläne immer frisch vom Server holen (kein Cache)
+    befuelleKlassenFilter('sl-klassen-filter', schueler);
+    const filter=document.getElementById('sl-klassen-filter')?.value||'';
+    if(filter) schueler=schueler.filter(s=>s.klasse===filter);
     const planSnaps=await getDocsFromServer(collection(db,'plans'));
     const planMap={};planSnaps.forEach(p=>{const d=p.data();if(d.tag===tag)planMap[d.uid]=d;});
     renderPlanTabelle(cont,schueler,planMap,tag);
@@ -2292,18 +2322,24 @@ function saveSchueler(){
       return;
     }
 
-    // NEU ANLEGEN: Firebase Auth + Firestore in einem Schritt
+    // NEU ANLEGEN: Secondary Auth damit Admin eingeloggt bleibt
     if(!pw||pw.length<4){showErr(err,'Bitte Passwort generieren lassen.');return;}
     const saveBtn=document.getElementById('ms-save-btn');
     if(saveBtn){saveBtn.disabled=true;saveBtn.textContent='Wird angelegt...';}
     try{
-      // 1. Auth-Konto anlegen
-      const cred=await createUserWithEmailAndPassword(auth,email,pw);
-      // 2. Firestore-Dokument mit Passwort mitspeichern (für Passwortliste + Re-Import)
+      const {initializeApp,getApp}=await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js');
+      const {getAuth:getAuth2,createUserWithEmailAndPassword:createUser2,signOut:signOut2}=
+        await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js');
+      let secondaryApp;
+      try{secondaryApp=getApp('secondary-schueler');}
+      catch(e){secondaryApp=initializeApp(window._firebase.auth.app.options,'secondary-schueler');}
+      const secondaryAuth=getAuth2(secondaryApp);
+      const cred=await createUser2(secondaryAuth,email,pw);
+      await signOut2(secondaryAuth);
       await setDoc(doc(db,'users',cred.user.uid),{
         vorname,nachname,klasse,gruppe,email,
         role:'schueler',mustSetPassword:false,
-        passwort:pw, // gespeichert für Schulleitung-Passwortliste
+        passwort:pw,
         createdAt:new Date().toISOString()
       });
       toast('✓ '+vorname+' '+nachname+' angelegt · Passwort: '+pw);
@@ -2383,7 +2419,7 @@ function saveLehrer(){
   const saveBtn=document.getElementById('ml-save-btn');
   saveBtn.disabled=true;saveBtn.textContent='Wird gespeichert…';
 
-  withFirebase(async({db,doc,setDoc,updateDoc,createUserWithEmailAndPassword,auth})=>{
+  withFirebase(async({db,doc,setDoc,updateDoc,auth})=>{
     try{
       if(editLehrerModalUid){
         // Bearbeiten: nur Firestore aktualisieren
@@ -2392,15 +2428,32 @@ function saveLehrer(){
         closeLehrerModal();
         loadLehrerKlassenListe();
       } else {
-        // Neu anlegen: Auth + Firestore
+        // Neu anlegen: Secondary Auth Instance verwenden damit Admin eingeloggt bleibt!
         if(!pw||pw.length<6){showErr(err,'Bitte Passwort generieren.');saveBtn.disabled=false;saveBtn.innerHTML='<i class="ti ti-check"></i> Speichern';return;}
-        const cred=await createUserWithEmailAndPassword(auth,email,pw);
-        await setDoc(doc(db,'users',cred.user.uid),{
+
+        const {initializeApp,getApp} = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js');
+        const {getAuth:getAuth2,createUserWithEmailAndPassword:createUser2,signOut:signOut2} =
+          await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js');
+
+        // Zweite App-Instanz für den neuen Nutzer
+        let secondaryApp;
+        try { secondaryApp=getApp('secondary-lehrer'); }
+        catch(e) {
+          secondaryApp=initializeApp(window._firebase.auth.app.options,'secondary-lehrer');
+        }
+        const secondaryAuth=getAuth2(secondaryApp);
+
+        const cred=await createUser2(secondaryAuth,email,pw);
+        const newUid=cred.user.uid;
+        await signOut2(secondaryAuth); // Sekundäre Session sofort beenden
+
+        // Firestore-Dokument mit Admin-Session schreiben
+        await setDoc(doc(db,'users',newUid),{
           vorname,nachname,email,
           role:'lehrer',
           klassen:[],
           angebote:[],
-          mustSetPassword:true, // Lehrer muss PW beim ersten Login ändern
+          mustSetPassword:true,
           passwort:pw,
           createdAt:new Date().toISOString()
         });
@@ -2965,7 +3018,7 @@ function renderFaecherListe(liste){
         <span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:${f.bg||'#FAECE7'};border:1px solid ${f.color||'#4A1B0C'};margin-right:6px;"></span>
         ${f.icon||'📌'} ${f.name}
       </td>
-      <td style="font-size:12px;color:var(--text-soft);">${f.zeitschieneName||f.zeitschiene||'–'}${f.isDoppelstunde?' 🔁':''}${f.isEinzelnWaehlbar?' <span style="color:var(--orange);font-weight:600;">(einzeln)</span>':''}</td>
+      <td style="font-size:12px;color:var(--text-soft);">${f.zeitschieneName||f.zeitschiene||'–'}${f.isDoppelstunde?' 🔁':''}${f.isEinzelnWaehlbar?' <span style="color:var(--orange);font-weight:600;">(einzeln)</span>':''}${f.wochentage&&f.wochentage.length?' · <span style="color:#085041;font-size:11px;">'+f.wochentage.map(t=>(['','Mo','Di','Mi','Do'][t])).join(', ')+'</span>':''}</td>
       <td><span style="background:var(--orange-light);color:var(--orange-dark);font-size:12px;font-weight:600;padding:2px 8px;border-radius:99px;">${f.maxTeilnehmer||'∞'}</span></td>
       <td style="font-size:13px;">${gruppenAnzeige}</td>
       <td>${aktiv?'<span style="color:#1D9E75;font-size:12px;font-weight:600;">● aktiv</span>':'<span style="color:var(--text-lighter);font-size:12px;">○ inaktiv</span>'}</td>
@@ -2993,6 +3046,11 @@ function openFachModal(id){
       const d=snap.data();
       document.getElementById('fm-name').value=d.name||'';
       selectIcon(d.icon||'📌'); // Icon korrekt setzen inkl. Vorschau und Palette-Highlight
+      // Wochentage vorbelegen
+      [1,2,3,4].forEach(t=>{
+        const cb=document.getElementById('fm-tag-'+t);
+        if(cb) cb.checked=(d.wochentage||[]).includes(t);
+      });
       document.getElementById('fm-max').value=d.maxTeilnehmer||'';
       document.getElementById('fm-beschreibung').value=d.beschreibung||'';
       if(document.getElementById('fm-aktiv'))
@@ -3028,6 +3086,8 @@ function openFachModal(id){
     document.getElementById('modal-fach-title').textContent='Neues Fach anlegen';
     document.getElementById('fm-name').value='';
     selectIcon('📌'); // Icon zurücksetzen
+    // Wochentage zurücksetzen (alle abwählen = alle Tage verfügbar)
+    [1,2,3,4].forEach(t=>{const cb=document.getElementById('fm-tag-'+t);if(cb)cb.checked=false;});
     document.getElementById('fm-max').value='';
     document.getElementById('fm-beschreibung').value='';
     if(document.getElementById('fm-aktiv')) document.getElementById('fm-aktiv').checked=true;
@@ -3401,6 +3461,9 @@ function saveFach(){
   const zsNummern=zsWert.split(',').map(Number);
   const isDoppel=!istEinzelnWaehlbar && zsNummern.length>1;
 
+  // Wochentage auslesen (1=Mo,2=Di,3=Mi,4=Do) – leer = alle Tage
+  const wochentage=[1,2,3,4].filter(t=>document.getElementById('fm-tag-'+t)?.checked);
+
   // Farbe auslesen
   const farbenRadio=document.querySelector('input[name="fm-farbe"]:checked');
   const farben=farbenRadio?farbenRadio.value.split('|'):['#FAECE7','#4A1B0C'];
@@ -3417,7 +3480,9 @@ function saveFach(){
         zeitschieneName:zsNummern.map(z=>({1:'7. Std.',2:'8. Std.',3:'9. Std.',4:'10. Std.'}[z])).join(istEinzelnWaehlbar?' + ':'+'),
         isDoppelstunde:isDoppel,
         isEinzelnWaehlbar:istEinzelnWaehlbar,
-        maxTeilnehmer, beschreibung, gruppen, aktiv,
+        maxTeilnehmer, beschreibung, gruppen,
+        wochentage: wochentage.length>0 ? wochentage : null, // null = alle Tage
+        aktiv,
         updatedAt:new Date().toISOString()
       };
       if(editFachId){
@@ -3710,11 +3775,23 @@ function ladeDynamischeFaecher(){
 
 function renderDynamischeChips(){
   const gruppe=currentUserData?.gruppe||'durchstarter';
+  // Wochentag des aktiven Tags ermitteln (1=Mo...4=Do)
+  let aktiverWochentag=null;
+  if(activeTag){
+    const [j,m,t]=activeTag.split('-').map(Number);
+    aktiverWochentag=new Date(j,m-1,t).getDay(); // 1=Mo,2=Di,3=Mi,4=Do
+  }
+
   // ALLE alten dynamischen Chips entfernen bevor neue erstellt werden
   document.querySelectorAll('.fach-chip-dyn').forEach(c=>c.remove());
 
   dynamischeFaecher.forEach(f=>{
     if(f.gruppen && !f.gruppen.includes(gruppe)) return;
+
+    // Wochentage prüfen: null/leer = alle Tage, sonst nur erlaubte Tage
+    if(f.wochentage && f.wochentage.length>0 && aktiverWochentag!==null){
+      if(!f.wochentage.includes(aktiverWochentag)) return; // Nicht heute → Chip nicht anzeigen
+    }
 
     const zsNummern=(f.zeitschiene||'1').split(',').map(Number);
     const isDoppel=f.isDoppelstunde && zsNummern.length>1;
@@ -3726,7 +3803,6 @@ function renderDynamischeChips(){
       if(!container) return;
 
       const chipKey=f.id+'-'+zs;
-      // Doppelten Chip verhindern (extra Absicherung)
       if(container.querySelector(`[data-fach-id="${chipKey}"]`)) return;
 
       const btn=document.createElement('button');
@@ -3817,6 +3893,7 @@ async function addNeuesAngebot(){
   const name=input.value.trim();
   const zeitschiene=document.getElementById('ma-neues-zeitschiene')?.value||'';
   const gruppen=['fruehstarter','starter','durchstarter'].filter(g=>document.getElementById('ma-neues-'+g)?.checked);
+  const wochentage=[1,2,3,4].filter(t=>document.getElementById('ma-neues-tag-'+t)?.checked);
   const err=document.getElementById('ma-error');
   err.style.display='none';
 
@@ -3845,7 +3922,7 @@ async function addNeuesAngebot(){
         zeitschieneName:zsNummern.map(z=>({1:'7. Std.',2:'8. Std.',3:'9. Std.',4:'10. Std.'}[z])).join(istEinzeln?' + ':'+'),
         isDoppelstunde:isDoppel,
         isEinzelnWaehlbar:istEinzeln,
-        maxTeilnehmer:null, beschreibung:'', gruppen, aktiv:true,
+        maxTeilnehmer:null, beschreibung:'', gruppen, wochentage:wochentage.length>0?wochentage:null, aktiv:true,
         createdAt:new Date().toISOString()
       });
       toast('✓ Angebot „'+name+'" angelegt – erscheint jetzt bei Schülern!');
@@ -4663,6 +4740,22 @@ function savePwReset(){
         </label>
       </div>
 
+      <label class="form-label" style="font-size:12px;">An welchen Wochentagen? (leer = alle Mo–Do)</label>
+      <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;">
+        <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;padding:5px 9px;border:1px solid var(--gray-border);border-radius:7px;">
+          <input type="checkbox" id="ma-neues-tag-1" style="accent-color:var(--orange);" /> Mo
+        </label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;padding:5px 9px;border:1px solid var(--gray-border);border-radius:7px;">
+          <input type="checkbox" id="ma-neues-tag-2" style="accent-color:var(--orange);" /> Di
+        </label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;padding:5px 9px;border:1px solid var(--gray-border);border-radius:7px;">
+          <input type="checkbox" id="ma-neues-tag-3" style="accent-color:var(--orange);" /> Mi
+        </label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;padding:5px 9px;border:1px solid var(--gray-border);border-radius:7px;">
+          <input type="checkbox" id="ma-neues-tag-4" style="accent-color:var(--orange);" /> Do
+        </label>
+      </div>
+
       <button class="btn btn-primary btn-sm btn-full" onclick="addNeuesAngebot()">
         <i class="ti ti-plus"></i> Anlegen und zuweisen
       </button>
@@ -4766,6 +4859,25 @@ function savePwReset(){
         </label>
         <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;padding:6px 10px;border:1.5px solid var(--gray-border);border-radius:8px;">
           <input type="checkbox" id="fm-gruppe-durchstarter" style="accent-color:var(--orange);" /> 🟢 Durchstarter
+        </label>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Verfügbar an Wochentagen</label>
+      <p class="text-sm text-soft" style="margin-bottom:6px;">Kein Tag gewählt = Fach erscheint an allen Tagen (Mo–Do, nicht Fr).</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;">
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;padding:6px 12px;border:1.5px solid var(--gray-border);border-radius:8px;">
+          <input type="checkbox" id="fm-tag-1" style="accent-color:var(--orange);" /> Mo
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;padding:6px 12px;border:1.5px solid var(--gray-border);border-radius:8px;">
+          <input type="checkbox" id="fm-tag-2" style="accent-color:var(--orange);" /> Di
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;padding:6px 12px;border:1.5px solid var(--gray-border);border-radius:8px;">
+          <input type="checkbox" id="fm-tag-3" style="accent-color:var(--orange);" /> Mi
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;padding:6px 12px;border:1.5px solid var(--gray-border);border-radius:8px;">
+          <input type="checkbox" id="fm-tag-4" style="accent-color:var(--orange);" /> Do
         </label>
       </div>
     </div>
