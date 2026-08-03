@@ -2474,9 +2474,23 @@ function saveLehrer(){
   });
 }
 
+function deleteLehrer(uid, name){
+  if(!confirm('Lehrkraft „'+name+'" wirklich löschen?\n\nDas Firestore-Profil wird entfernt. Den Firebase-Auth-Eintrag bitte zusätzlich in der Firebase Console löschen (Authentication → Users → '+name+').'))return;
+  withFirebase(async({db,doc,deleteDoc})=>{
+    try{
+      await deleteDoc(doc(db,'users',uid));
+      toast('✓ '+name+' aus Firestore gelöscht. Auth-Eintrag bitte manuell in Firebase Console entfernen.');
+      loadLehrerKlassenListe();
+    }catch(e){
+      toast('❌ Fehler: '+(e.message||e),true);
+    }
+  });
+}
+
 function loadLehrerKlassenListe(){
-  withFirebase(async({db,getDocs,collection})=>{
-    const snaps=await getDocs(collection(db,'users'));
+  withFirebase(async({db,getDocsFromServer,collection})=>{
+    // getDocsFromServer statt getDocs um Cache-Probleme zu vermeiden
+    const snaps=await getDocsFromServer(collection(db,'users'));
     const lehrer=[];snaps.forEach(s=>{if(s.data().role==='lehrer')lehrer.push({uid:s.id,...s.data()});});
     lehrer.sort((a,b)=>(a.nachname+a.vorname).localeCompare(b.nachname+b.vorname));
     renderLehrerKlassenListe(lehrer);
@@ -2504,6 +2518,7 @@ function renderLehrerKlassenListe(lehrer){
           <button class="btn btn-secondary btn-sm" title="Klassen bearbeiten" onclick="openKlassenModal('${l.uid}','${l.vorname} ${l.nachname}',${JSON.stringify(klassen)})"><i class="ti ti-edit"></i> Klassen</button>
           <button class="btn btn-secondary btn-sm" title="Angebote zuweisen" onclick="openAngeboteModal('${l.uid}','${l.vorname} ${l.nachname}',${JSON.stringify(angebote)})"><i class="ti ti-target"></i> Angebote</button>
           <button class="btn btn-secondary btn-sm" title="Passwort zurücksetzen" onclick="openPwResetModal('${l.uid}','${l.vorname} ${l.nachname}','lehrer')"><i class="ti ti-key"></i></button>
+          <button class="btn btn-danger btn-sm" title="Lehrkraft löschen" onclick="deleteLehrer('${l.uid}','${l.vorname} ${l.nachname}')"><i class="ti ti-trash"></i></button>
         </div>
       </td>
     </tr>`;
