@@ -2499,26 +2499,33 @@ function loadLehrerKlassenListe(){
 function renderLehrerKlassenListe(lehrer){
   const cont=document.getElementById('sl-lehrer-liste');
   if(!lehrer.length){cont.innerHTML='<p class="text-sm text-soft">Keine Lehrkräfte gefunden.</p>';return;}
-  let html=`<table class="schueler-table"><thead><tr><th>Name</th><th>E-Mail</th><th>Klassen</th><th>Angebote</th><th></th></tr></thead><tbody>`;
+  let html=`<table class="schueler-table"><thead><tr><th>Name</th><th>Klassen</th><th>Angebote</th><th></th></tr></thead><tbody>`;
   lehrer.forEach(l=>{
     const klassen=l.klassen||[];
-    const chipsHtml=klassen.length?klassen.map(k=>`<span class="lehrer-klasse-chip">${k}</span>`).join(''):'<span class="text-soft" style="font-size:12px;">Keine Klasse zugewiesen</span>';
+    const chipsHtml=klassen.length?klassen.map(k=>`<span class="lehrer-klasse-chip">${k}</span>`).join(''):'<span class="text-soft" style="font-size:12px;">–</span>';
     const angebote=l.angebote||[];
     const angeboteHtml=angebote.length
       ? angebote.map(a=>`<span style="background:var(--teal-light);color:#085041;font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;display:inline-block;margin:1px;">${a}</span>`).join('')
-      : '<span style="font-size:12px;color:var(--text-lighter);">Kein Angebot</span>';
+      : '<span style="font-size:12px;color:var(--text-lighter);">–</span>';
+    const emailId='email-'+l.uid.slice(0,8);
     html+=`<tr>
-      <td style="font-weight:500;">${l.vorname} ${l.nachname}</td>
-      <td class="text-soft" style="font-size:12px;">${l.email||''}</td>
+      <td>
+        <div style="font-weight:500;font-size:13px;">${l.vorname} ${l.nachname}</div>
+        <div id="${emailId}" style="display:none;font-size:11px;color:var(--text-soft);margin-top:2px;">${l.email||''}</div>
+        <button onclick="document.getElementById('${emailId}').style.display=document.getElementById('${emailId}').style.display==='none'?'block':'none'"
+          style="font-size:10px;color:var(--text-lighter);background:none;border:none;cursor:pointer;padding:0;margin-top:2px;">
+          <i class="ti ti-mail"></i> E-Mail anzeigen
+        </button>
+      </td>
       <td><div class="lehrer-klassen">${chipsHtml}</div></td>
       <td><div style="display:flex;flex-wrap:wrap;gap:3px;">${angeboteHtml}</div></td>
       <td>
-        <div class="flex-row" style="gap:6px;justify-content:flex-end;">
+        <div class="flex-row" style="gap:4px;justify-content:flex-end;flex-wrap:wrap;">
           <button class="btn btn-secondary btn-sm" title="Name bearbeiten" onclick="openLehrerModal('${l.uid}')"><i class="ti ti-edit"></i></button>
-          <button class="btn btn-secondary btn-sm" title="Klassen bearbeiten" onclick="openKlassenModal('${l.uid}','${l.vorname} ${l.nachname}',${JSON.stringify(klassen)})"><i class="ti ti-edit"></i> Klassen</button>
-          <button class="btn btn-secondary btn-sm" title="Angebote zuweisen" onclick="openAngeboteModal('${l.uid}','${l.vorname} ${l.nachname}',${JSON.stringify(angebote)})"><i class="ti ti-target"></i> Angebote</button>
-          <button class="btn btn-secondary btn-sm" title="Passwort zurücksetzen" onclick="openPwResetModal('${l.uid}','${l.vorname} ${l.nachname}','lehrer')"><i class="ti ti-key"></i></button>
-          <button class="btn btn-danger btn-sm" title="Lehrkraft löschen" onclick="deleteLehrer('${l.uid}','${l.vorname} ${l.nachname}')"><i class="ti ti-trash"></i></button>
+          <button class="btn btn-secondary btn-sm" title="Klassen" onclick="openKlassenModal('${l.uid}','${l.vorname} ${l.nachname}',${JSON.stringify(klassen)})"><i class="ti ti-school"></i></button>
+          <button class="btn btn-secondary btn-sm" title="Angebote" onclick="openAngeboteModal('${l.uid}','${l.vorname} ${l.nachname}',${JSON.stringify(angebote)})"><i class="ti ti-target"></i></button>
+          <button class="btn btn-secondary btn-sm" title="Passwort" onclick="openPwResetModal('${l.uid}','${l.vorname} ${l.nachname}','lehrer')"><i class="ti ti-key"></i></button>
+          <button class="btn btn-danger btn-sm" title="Löschen" onclick="deleteLehrer('${l.uid}','${l.vorname} ${l.nachname}')"><i class="ti ti-trash"></i></button>
         </div>
       </td>
     </tr>`;
@@ -3134,10 +3141,11 @@ function openFachModal(id){
   }
 }
 // ═══ ICON-PALETTE FÜR FACH-MODAL ═══
-const FM_ICONS=['⚽','🏀','🏐','🎾','🏓','🎨','🎭','🎬','📚','📖','🔬','🔭','🎵','🎸',
+const FM_ICONS=['📌','π','∑','√','∞','∆','±','×','÷','½','²','³',
+  '⚽','🏀','🏐','🎾','🏓','🎨','🎭','🎬','📚','📖','🔬','🔭','🎵','🎸',
   '🎺','🎻','🥁','🎤','🖌️','✂️','🧵','🧶','💻','🤸','🏃','🧘','⛹️','🎯','🎲','🃏',
   '♟️','🌱','🌍','🎪','🎠','🔧','🛠️','🍳','🧁','🌟','❤️','🌈','🦁','🐯','🐻','🦊',
-  '🐼','🐧','🦋','🌸','📌'];
+  '🐼','🐧','🦋','🌸'];
 
 function initIconPalette(){
   const palette=document.getElementById('fm-icon-palette');
@@ -4643,18 +4651,57 @@ function savePwReset(){
 
   btn.disabled=true; btn.textContent='Wird gesetzt…';
 
-  withFirebase(async({db,doc,updateDoc})=>{
+  withFirebase(async({db,doc,updateDoc,getDoc,auth})=>{
     try{
+      // 1. Neues Passwort in Firestore speichern (für Passwortliste)
       await updateDoc(doc(db,'users',pwResetUid),{
+        passwort: newPw,
         mustSetPassword: true,
-        tempPw: newPw,
         pwResetAt: new Date().toISOString()
       });
-      const label=pwResetRole==='lehrer'?'Lehrkraft':'Schüler';
-      toast('✓ Passwort zurückgesetzt. '+label+' muss beim nächsten Login ein neues Passwort setzen.');
+
+      // 2. Passwort in Firebase Auth ändern via sekundäre Instanz
+      // Dazu brauchen wir die E-Mail der Person
+      const snap=await getDoc(doc(db,'users',pwResetUid));
+      if(!snap.exists()){showErr(err,'Person nicht gefunden.');return;}
+      const email=snap.data().email;
+      const altPw=snap.data().passwort||snap.data().tempPw||(snap.data().klasse+snap.data().nachname)||'';
+
+      const {initializeApp,getApp}=await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js');
+      const {getAuth:getAuth2,signInWithEmailAndPassword:signIn2,updatePassword:updatePw2,signOut:signOut2}=
+        await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js');
+
+      let secondaryApp;
+      try{secondaryApp=getApp('secondary-pwreset');}
+      catch(e){secondaryApp=initializeApp(auth.app.options,'secondary-pwreset');}
+      const auth2=getAuth2(secondaryApp);
+
+      // Mit altem Passwort einloggen und dann neues setzen
+      // Wir versuchen alle bekannten alten Passwörter
+      let cred=null;
+      const altPasswords=[altPw, snap.data().tempPw, snap.data().klasse+snap.data().nachname].filter(Boolean);
+      for(const pw of altPasswords){
+        try{
+          cred=await signIn2(auth2,email,pw);
+          break;
+        }catch(e){/* Falsches Passwort, nächstes versuchen */}
+      }
+
+      if(cred){
+        await updatePw2(cred.user,newPw);
+        await signOut2(auth2);
+        const label=pwResetRole==='lehrer'?'Lehrkraft':'Schüler';
+        toast('✅ Passwort erfolgreich geändert! '+label+' kann sich sofort mit dem neuen Passwort einloggen.');
+      } else {
+        // Fallback: Passwort-Reset-E-Mail senden
+        const {sendPasswordResetEmail}=await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js');
+        await sendPasswordResetEmail(auth,email);
+        toast('⚠️ Altes Passwort unbekannt – Passwort-Reset-E-Mail an '+email+' gesendet. Person muss über E-Mail ein neues Passwort setzen.');
+      }
       closePwResetModal();
     }catch(e){
-      showErr(err,'Fehler: '+e.message);toast('❌ Fach konnte nicht gespeichert werden: '+e.message, true);
+      console.error('PW-Reset Fehler:',e);
+      showErr(err,'Fehler: '+(e.message||e.code||e));
     }finally{
       btn.disabled=false; btn.textContent='Passwort setzen';
     }
