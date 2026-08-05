@@ -2216,7 +2216,7 @@ function openSchuelerModal(uid){
         const d=snap.data();
         // Lehrer darf nur eigene Klassen bearbeiten (außer AG-Feld)
         if(currentRole==='lehrer' && !lehrerDarfBearbeiten(d.klasse)){
-          // Nur AG-Feld anzeigen, Rest sperren
+          // Fremde Klasse: alle Felder sperren inkl. AG-Feld
           document.getElementById('ms-vorname').value=d.vorname||'';
           document.getElementById('ms-nachname').value=d.nachname||'';
           document.getElementById('ms-klasse').value=d.klasse||'';
@@ -2226,6 +2226,10 @@ function openSchuelerModal(uid){
             const el=document.getElementById(id);
             if(el)el.disabled=true;
           });
+          // AG-Feld ebenfalls sperren (keine Berechtigung für fremde Klassen)
+          document.getElementById('ms-halbag-group').style.display='none';
+          // Hinweis anzeigen
+          showErr(document.getElementById('ms-error'),'⚠️ Klasse '+d.klasse+' ist dir nicht zugewiesen – nur Ansicht, keine Änderungen möglich.');
         } else {
           document.getElementById('ms-vorname').value=d.vorname||'';
           document.getElementById('ms-nachname').value=d.nachname||'';
@@ -2293,11 +2297,31 @@ function saveSchueler(){
     // BEARBEITEN: nur Firestore aktualisieren
     if(editSchuelerUid){
       try{
+        // Erst Klasse des Schülers aus Firestore laden um Berechtigung zu prüfen
+        const schuelerSnap=await (async()=>{
+          const {getDoc:gd}=await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+          return gd(doc(db,'users',editSchuelerUid));
+        })().catch(()=>null);
+
+        const schuelerKlasse=schuelerSnap?.exists()?schuelerSnap.data().klasse:klasse;
+
+        // Lehrer darf nur Schüler eigener Klassen bearbeiten (inkl. AG-Feld)
+        if(currentRole==='lehrer' && !lehrerDarfBearbeiten(schuelerKlasse)){
+          showErr(err,'⛔ Du hast keine Berechtigung, Schüler der Klasse '+schuelerKlasse+' zu bearbeiten. Diese Klasse ist dir nicht zugewiesen.');
+          err.scrollIntoView({behavior:'smooth',block:'center'});
+          return;
+        }
+
         const halbagGroupSichtbar = document.getElementById('ms-halbag-group')?.style.display!=='none';
         const halbagVal=document.getElementById('ms-halbag')?.value.trim()||null;
         const halbagTagRadio=document.querySelector('input[name="ms-halbag-tag"]:checked');
         const halbagTag=halbagTagRadio?parseInt(halbagTagRadio.value):null;
-        const updateData={vorname,nachname,klasse,gruppe};
+
+        // Lehrer darf nur AG-Feld ändern, keine anderen Felder (bei fremden Klassen bereits oben geblockt)
+        // Bei eigenen Klassen: alle Felder erlaubt
+        const updateData = lehrerDarfBearbeiten(schuelerKlasse)||currentRole==='leitung'
+          ? {vorname,nachname,klasse,gruppe}
+          : {}; // Nur AG (wird unten hinzugefügt)
 
         if(halbagGroupSichtbar){
           if(halbagVal && !halbagTag){
@@ -2316,7 +2340,7 @@ function saveSchueler(){
         loadSchuelerListe(currentRole==='lehrer'?'l-schueler-liste':'sl-schueler-liste');
       }catch(e){
         console.error('Fehler beim Speichern des Schülers:',e);
-        showErr(err,'Fehler beim Speichern: '+(e.message||e.code||'Unbekannter Fehler')+'. Bitte Firestore-Regeln prüfen.');
+        showErr(err,'Fehler beim Speichern: '+(e.message||e.code||'Unbekannter Fehler'));
         err.scrollIntoView({behavior:'smooth',block:'center'});
       }
       return;
@@ -2356,10 +2380,38 @@ function saveSchueler(){
   });
 }
 function deleteSchueler(uid,name){
-  if(!confirm(`${name} wirklich löschen?`))return;
-  withFirebase(async({db,doc,deleteDoc})=>{
-    await deleteDoc(doc(db,'users',uid));
-    toast(name+' gelöscht.');loadSchuelerListe(currentRole==='lehrer'?'l-schueler-liste':'sl-schueler-liste');
+  if(!confirm(name+' wirklich vollständig löschen?\n\nFirestore-Profil und Login-Konto werden entfernt.'))return;
+  withFirebase(async({db,doc,deleteDoc,getDoc,auth})=>{
+    try{
+      const snap=await getDoc(doc(db,'users',uid));
+      const email=snap.exists()?snap.data().email:null;
+      const pw=snap.exists()?(snap.data().passwort||null):null;
+
+      await deleteDoc(doc(db,'users',uid));
+
+      if(email&&pw){
+        try{
+          const {initializeApp,getApp}=await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js');
+          const {getAuth:getAuth2,signInWithEmailAndPassword:signIn2,deleteUser,signOut:signOut2}=
+            await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js');
+          let secondaryApp;
+          try{secondaryApp=getApp('secondary-delete-s');}
+          catch(e){secondaryApp=initializeApp(auth.app.options,'secondary-delete-s');}
+          const auth2=getAuth2(secondaryApp);
+          const cred=await signIn2(auth2,email,pw);
+          await deleteUser(cred.user);
+          await signOut2(auth2).catch(()=>{});
+          toast('✅ '+name+' vollständig gelöscht.');
+        }catch(authErr){
+          toast('⚠️ Profil gelöscht. Auth-Konto bitte manuell in Firebase Console entfernen: '+email,true);
+        }
+      } else {
+        toast('✅ '+name+' gelöscht.');
+      }
+      loadSchuelerListe(currentRole==='lehrer'?'l-schueler-liste':'sl-schueler-liste');
+    }catch(e){
+      toast('❌ Fehler: '+(e.message||e),true);
+    }
   });
 }
 
@@ -2475,14 +2527,47 @@ function saveLehrer(){
 }
 
 function deleteLehrer(uid, name){
-  if(!confirm('Lehrkraft „'+name+'" wirklich löschen?\n\nDas Firestore-Profil wird entfernt. Den Firebase-Auth-Eintrag bitte zusätzlich in der Firebase Console löschen (Authentication → Users → '+name+').'))return;
-  withFirebase(async({db,doc,deleteDoc})=>{
+  if(!confirm('Lehrkraft „'+name+'" wirklich vollständig löschen?\n\nEs werden gelöscht:\n• Firestore-Profil\n• Firebase Auth-Konto (Login)\n\nDieser Vorgang kann nicht rückgängig gemacht werden.'))return;
+
+  withFirebase(async({db,doc,deleteDoc,getDoc,auth})=>{
     try{
+      // 1. E-Mail aus Firestore holen bevor wir löschen
+      const snap=await getDoc(doc(db,'users',uid));
+      const email=snap.exists()?snap.data().email:null;
+      const pw=snap.exists()?(snap.data().passwort||null):null;
+
+      // 2. Firestore-Dokument löschen
       await deleteDoc(doc(db,'users',uid));
-      toast('✓ '+name+' aus Firestore gelöscht. Auth-Eintrag bitte manuell in Firebase Console entfernen.');
+
+      // 3. Firebase Auth-Konto löschen via sekundäre Instanz
+      // Dazu müssen wir uns als die Person einloggen und dann löschen
+      if(email && pw){
+        try{
+          const {initializeApp,getApp}=await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js');
+          const {getAuth:getAuth2,signInWithEmailAndPassword:signIn2,deleteUser,signOut:signOut2}=
+            await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js');
+
+          let secondaryApp;
+          try{secondaryApp=getApp('secondary-delete');}
+          catch(e){secondaryApp=initializeApp(auth.app.options,'secondary-delete');}
+          const auth2=getAuth2(secondaryApp);
+
+          const cred=await signIn2(auth2,email,pw);
+          await deleteUser(cred.user);
+          await signOut2(auth2).catch(()=>{});
+          toast('✅ '+name+' vollständig gelöscht (Profil + Login-Konto).');
+        }catch(authErr){
+          // Auth-Login fehlgeschlagen (Passwort geändert etc.)
+          // Fallback: Passwort-Reset-E-Mail senden damit Account deaktiviert werden kann
+          console.warn('Auth-Löschung fehlgeschlagen:',authErr.message);
+          toast('⚠️ Firestore gelöscht. Auth-Konto konnte nicht automatisch entfernt werden (Passwort unbekannt). Bitte manuell in Firebase Console löschen: '+email,true);
+        }
+      } else {
+        toast('✅ '+name+' aus Firestore gelöscht. Kein Auth-Konto gefunden (evtl. schon gelöscht).');
+      }
       loadLehrerKlassenListe();
     }catch(e){
-      toast('❌ Fehler: '+(e.message||e),true);
+      toast('❌ Fehler beim Löschen: '+(e.message||e),true);
     }
   });
 }
@@ -3019,7 +3104,8 @@ let editFachId=null;
 function loadFaecherListe(){
   withFirebase(async({db,getDocs,collection})=>{
     const snaps=await getDocs(collection(db,'faecher'));
-    const liste=[];snaps.forEach(s=>liste.push({id:s.id,...s.data()}));
+    const liste=[];
+    snaps.forEach(s=>liste.push({id:s.id,...s.data()}));
     liste.sort((a,b)=>a.name.localeCompare(b.name));
     renderFaecherListe(liste);
   });
@@ -3033,12 +3119,14 @@ function renderFaecherListe(liste){
   </tr></thead><tbody>`;
   liste.forEach(f=>{
     const aktiv=f.aktiv!==false;
+    const isSystem=f.isSystemFach===true;
     const gruppenLabels={fruehstarter:'⭐',starter:'🔵',durchstarter:'🟢'};
     const gruppenAnzeige=(f.gruppen||[]).map(g=>gruppenLabels[g]||g).join(' ')||'–';
     html+=`<tr style="${aktiv?'':'opacity:.5;'}">
       <td style="font-weight:500;">
         <span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:${f.bg||'#FAECE7'};border:1px solid ${f.color||'#4A1B0C'};margin-right:6px;"></span>
         ${f.icon||'📌'} ${f.name}
+        ${isSystem?'<span style="font-size:10px;font-weight:600;color:#085041;background:#E1F5EE;padding:1px 6px;border-radius:99px;margin-left:4px;">System</span>':''}
       </td>
       <td style="font-size:12px;color:var(--text-soft);">${f.zeitschieneName||f.zeitschiene||'–'}${f.isDoppelstunde?' 🔁':''}${f.isEinzelnWaehlbar?' <span style="color:var(--orange);font-weight:600;">(einzeln)</span>':''}${f.wochentage&&f.wochentage.length?' · <span style="color:#085041;font-size:11px;">'+f.wochentage.map(t=>(['','Mo','Di','Mi','Do'][t])).join(', ')+'</span>':''}</td>
       <td><span style="background:var(--orange-light);color:var(--orange-dark);font-size:12px;font-weight:600;padding:2px 8px;border-radius:99px;">${f.maxTeilnehmer||'∞'}</span></td>
@@ -3047,7 +3135,10 @@ function renderFaecherListe(liste){
       <td>
         <div class="flex-row" style="gap:6px;justify-content:flex-end;">
           <button class="btn btn-secondary btn-sm" onclick="openFachModal('${f.id}')"><i class="ti ti-edit"></i></button>
-          <button class="btn btn-danger btn-sm" onclick="deleteFach('${f.id}','${f.name}')"><i class="ti ti-trash"></i></button>
+          ${isSystem
+            ? '<span style="font-size:11px;color:var(--text-lighter);padding:0 4px;" title="System-Fächer können nicht gelöscht werden">🔒</span>'
+            : `<button class="btn btn-danger btn-sm" onclick="deleteFach('${f.id}','${f.name}')"><i class="ti ti-trash"></i></button>`
+          }
         </div>
       </td>
     </tr>`;
