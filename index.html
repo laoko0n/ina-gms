@@ -324,18 +324,7 @@
           <span class="zs-badge">Frühe Angebote</span>
         </div>
         <div class="zs-body">
-          <div class="fach-chips" id="chips-1">
-            <button class="fach-chip" onclick="waehlen(1,'Mittagessen','sel-essen','🍽️','#FAEEDA','#633806')">🍽️ Mittagessen</button>
-            <button class="fach-chip" onclick="waehlen(1,'Frühe Freizeit','sel-fruehfrei','🌿','#E6F1FB','#0C447C')">🌿 Frühe Freizeit</button>
-            <button class="fach-chip" onclick="waehlen(1,'Frühe AG','sel-fruehag','🎨','#EAF3DE','#27500A')">🎨 Frühe AG</button>
-            <button class="fach-chip" onclick="waehlen(1,'Frühe Lernzeit','sel-fruehlearn','📚','#FAEEDA','#633806')">📚 Frühe Lernzeit</button>
-            <span style="display:inline-flex;align-items:center;gap:0;">
-              <button class="fach-chip" id="chip-nico-1" onclick="waehlen(1,'Freizeit mit Nico','sel-nico','🤸','#E1F5EE','#085041')">🤸 Freizeit mit Nico 🔁</button>
-              <button class="fach-chip-info" onclick="openNicoInfo()" title="Was ist Freizeit mit Nico?">i</button>
-            </span>
-            <button class="fach-chip" id="chip-spielausleihe-1" onclick="openAusleiheModal('Spielausleihe',1)">🎲 Spielausleihe</button>
-            <button class="fach-chip" id="chip-sportausleihe-1" onclick="openAusleiheModal('Sportgeräteausleihe',1)">⚽ Sportgeräteausleihe</button>
-          </div>
+          <div class="fach-chips" id="chips-1"></div>
           <div class="zs-hint" id="hint-1">Tippe auf ein Angebot um es zu wählen.</div>
         </div>
       </div>
@@ -348,18 +337,7 @@
           <span class="zs-badge">Frühe Angebote</span>
         </div>
         <div class="zs-body">
-          <div class="fach-chips" id="chips-2">
-            <button class="fach-chip" onclick="waehlen(2,'Mittagessen','sel-essen','🍽️','#FAEEDA','#633806')">🍽️ Mittagessen</button>
-            <button class="fach-chip" onclick="waehlen(2,'Frühe Freizeit','sel-fruehfrei','🌿','#E6F1FB','#0C447C')">🌿 Frühe Freizeit</button>
-            <button class="fach-chip" onclick="waehlen(2,'Frühe AG','sel-fruehag','🎨','#EAF3DE','#27500A')">🎨 Frühe AG</button>
-            <button class="fach-chip" onclick="waehlen(2,'Frühe Lernzeit','sel-fruehlearn','📚','#FAEEDA','#633806')">📚 Frühe Lernzeit</button>
-            <span style="display:inline-flex;align-items:center;gap:0;">
-              <button class="fach-chip" id="chip-nico-2" onclick="waehlen(2,'Freizeit mit Nico','sel-nico','🤸','#E1F5EE','#085041')">🤸 Freizeit mit Nico</button>
-              <button class="fach-chip-info" onclick="openNicoInfo()" title="Was ist Freizeit mit Nico?">i</button>
-            </span>
-            <button class="fach-chip" id="chip-spielausleihe-2" onclick="openAusleiheModal('Spielausleihe',2)">🎲 Spielausleihe</button>
-            <button class="fach-chip" id="chip-sportausleihe-2" onclick="openAusleiheModal('Sportgeräteausleihe',2)">⚽ Sportgeräteausleihe</button>
-          </div>
+          <div class="fach-chips" id="chips-2"></div>
           <div class="zs-hint" id="hint-2">Tippe auf ein Angebot um es zu wählen.</div>
         </div>
       </div>
@@ -372,11 +350,7 @@
           <span class="zs-badge">Späte Angebote</span>
         </div>
         <div class="zs-body">
-          <div class="fach-chips" id="chips-3">
-            <button class="fach-chip" onclick="waehlen(3,'Späte Freizeit','sel-spaetfrei','🌿','#FAECE7','#4A1B0C')">🌿 Späte Freizeit</button>
-            <button class="fach-chip" onclick="waehlen(3,'Späte AG','sel-spaetag','🎭','#E1F5EE','#085041')">🎭 Späte AG 🔁</button>
-            <button class="fach-chip" onclick="waehlen(3,'Späte Lernzeit','sel-spaetlearn','📖','#EEEDFE','#26215C')">📖 Späte Lernzeit 🔁</button>
-          </div>
+          <div class="fach-chips" id="chips-3"></div>
           <div class="zs-hint" id="hint-3">🔁 = Doppelstunde – 10. Std. wird automatisch mitgesetzt.</div>
         </div>
       </div>
@@ -389,11 +363,7 @@
           <span class="zs-badge">Späte Angebote</span>
         </div>
         <div class="zs-body">
-          <div class="fach-chips" id="chips-4">
-            <button class="fach-chip" onclick="waehlen(4,'Späte Freizeit','sel-spaetfrei','🌿','#FAECE7','#4A1B0C')">🌿 Späte Freizeit</button>
-            <button class="fach-chip" onclick="waehlen(4,'Späte AG','sel-spaetag','🎭','#E1F5EE','#085041')">🎭 Späte AG</button>
-            <button class="fach-chip" onclick="waehlen(4,'Späte Lernzeit','sel-spaetlearn','📖','#EEEDFE','#26215C')">📖 Späte Lernzeit</button>
-          </div>
+          <div class="fach-chips" id="chips-4"></div>
           <div class="zs-hint" id="hint-4">Bei Späte AG oder Späte Lernzeit in 9. Std. wird 10. Std. automatisch mitgesetzt.</div>
         </div>
       </div>
@@ -877,7 +847,7 @@ const GRUPPEN = {
     freiZS:[1,2],
     festZS:{ 3:WEBUNTIS, 4:WEBUNTIS },
     // Welche Chips in 7.+8. Std. sichtbar sind
-    erlaubteChips:['Mittagessen','Frühe Freizeit','Spielausleihe','Sportgeräteausleihe']
+    erlaubteChips:null // alle Fächer kommen aus Firestore
   },
   starter: {
     label:'🔵 Starter', klasse:'gruppe-starter', info:'🔵',
@@ -885,7 +855,7 @@ const GRUPPEN = {
             +'9. u. 10. Std. sind durch deinen <b>regulären Schulplan</b> belegt – schau in <b>Webuntis</b> nach!',
     freiZS:[1,2],
     festZS:{ 3:WEBUNTIS, 4:WEBUNTIS },
-    erlaubteChips:['Mittagessen','Frühe Freizeit','Frühe AG','Freizeit mit Nico','Spielausleihe','Sportgeräteausleihe']
+    erlaubteChips:null // alle Fächer kommen aus Firestore
   },
   durchstarter: {
     label:'🟢 Durchstarter', klasse:'gruppe-durchstarter', info:'🟢',
@@ -3894,13 +3864,12 @@ function ladeDynamischeFaecher(){
     try{
       const snaps=await getDocs(collection(db,'faecher'));
       dynamischeFaecher=[];
-      // Statische Fächer die bereits als feste Chips im HTML sind – nicht nochmal dynamisch laden
-      const STATISCHE_FAECHER=new Set(['Spielausleihe','Sportgeräteausleihe','Mittagessen','Frühe Freizeit','Frühe AG','Frühe Lernzeit','Freizeit mit Nico']);
+      // Deduplizierung nach Name
       const bereitsGeladen=new Set();
       snaps.forEach(s=>{
         const d={id:s.id,...s.data()};
         if(d.aktiv!==false && d.name && d.zeitschiene && d.gruppen && d.gruppen.length>0){
-          if(!STATISCHE_FAECHER.has(d.name) && !bereitsGeladen.has(d.name)){
+          if(!bereitsGeladen.has(d.name)){
             bereitsGeladen.add(d.name);
             dynamischeFaecher.push(d);
           }
@@ -3958,13 +3927,19 @@ function renderDynamischeChips(){
       btn.setAttribute('data-fach-id',chipKey);
       btn.setAttribute('data-fach-bg',f.bg||'#FAECE7');
       btn.setAttribute('data-fach-color',f.color||'#4A1B0C');
-      btn.textContent=(f.icon||'📌')+' '+f.name+(isDoppel?' 🔁':'');
+      btn.textContent=(f.icon||'📌')+' '+f.name+(isDoppel?' 🔁':'')+(f.isEinzelnWaehlbar&&zsNummern.length>1?'':'' );
+      // Ausleihe-Fächer nutzen das Buchungsmodal
+      const istAusleihe=(f.name==='Spielausleihe'||f.name==='Sportgeräteausleihe');
       btn.onclick=()=>{
-        waehlen(zs, f.name, f.sel||'sel-custom', f.icon||'📌', f.bg||'#FAECE7', f.color||'#4A1B0C', f.id);
-        if(isDoppel){
-          const zsZwei=zsNummern[1];
-          gewahlt[zsZwei]={name:f.name,sel:f.sel||'sel-custom',icon:f.icon||'📌',bg:f.bg||'#FAECE7',color:f.color||'#4A1B0C',fachId:f.id};
-          renderGewahlt();
+        if(istAusleihe){
+          openAusleiheModal(f.name, zs);
+        } else {
+          waehlen(zs, f.name, f.sel||'sel-custom', f.icon||'📌', f.bg||'#FAECE7', f.color||'#4A1B0C', f.id);
+          if(isDoppel){
+            const zsZwei=zsNummern[1];
+            gewahlt[zsZwei]={name:f.name,sel:f.sel||'sel-custom',icon:f.icon||'📌',bg:f.bg||'#FAECE7',color:f.color||'#4A1B0C',fachId:f.id};
+            renderGewahlt();
+          }
         }
       };
       container.appendChild(btn);
