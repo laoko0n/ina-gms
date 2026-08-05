@@ -2496,6 +2496,21 @@ function saveLehrer(){
   });
 }
 
+function entferneAngebotVonLehrer(uid, angebot, name){
+  if(!confirm('Angebot „'+angebot+'" von '+name+' entfernen?\n(Das Fach existiert nicht mehr in der Fächer-Liste)'))return;
+  withFirebase(async({db,doc,updateDoc,getDoc})=>{
+    try{
+      const snap=await getDoc(doc(db,'users',uid));
+      if(!snap.exists())return;
+      const aktuell=snap.data().angebote||[];
+      const neu=aktuell.filter(a=>a!==angebot);
+      await updateDoc(doc(db,'users',uid),{angebote:neu});
+      toast('✓ Angebot „'+angebot+'" entfernt.');
+      loadLehrerKlassenListe();
+    }catch(e){toast('❌ Fehler: '+(e.message||e),true);}
+  });
+}
+
 function deleteLehrer(uid, name){
   if(!confirm('Lehrkraft „'+name+'" wirklich vollständig löschen?\n\nEs werden gelöscht:\n• Firestore-Profil\n• Firebase Auth-Konto (Login)\n\nDieser Vorgang kann nicht rückgängig gemacht werden.'))return;
 
@@ -2543,15 +2558,26 @@ function deleteLehrer(uid, name){
 }
 
 function loadLehrerKlassenListe(){
-  withFirebase(async({db,getDocsFromServer,collection})=>{
-    // getDocsFromServer statt getDocs um Cache-Probleme zu vermeiden
-    const snaps=await getDocsFromServer(collection(db,'users'));
-    const lehrer=[];snaps.forEach(s=>{if(s.data().role==='lehrer')lehrer.push({uid:s.id,...s.data()});});
+  withFirebase(async({db,getDocsFromServer,getDocs,collection})=>{
+    // Beide Collections parallel laden
+    const [lehrerSnaps, faecherSnaps] = await Promise.all([
+      getDocsFromServer(collection(db,'users')),
+      getDocs(collection(db,'faecher'))
+    ]);
+
+    // Alle gültigen Fach-Namen aus Firestore sammeln
+    const gueltigeFaecher=new Set();
+    faecherSnaps.forEach(s=>{if(s.data().name)gueltigeFaecher.add(s.data().name);});
+
+    const lehrer=[];
+    lehrerSnaps.forEach(s=>{
+      if(s.data().role==='lehrer') lehrer.push({uid:s.id,...s.data()});
+    });
     lehrer.sort((a,b)=>(a.nachname+a.vorname).localeCompare(b.nachname+b.vorname));
-    renderLehrerKlassenListe(lehrer);
+    renderLehrerKlassenListe(lehrer, gueltigeFaecher);
   });
 }
-function renderLehrerKlassenListe(lehrer){
+function renderLehrerKlassenListe(lehrer, gueltigeFaecher=null){
   const cont=document.getElementById('sl-lehrer-liste');
   if(!lehrer.length){cont.innerHTML='<p class="text-sm text-soft">Keine Lehrkräfte gefunden.</p>';return;}
   let html=`<table class="schueler-table"><thead><tr><th>Name</th><th>Klassen</th><th>Angebote</th><th></th></tr></thead><tbody>`;
@@ -2559,10 +2585,23 @@ function renderLehrerKlassenListe(lehrer){
     const klassen=l.klassen||[];
     const chipsHtml=klassen.length?klassen.map(k=>`<span class="lehrer-klasse-chip">${k}</span>`).join(''):'<span class="text-soft" style="font-size:12px;">–</span>';
     const angebote=l.angebote||[];
-    const angeboteHtml=angebote.length
-      ? angebote.map(a=>`<span style="background:var(--teal-light);color:#085041;font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;display:inline-block;margin:1px;">${a}</span>`).join('')
-      : '<span style="font-size:12px;color:var(--text-lighter);">–</span>';
     const emailId='email-'+l.uid.slice(0,8);
+
+    // Angebote mit Gültigkeitsprüfung
+    const angeboteHtml=angebote.length
+      ? angebote.map(a=>{
+          const ungueltig=gueltigeFaecher && !gueltigeFaecher.has(a);
+          if(ungueltig){
+            return `<span style="background:#FCEBEB;color:#A32D2D;font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;display:inline-block;margin:1px;" title="Fach existiert nicht mehr in der Fächer-Liste">
+              ⚠️ ${a}
+              <button onclick="entferneAngebotVonLehrer('${l.uid}','${a}','${l.vorname} ${l.nachname}')" 
+                style="background:none;border:none;cursor:pointer;color:#A32D2D;font-size:12px;margin-left:2px;padding:0;" title="Entfernen">✕</button>
+            </span>`;
+          }
+          return `<span style="background:var(--teal-light);color:#085041;font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;display:inline-block;margin:1px;">${a}</span>`;
+        }).join('')
+      : '<span style="font-size:12px;color:var(--text-lighter);">–</span>';
+
     html+=`<tr>
       <td>
         <div style="font-weight:500;font-size:13px;">${l.vorname} ${l.nachname}</div>
