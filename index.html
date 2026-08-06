@@ -459,6 +459,11 @@
         <div class="card-title flex-row">
           <i class="ti ti-users"></i> Schüler
           <span class="spacer"></span>
+          <select id="l-schueler-klassen-filter" class="form-control"
+            style="max-width:150px;font-size:13px;padding:6px 10px;margin-right:6px;"
+            onchange="lFilterSchuelerListe()">
+            <option value="">Alle Klassen</option>
+          </select>
           <button class="btn btn-primary btn-sm" onclick="openSchuelerModal()"><i class="ti ti-plus"></i> Hinzufügen</button>
         </div>
         <p class="text-sm text-soft" style="margin-bottom:.75rem;">Du siehst alle Schüler – bearbeiten kannst du nur deine eigenen Klassen (<span id="l-meine-klassen-hint" style="font-weight:600;"></span>).</p>
@@ -815,17 +820,35 @@
 
 <!-- ═══ MODAL: LEHRER KLASSEN ZUWEISEN ═══ -->
 <div id="modal-lehrer-klassen" class="modal-backdrop hidden">
-  <div class="modal">
+  <div class="modal" style="max-width:480px;">
     <div class="modal-title" id="mlk-titel">Klassen zuweisen</div>
-    <p class="text-sm text-soft" style="margin-bottom:.875rem;" id="mlk-name"></p>
+    <p class="text-sm text-soft" style="margin-bottom:.75rem;" id="mlk-name"></p>
+
+    <!-- Alle Klassen Button -->
+    <div style="margin-bottom:.75rem;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+      <button class="btn btn-secondary btn-sm" onclick="setAlleKlassen()" style="background:#E1F5EE;border-color:#1D9E75;color:#085041;">
+        👥 Alle Klassen auswählen
+      </button>
+      <button class="btn btn-secondary btn-sm" onclick="editLehrerKlassen=[];renderKlassenTags()">
+        ✕ Alle entfernen
+      </button>
+    </div>
+
+    <!-- Schnellauswahl vorhandener Klassen -->
+    <div class="form-group">
+      <label class="form-label">Schnellauswahl</label>
+      <div id="mlk-schnellauswahl" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;"></div>
+    </div>
+
     <div class="form-group">
       <label class="form-label">Zugewiesene Klassen</label>
       <div class="klassen-tags" id="mlk-tags"></div>
-      <div class="klassen-add-row">
+      <div class="klassen-add-row" style="margin-top:8px;">
         <input type="text" id="mlk-input" class="form-control" placeholder="Klasse eingeben (z. B. 7a)" style="flex:1;" />
         <button class="btn btn-primary btn-sm" onclick="addKlassenTag()"><i class="ti ti-plus"></i> Hinzufügen</button>
       </div>
     </div>
+
     <div id="mlk-error" class="text-sm" style="color:#A32D2D;display:none;margin-bottom:.5rem;"></div>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeKlassenModal()">Abbrechen</button>
@@ -842,8 +865,7 @@ const WEBUNTIS = { name:'s. Webuntis', sel:'sel-webuntis', icon:'📅', bg:'#F1E
 const GRUPPEN = {
   fruehstarter: {
     label:'⭐ Frühstarter', klasse:'gruppe-fruehstarter', info:'⭐',
-    infoText:'Als <b>Frühstarter</b> kannst du in 7. u. 8. Std. nur <b>Mittagessen</b> oder <b>Frühe Freizeit</b> wählen. '
-            +'9. u. 10. Std. sind durch deinen <b>regulären Schulplan</b> belegt – schau in <b>Webuntis</b> nach!',
+    infoText:'In der 7. und 8. Stunde kannst du dein Angebot wählen.',
     freiZS:[1,2],
     festZS:{ 3:WEBUNTIS, 4:WEBUNTIS },
     // Welche Chips in 7.+8. Std. sichtbar sind
@@ -851,8 +873,7 @@ const GRUPPEN = {
   },
   starter: {
     label:'🔵 Starter', klasse:'gruppe-starter', info:'🔵',
-    infoText:'Als <b>Starter</b> kannst du in 7. u. 8. Std. <b>Mittagessen</b>, <b>Frühe Freizeit</b> oder <b>Frühe AG</b> wählen. '
-            +'9. u. 10. Std. sind durch deinen <b>regulären Schulplan</b> belegt – schau in <b>Webuntis</b> nach!',
+    infoText:'In der 7. und 8. Stunde kannst du dein Angebot wählen.',
     freiZS:[1,2],
     festZS:{ 3:WEBUNTIS, 4:WEBUNTIS },
     erlaubteChips:null // alle Fächer kommen aus Firestore
@@ -2137,13 +2158,49 @@ function exportPasswoerter(){
     XLSX.writeFile(wb,'ina-schueler-passwoerter.xlsx');
   });
 }
+// Globale Schülerliste für Filter-Funktion
+let _alleSchuelerCache=[];
+
 function loadSchuelerListe(containerId){
   withFirebase(async({db,getDocs,collection})=>{
     const snaps=await getDocs(collection(db,'users'));
-    const liste=[];snaps.forEach(s=>{if(s.data().role==='schueler')liste.push({uid:s.id,...s.data()});});
+    const liste=[];
+    snaps.forEach(s=>{if(s.data().role==='schueler')liste.push({uid:s.id,...s.data()});});
     liste.sort((a,b)=>(a.klasse+a.nachname).localeCompare(b.klasse+b.nachname));
-    renderSchuelerListe(containerId,liste);
+
+    // Cache für Filter
+    if(containerId==='l-schueler-liste') _alleSchuelerCache=liste;
+
+    // Dropdown befüllen (nur für Lehrer-Tab)
+    const sel=document.getElementById('l-schueler-klassen-filter');
+    if(sel && containerId==='l-schueler-liste'){
+      const aktuellerWert=sel.value;
+      const klassen=[...new Set(liste.map(s=>s.klasse).filter(Boolean))].sort((a,b)=>{
+        const na=parseInt(a),nb=parseInt(b);
+        if(na!==nb)return na-nb;
+        return a.localeCompare(b);
+      });
+      sel.innerHTML='<option value="">Alle Klassen</option>';
+      klassen.forEach(k=>{
+        const opt=document.createElement('option');
+        opt.value=k; opt.textContent='Klasse '+k;
+        if(k===aktuellerWert) opt.selected=true;
+        sel.appendChild(opt);
+      });
+      // Gefilterte Liste anzeigen
+      const filter=aktuellerWert;
+      const gefiltert=filter?liste.filter(s=>s.klasse===filter):liste;
+      renderSchuelerListe(containerId, gefiltert);
+    } else {
+      renderSchuelerListe(containerId, liste);
+    }
   });
+}
+
+function lFilterSchuelerListe(){
+  const filter=document.getElementById('l-schueler-klassen-filter')?.value||'';
+  const gefiltert=filter?_alleSchuelerCache.filter(s=>s.klasse===filter):_alleSchuelerCache;
+  renderSchuelerListe('l-schueler-liste', gefiltert);
 }
 function renderSchuelerListe(containerId,liste){
   const cont=document.getElementById(containerId);
@@ -2627,15 +2684,78 @@ function renderLehrerKlassenListe(lehrer, gueltigeFaecher=null){
   html+='</tbody></table>';
   cont.innerHTML=html;
 }
+// Alle verfügbaren Klassen aus Schülerliste (für Schnellauswahl)
+let _alleKlassenVerfuegbar=[];
+
 function openKlassenModal(uid,name,klassen){
   editLehrerUid=uid;
-  editLehrerKlassen=[...klassen];
-  document.getElementById('mlk-titel').textContent='Klassen zuweisen';
-  document.getElementById('mlk-name').textContent=name;
+  // Defensiv: klassen kann undefined/null sein wenn neu angelegt
+  editLehrerKlassen=Array.isArray(klassen)?[...klassen]:[];
+  document.getElementById('mlk-titel').textContent='Klassen zuweisen: '+name;
+  document.getElementById('mlk-name').textContent='';
   document.getElementById('mlk-input').value='';
   document.getElementById('mlk-error').style.display='none';
+
+  // Schnellauswahl aus vorhandenen Schüler-Klassen laden
+  _ladeKlassenSchnellauswahl();
   renderKlassenTags();
   document.getElementById('modal-lehrer-klassen').classList.remove('hidden');
+}
+
+function _ladeKlassenSchnellauswahl(){
+  const cont=document.getElementById('mlk-schnellauswahl');
+  if(!cont)return;
+  // Klassen aus Cache falls vorhanden
+  const klassen=_alleSchuelerCache.length>0
+    ? [...new Set(_alleSchuelerCache.map(s=>s.klasse).filter(Boolean))].sort((a,b)=>{
+        const na=parseInt(a),nb=parseInt(b);
+        if(na!==nb)return na-nb;
+        return a.localeCompare(b);
+      })
+    : [];
+  _alleKlassenVerfuegbar=klassen;
+  if(!klassen.length){
+    cont.innerHTML='<span class="text-sm text-soft">Keine Klassen vorhanden</span>';
+    return;
+  }
+  cont.innerHTML=klassen.map(k=>{
+    const aktiv=editLehrerKlassen.includes(k);
+    return `<button onclick="toggleKlasseSchnell('${k}')" id="mlk-schnell-${k}"
+      style="padding:5px 10px;border-radius:8px;border:1.5px solid ${aktiv?'var(--orange-dark)':'var(--gray-border)'};
+      background:${aktiv?'var(--orange-light)':'#fff'};color:${aktiv?'var(--orange-dark)':'var(--text-soft)'};
+      font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">
+      ${k}
+    </button>`;
+  }).join('');
+}
+
+function toggleKlasseSchnell(k){
+  if(editLehrerKlassen.includes(k)){
+    editLehrerKlassen=editLehrerKlassen.filter(x=>x!==k);
+  } else {
+    editLehrerKlassen.push(k);
+    editLehrerKlassen.sort((a,b)=>{
+      const na=parseInt(a),nb=parseInt(b);
+      if(na!==nb)return na-nb;
+      return a.localeCompare(b);
+    });
+  }
+  // Schnellauswahl-Buttons aktualisieren
+  _alleKlassenVerfuegbar.forEach(kl=>{
+    const btn=document.getElementById('mlk-schnell-'+kl);
+    if(!btn)return;
+    const aktiv=editLehrerKlassen.includes(kl);
+    btn.style.borderColor=aktiv?'var(--orange-dark)':'var(--gray-border)';
+    btn.style.background=aktiv?'var(--orange-light)':'#fff';
+    btn.style.color=aktiv?'var(--orange-dark)':'var(--text-soft)';
+  });
+  renderKlassenTags();
+}
+
+function setAlleKlassen(){
+  editLehrerKlassen=[..._alleKlassenVerfuegbar];
+  _ladeKlassenSchnellauswahl();
+  renderKlassenTags();
 }
 function renderKlassenTags(){
   const cont=document.getElementById('mlk-tags');
@@ -3233,6 +3353,9 @@ function openFachModal(id){
         document.getElementById('fm-aktiv').checked=d.aktiv!==false;
       if(document.getElementById('fm-alle-lehrer'))
         document.getElementById('fm-alle-lehrer').checked=d.alleLehrer===true;
+      // Klassen vorbelegen
+      fmKlassenArr=Array.isArray(d.klassen)?[...d.klassen]:[];
+      _renderFmKlassen();
       // Zeitschiene – alle erst abwählen, dann richtige setzen
       document.querySelectorAll('input[name="fm-zs"]').forEach(r=>r.checked=false);
       const zsRohWert=d.isEinzelnWaehlbar?('einzeln:'+(d.zeitschiene||'')):(d.zeitschiene||'');
@@ -3273,6 +3396,8 @@ function openFachModal(id){
     document.getElementById('fm-beschreibung').value='';
     if(document.getElementById('fm-aktiv')) document.getElementById('fm-aktiv').checked=true;
     if(document.getElementById('fm-alle-lehrer')) document.getElementById('fm-alle-lehrer').checked=false;
+    fmKlassenArr=[];
+    _renderFmKlassen();
     ['fruehstarter','starter','durchstarter'].forEach(g=>{
       const cb=document.getElementById('fm-gruppe-'+g);if(cb)cb.checked=true;
     });
@@ -3616,6 +3741,76 @@ function selectIcon(icon){
   });
 }
 
+// ═══ TAG×STUNDEN-MATRIX HELFER ═══
+// ═══ KLASSEN-AUSWAHL IM FACH-MODAL ═══
+let fmKlassenArr=[];
+
+function fmKlasseHinzufuegen(){
+  const val=document.getElementById('fm-klasse-input')?.value.trim();
+  if(!val)return;
+  if(fmKlassenArr.includes(val)){toast('Klasse bereits vorhanden.');return;}
+  fmKlassenArr.push(val);
+  document.getElementById('fm-klasse-input').value='';
+  _renderFmKlassen();
+}
+
+function fmKlasseEntfernen(k){
+  fmKlassenArr=fmKlassenArr.filter(x=>x!==k);
+  _renderFmKlassen();
+}
+
+function fmAlleKlassenWaehlen(){
+  // Alle Klassen aus Schüler-Cache laden
+  const klassen=_alleSchuelerCache.length>0
+    ? [...new Set(_alleSchuelerCache.map(s=>s.klasse).filter(Boolean))].sort((a,b)=>{
+        const na=parseInt(a),nb=parseInt(b);
+        if(na!==nb)return na-nb;
+        return a.localeCompare(b);
+      })
+    : [];
+  fmKlassenArr=klassen;
+  _renderFmKlassen();
+}
+
+function _renderFmKlassen(){
+  const cont=document.getElementById('fm-klassen-liste');
+  if(!cont)return;
+  if(!fmKlassenArr.length){
+    cont.innerHTML='<span class="text-sm text-soft" style="padding:2px 4px;">Alle Klassen</span>';
+    return;
+  }
+  cont.innerHTML=fmKlassenArr.map(k=>
+    `<span style="background:var(--orange-light);color:var(--orange-dark);font-size:12px;font-weight:600;padding:3px 8px;border-radius:99px;display:inline-flex;align-items:center;gap:4px;">
+      ${k}<span onclick="fmKlasseEntfernen('${k}')" style="cursor:pointer;font-size:14px;line-height:1;">×</span>
+    </span>`
+  ).join('');
+}
+
+function fmZeileToggle(tag){
+  // Prüfe ob alle in dieser Zeile schon gecheckt sind
+  const alleGecheckt=[1,2,3,4].every(zs=>document.getElementById('fm-ts-'+tag+'-'+zs)?.checked);
+  [1,2,3,4].forEach(zs=>{
+    const cb=document.getElementById('fm-ts-'+tag+'-'+zs);
+    if(cb) cb.checked=!alleGecheckt;
+  });
+}
+
+function fmSpalteToggle(zs){
+  // Prüfe ob alle in dieser Spalte schon gecheckt sind
+  const alleGecheckt=[1,2,3,4].every(tag=>document.getElementById('fm-ts-'+tag+'-'+zs)?.checked);
+  [1,2,3,4].forEach(tag=>{
+    const cb=document.getElementById('fm-ts-'+tag+'-'+zs);
+    if(cb) cb.checked=!alleGecheckt;
+  });
+}
+
+function fmAlleAbwaehlen(){
+  [1,2,3,4].forEach(tag=>[1,2,3,4].forEach(zs=>{
+    const cb=document.getElementById('fm-ts-'+tag+'-'+zs);
+    if(cb) cb.checked=false;
+  }));
+}
+
 function closeFachModal(){document.getElementById('modal-fach').classList.add('hidden');editFachId=null;}
 
 function saveFach(){
@@ -3626,6 +3821,7 @@ function saveFach(){
   const gruppen=['fruehstarter','starter','durchstarter'].filter(g=>document.getElementById('fm-gruppe-'+g)?.checked);
   const aktiv=document.getElementById('fm-aktiv')?.checked||false;
   const alleLehrer=document.getElementById('fm-alle-lehrer')?.checked||false;
+  const klassen=fmKlassenArr.length>0?[...fmKlassenArr]:null; // null = alle Klassen
   const err=document.getElementById('fm-error');
   err.style.display='none';
 
@@ -3674,6 +3870,7 @@ function saveFach(){
         wochentage: wochentage, // abgeleitete Wochentage für Rückwärtskompatibilität
         tagStunden: tagStunden.length>0 ? tagStunden : null, // detaillierte Tag×Stunde-Einschränkung
         alleLehrer: alleLehrer, // alle Lehrkräfte können Belegung sehen
+        klassen: klassen, // null = alle Klassen, sonst Array
         aktiv,
         updatedAt:new Date().toISOString()
       };
@@ -3978,6 +4175,10 @@ function renderDynamischeChips(){
 
   dynamischeFaecher.forEach(f=>{
     if(f.gruppen && !f.gruppen.includes(gruppe)) return;
+
+    // Klassen-Einschränkung prüfen
+    const schuelerKlasse=currentUserData?.klasse||'';
+    if(f.klassen && f.klassen.length>0 && schuelerKlasse && !f.klassen.includes(schuelerKlasse)) return;
 
     // Tag×Stunde-Einschränkung prüfen (präzise: {tag, zs} Paare)
     if(f.tagStunden && f.tagStunden.length>0 && aktiverWochentag!==null){
@@ -5120,41 +5321,59 @@ function savePwReset(){
 
     <div class="form-group">
       <label class="form-label">Verfügbar an Wochentagen &amp; Stunden</label>
-      <p class="text-sm text-soft" style="margin-bottom:8px;">Nichts gewählt = Fach erscheint an allen Tagen in allen Stunden der gewählten Zeitschiene.</p>
+      <p class="text-sm text-soft" style="margin-bottom:8px;">Nichts gewählt = Fach erscheint an allen Tagen in allen Stunden. Klicke auf einen Tag oder eine Stunde um die ganze Zeile/Spalte zu wählen.</p>
       <table style="width:100%;border-collapse:collapse;font-size:12px;">
         <thead>
           <tr>
-            <th style="padding:6px 8px;text-align:left;color:var(--text-soft);font-weight:600;border-bottom:1px solid var(--gray-border);">Tag</th>
-            <th style="padding:6px 8px;text-align:center;color:var(--text-soft);font-weight:600;border-bottom:1px solid var(--gray-border);">7. Std.</th>
-            <th style="padding:6px 8px;text-align:center;color:var(--text-soft);font-weight:600;border-bottom:1px solid var(--gray-border);">8. Std.</th>
-            <th style="padding:6px 8px;text-align:center;color:var(--text-soft);font-weight:600;border-bottom:1px solid var(--gray-border);">9. Std.</th>
-            <th style="padding:6px 8px;text-align:center;color:var(--text-soft);font-weight:600;border-bottom:1px solid var(--gray-border);">10. Std.</th>
+            <th style="padding:6px 8px;text-align:left;color:var(--text-soft);font-weight:600;border-bottom:1px solid var(--gray-border);">
+              <button onclick="fmAlleAbwaehlen()" style="font-size:10px;background:none;border:1px solid var(--gray-border);border-radius:5px;padding:2px 6px;cursor:pointer;color:var(--text-soft);">Alle ✕</button>
+            </th>
+            <th style="padding:6px 8px;text-align:center;border-bottom:1px solid var(--gray-border);">
+              <button onclick="fmSpalteToggle(1)" style="font-weight:700;font-size:12px;background:none;border:none;cursor:pointer;color:var(--orange-dark);padding:2px 6px;">7. Std.</button>
+            </th>
+            <th style="padding:6px 8px;text-align:center;border-bottom:1px solid var(--gray-border);">
+              <button onclick="fmSpalteToggle(2)" style="font-weight:700;font-size:12px;background:none;border:none;cursor:pointer;color:var(--orange-dark);padding:2px 6px;">8. Std.</button>
+            </th>
+            <th style="padding:6px 8px;text-align:center;border-bottom:1px solid var(--gray-border);">
+              <button onclick="fmSpalteToggle(3)" style="font-weight:700;font-size:12px;background:none;border:none;cursor:pointer;color:var(--orange-dark);padding:2px 6px;">9. Std.</button>
+            </th>
+            <th style="padding:6px 8px;text-align:center;border-bottom:1px solid var(--gray-border);">
+              <button onclick="fmSpalteToggle(4)" style="font-weight:700;font-size:12px;background:none;border:none;cursor:pointer;color:var(--orange-dark);padding:2px 6px;">10. Std.</button>
+            </th>
           </tr>
         </thead>
         <tbody>
           <tr style="border-bottom:0.5px solid var(--gray-border);">
-            <td style="padding:7px 8px;font-weight:500;">Montag</td>
+            <td style="padding:7px 8px;">
+              <button onclick="fmZeileToggle(1)" style="font-weight:600;font-size:12px;background:none;border:none;cursor:pointer;color:var(--text);padding:0;">Mo</button>
+            </td>
             <td style="text-align:center;padding:7px;"><input type="checkbox" id="fm-ts-1-1" style="accent-color:var(--orange);width:16px;height:16px;" /></td>
             <td style="text-align:center;padding:7px;"><input type="checkbox" id="fm-ts-1-2" style="accent-color:var(--orange);width:16px;height:16px;" /></td>
             <td style="text-align:center;padding:7px;"><input type="checkbox" id="fm-ts-1-3" style="accent-color:var(--orange);width:16px;height:16px;" /></td>
             <td style="text-align:center;padding:7px;"><input type="checkbox" id="fm-ts-1-4" style="accent-color:var(--orange);width:16px;height:16px;" /></td>
           </tr>
           <tr style="border-bottom:0.5px solid var(--gray-border);">
-            <td style="padding:7px 8px;font-weight:500;">Dienstag</td>
+            <td style="padding:7px 8px;">
+              <button onclick="fmZeileToggle(2)" style="font-weight:600;font-size:12px;background:none;border:none;cursor:pointer;color:var(--text);padding:0;">Di</button>
+            </td>
             <td style="text-align:center;padding:7px;"><input type="checkbox" id="fm-ts-2-1" style="accent-color:var(--orange);width:16px;height:16px;" /></td>
             <td style="text-align:center;padding:7px;"><input type="checkbox" id="fm-ts-2-2" style="accent-color:var(--orange);width:16px;height:16px;" /></td>
             <td style="text-align:center;padding:7px;"><input type="checkbox" id="fm-ts-2-3" style="accent-color:var(--orange);width:16px;height:16px;" /></td>
             <td style="text-align:center;padding:7px;"><input type="checkbox" id="fm-ts-2-4" style="accent-color:var(--orange);width:16px;height:16px;" /></td>
           </tr>
           <tr style="border-bottom:0.5px solid var(--gray-border);">
-            <td style="padding:7px 8px;font-weight:500;">Mittwoch</td>
+            <td style="padding:7px 8px;">
+              <button onclick="fmZeileToggle(3)" style="font-weight:600;font-size:12px;background:none;border:none;cursor:pointer;color:var(--text);padding:0;">Mi</button>
+            </td>
             <td style="text-align:center;padding:7px;"><input type="checkbox" id="fm-ts-3-1" style="accent-color:var(--orange);width:16px;height:16px;" /></td>
             <td style="text-align:center;padding:7px;"><input type="checkbox" id="fm-ts-3-2" style="accent-color:var(--orange);width:16px;height:16px;" /></td>
             <td style="text-align:center;padding:7px;"><input type="checkbox" id="fm-ts-3-3" style="accent-color:var(--orange);width:16px;height:16px;" /></td>
             <td style="text-align:center;padding:7px;"><input type="checkbox" id="fm-ts-3-4" style="accent-color:var(--orange);width:16px;height:16px;" /></td>
           </tr>
           <tr>
-            <td style="padding:7px 8px;font-weight:500;">Donnerstag</td>
+            <td style="padding:7px 8px;">
+              <button onclick="fmZeileToggle(4)" style="font-weight:600;font-size:12px;background:none;border:none;cursor:pointer;color:var(--text);padding:0;">Do</button>
+            </td>
             <td style="text-align:center;padding:7px;"><input type="checkbox" id="fm-ts-4-1" style="accent-color:var(--orange);width:16px;height:16px;" /></td>
             <td style="text-align:center;padding:7px;"><input type="checkbox" id="fm-ts-4-2" style="accent-color:var(--orange);width:16px;height:16px;" /></td>
             <td style="text-align:center;padding:7px;"><input type="checkbox" id="fm-ts-4-3" style="accent-color:var(--orange);width:16px;height:16px;" /></td>
@@ -5165,13 +5384,32 @@ function savePwReset(){
     </div>
 
     <div class="form-group">
-      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
-        <input type="checkbox" id="fm-aktiv" checked style="accent-color:var(--orange);width:16px;height:16px;" />
+      <label class="form-label">Klassen-Einschränkung <span class="text-soft" style="font-weight:400;">(optional)</span></label>
+      <p class="text-sm text-soft" style="margin-bottom:6px;">Leer = Fach gilt für alle Klassen der gewählten Gruppen. Klassen eingeben um es nur für bestimmte Klassen anzuzeigen.</p>
+      <div style="display:flex;gap:8px;margin-bottom:6px;">
+        <button type="button" class="btn btn-secondary btn-sm" onclick="fmAlleKlassenWaehlen()" style="background:#E1F5EE;border-color:#1D9E75;color:#085041;">
+          👥 Alle Klassen
+        </button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('fm-klassen-liste').innerHTML='';fmKlassenArr=[];">
+          ✕ Keine
+        </button>
+      </div>
+      <div id="fm-klassen-liste" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;min-height:28px;padding:4px;border:0.5px solid var(--gray-border);border-radius:8px;"></div>
+      <div style="display:flex;gap:6px;">
+        <input type="text" id="fm-klasse-input" class="form-control" placeholder="z.B. 5a" style="max-width:100px;"
+          onkeydown="if(event.key==='Enter'){event.preventDefault();fmKlasseHinzufuegen();}" />
+        <button type="button" class="btn btn-secondary btn-sm" onclick="fmKlasseHinzufuegen()">+ Hinzufügen</button>
+      </div>
+    </div>
+
+
         <span><b>Bei Schülern anzeigen</b> – Fach erscheint als wählbarer Chip im Stundenplan</span>
       </label>
     </div>
 
-    <div class="form-group" style="background:#E1F5EE;border:1.5px solid #1D9E75;border-radius:10px;padding:12px 14px;">
+    <div class="form-group">
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
+        <input type="checkbox" id="fm-aktiv" checked style="accent-color:var(--orange);width:16px;height:16px;" />
       <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
         <input type="checkbox" id="fm-alle-lehrer" style="accent-color:#1D9E75;width:16px;height:16px;" />
         <span><b>Alle Lehrkräfte</b> können die Belegung dieses Fachs sehen</span>
