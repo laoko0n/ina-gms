@@ -524,15 +524,6 @@
       </div>
     </div>
 
-    <div id="l-tab-spielausleihe" class="hidden">
-      <div class="card">
-        <div class="card-title"><i class="ti ti-ball-basketball"></i> Ausleihe – Wochenübersicht</div>
-        <p class="text-sm text-soft" style="margin-bottom:.75rem;">Wer hat sich diese Woche für Spiel- oder Sportgeräteausleihe eingetragen?</p>
-        <div id="l-spielausleihe-woche"></div>
-        <div id="l-spielausleihe-inhalt"><p class="text-sm text-soft">Lade…</p></div>
-      </div>
-    </div>
-
     <div id="l-tab-angebot" class="hidden">
       <div class="card">
         <div class="card-title"><i class="ti ti-clipboard-check"></i> Mein Angebot</div>
@@ -546,7 +537,6 @@
   <nav class="bottom-nav" style="flex-wrap:nowrap;overflow-x:auto;justify-content:flex-start;">
     <button class="nav-btn active" id="l-nav-uebersicht" onclick="lShowTab('uebersicht')"><i class="ti ti-list-check"></i>Übersicht</button>
     <button class="nav-btn" id="l-nav-angebot" onclick="lShowTab('angebot')"><i class="ti ti-clipboard-check"></i>INA-Angebot</button>
-    <button class="nav-btn" id="l-nav-spielausleihe" onclick="lShowTab('spielausleihe')"><i class="ti ti-ball-basketball"></i>Ausleihe</button>
     <button class="nav-btn" id="l-nav-meldungen" onclick="lShowTab('meldungen')"><i class="ti ti-bell"></i>Meldungen<span id="l-meldungen-badge" style="display:none;background:#A32D2D;color:#fff;font-size:10px;font-weight:700;padding:1px 5px;border-radius:99px;margin-left:4px;"></span></button>
     <button class="nav-btn" id="l-nav-stats" onclick="lShowTab('stats')"><i class="ti ti-chart-bar"></i>Statistik</button>
     <button class="nav-btn" id="l-nav-schueler" onclick="lShowTab('schueler')"><i class="ti ti-users"></i>Schüler</button>
@@ -1967,7 +1957,7 @@ function savePlan(){
 
 // ═══ TABS ═══
 function lShowTab(tab){
-  ['uebersicht','angebot','anwesenheit','spielausleihe','meldungen','stats','schueler','fehlzeiten','pw'].forEach(t=>{
+  ['uebersicht','angebot','anwesenheit','meldungen','stats','schueler','fehlzeiten','pw'].forEach(t=>{
     const te=document.getElementById('l-tab-'+t);
     const ne=document.getElementById('l-nav-'+t);
     if(te)te.classList.toggle('hidden',t!==tab);
@@ -1975,7 +1965,6 @@ function lShowTab(tab){
   });
   if(tab==='stats')         loadLehrerStats();
   if(tab==='angebot'||tab==='anwesenheit') initAngebotTab();
-  if(tab==='spielausleihe') loadSpielausleiheUebersicht();
   if(tab==='fehlzeiten')    loadFehlzeitenUebersicht('l');
   if(tab==='meldungen')     loadMeldungen();
 }
@@ -4884,14 +4873,7 @@ function initAngebotTab(){
       return;
     }
 
-    header.innerHTML=`
-      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
-        ${meineAngebote.map(a=>`
-          <span style="display:inline-flex;align-items:center;gap:6px;background:#E1F5EE;border:1.5px solid #1D9E75;color:#085041;font-size:14px;font-weight:600;padding:6px 14px;border-radius:99px;">
-            <i class="ti ti-clipboard-check"></i> ${a}
-          </span>`).join('')}
-      </div>
-      <p class="text-sm text-soft" style="margin-top:8px;">Wähle einen Tag um die Teilnehmer zu sehen und die Anwesenheit zu erfassen.</p>`;
+    header.innerHTML=`<p class="text-sm text-soft">Wähle einen Tag um die Teilnehmer zu sehen und die Anwesenheit zu erfassen.</p>`;
 
     buildPlanTagLeiste('l-angebot-tage',(tag)=>loadAngebotMitAnwesenheit(tag,meineAngebote));
   });
