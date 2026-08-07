@@ -307,6 +307,10 @@
         <div style="font-size:13px;font-weight:600;color:#92400E;">⏳ Wählen ist ab <b>12:55 Uhr</b> möglich</div>
         <div style="font-size:22px;font-weight:800;color:#EA580C;margin-top:2px;font-variant-numeric:tabular-nums;" id="s-countdown-zeit">–:––</div>
       </div>
+      <!-- Testmodus-Hinweis -->
+      <div id="s-testmodus-hinweis" style="display:none;background:#FEF3C7;border:1.5px solid #D97706;border-radius:10px;padding:8px 14px;margin-bottom:.5rem;text-align:center;font-size:12px;font-weight:600;color:#78350F;">
+        🧪 Testmodus aktiv – alle Zeitsperren sind aufgehoben
+      </div>
       <!-- Vorauswahl-Leiste (nur wenn wahlWochen > 0 in Einstellungen) -->
       <div id="s-vorauswahl-bar" style="display:none;margin-bottom:.5rem;overflow-x:auto;white-space:nowrap;padding-bottom:4px;"></div>
       <!-- Gesperrt-Banner außerhalb Schulzeit / Wochenende -->
@@ -659,6 +663,19 @@
             <input type="number" id="einst-wahl-wochen" class="form-control" value="0" min="0" max="52" step="1" />
             <p class="text-sm text-soft" style="margin-top:3px;">0 = nur heutiger Tag</p>
           </div>
+        </div>
+
+        <div class="form-group" style="background:#FEF3C7;border:1.5px solid #D97706;border-radius:10px;padding:12px 14px;margin-bottom:1rem;">
+          <label style="display:flex;align-items:flex-start;gap:8px;font-size:13px;cursor:pointer;">
+            <input type="checkbox" id="einst-testmodus" style="accent-color:#D97706;width:17px;height:17px;margin-top:1px;flex-shrink:0;" />
+            <span>
+              <b>🧪 Testmodus aktivieren</b><br>
+              <span style="font-size:12px;color:#78350F;">
+                Hebt <b>alle</b> Sperren für Schüler auf: Uhrzeit, Wochenende/Freitag, Ferien und Schuljahresgrenzen.
+                Schüler können dann jederzeit und für jeden Tag wählen. <b>Vor dem Schulstart wieder ausschalten!</b>
+              </span>
+            </span>
+          </label>
         </div>
 
         <div class="section-label" style="margin-top:.5rem;">Ferien & unterrichtsfreie Tage</div>
@@ -1209,6 +1226,22 @@ function initSchuelerHeuteAnsicht(){
     if(saveBtn) saveBtn.style.opacity=sperren?'0.4':'';
   }
 
+  // ═══ TESTMODUS: alle Sperren aufheben ═══
+  const testmodus=schuljahrConfig.testmodus===true;
+  if(testmodus){
+    if(keinInaBanner) keinInaBanner.style.display='none';
+    if(countdownBanner) countdownBanner.style.display='none';
+    const hinweis=document.getElementById('s-testmodus-hinweis');
+    if(hinweis) hinweis.style.display='';
+    sperrePlanUI(false);
+    activeTag=heuteKey;
+    loadPlanFuerTag(heuteKey);
+    _baueVorauswahlLeiste(heute,sjBeginn,sjEnde,countdownBanner,sperrePlanUI,true);
+    return;
+  }
+  const hinweisAus=document.getElementById('s-testmodus-hinweis');
+  if(hinweisAus) hinweisAus.style.display='none';
+
   // Wochenende oder Freitag oder außerhalb Schuljahr
   if(wochentag===0||wochentag===5||wochentag===6||ausserhalbSchuljahr){
     if(countdownBanner) countdownBanner.style.display='none';
@@ -1240,57 +1273,8 @@ function initSchuelerHeuteAnsicht(){
     return;
   }
 
-  // Vorauswahl-Leiste wenn wahlWochen > 0
-  const wahlWochen=parseInt(schuljahrConfig.wahlWochen)||0;
-  const vorauswahlBar=document.getElementById('s-vorauswahl-bar');
-  if(vorauswahlBar){
-    vorauswahlBar.innerHTML='';
-    vorauswahlBar.style.display='none';
-    if(wahlWochen>0){
-      vorauswahlBar.style.display='';
-      const WTLANG2=['So','Mo','Di','Mi','Do','Fr','Sa'];
-      for(let w=0;w<=wahlWochen;w++){
-        for(let d=0;d<5;d++){ // Mo–Fr
-          const datum=new Date(heute);
-          datum.setDate(datum.getDate()+w*7+d+(1-wochentag||0));
-          // Wochentag-Offset zum nächsten Montag berechnen
-        }
-      }
-      // Einfache Implementierung: alle Schultage bis wahlWochen Wochen voraus
-      const ferien2=schuljahrConfig.ferien||[];
-      for(let offset=1;offset<=wahlWochen*5;offset++){
-        const datum=new Date(heute);
-        datum.setDate(datum.getDate()+offset);
-        const dKey=isoDate(datum);
-        const dow=datum.getDay();
-        if(dow===0||dow===5||dow===6) continue; // Wochenende + Freitag
-        if(sjBeginn&&dKey<sjBeginn) continue;
-        if(sjEnde&&dKey>sjEnde) continue;
-        const inF=ferien2.some(f=>f.von&&f.bis&&dKey>=f.von&&dKey<=f.bis);
-        if(inF) continue;
-        const btn=document.createElement('button');
-        btn.className='date-btn';
-        btn.style.cssText='padding:6px 10px;font-size:12px;';
-        btn.innerHTML=`<div class="day">${WTLANG2[dow]}</div>${datum.getDate()}.${datum.getMonth()+1}.`;
-        btn.onclick=()=>{
-          vorauswahlBar.querySelectorAll('.date-btn').forEach(b=>b.classList.remove('active'));
-          btn.classList.add('active');
-          activeTag=dKey;
-          loadPlanFuerTag(dKey);
-          // Countdown ausblenden für Zukunftstage
-          if(countdownBanner) countdownBanner.style.display='none';
-          sperrePlanUI(false);
-        };
-        vorauswahlBar.appendChild(btn);
-      }
-      if(vorauswahlBar.children.length>0){
-        const label=document.createElement('div');
-        label.style.cssText='font-size:11px;color:var(--text-soft);margin-bottom:4px;';
-        label.textContent='📅 Auch für folgende Tage wählbar (Testmodus):';
-        vorauswahlBar.prepend(label);
-      }
-    }
-  }
+  // Vorauswahl-Leiste (normaler Modus)
+  _baueVorauswahlLeiste(heute,sjBeginn,sjEnde,countdownBanner,sperrePlanUI,false);
 
   // Normaler Schultag – konfigurierbare Uhrzeit Sperre
   if(keinInaBanner) keinInaBanner.style.display='none';
@@ -1327,6 +1311,64 @@ function initSchuelerHeuteAnsicht(){
 
   pruefeUhrzeit();
   _countdownInterval=setInterval(pruefeUhrzeit,1000);
+}
+
+// Baut die Leiste mit wählbaren Tagen (Vorauswahl / Testmodus)
+function _baueVorauswahlLeiste(heute,sjBeginn,sjEnde,countdownBanner,sperrePlanUI,testmodus){
+  const bar=document.getElementById('s-vorauswahl-bar');
+  if(!bar) return;
+  bar.innerHTML='';
+  bar.style.display='none';
+
+  const wahlWochen=parseInt(schuljahrConfig.wahlWochen)||0;
+  // Im Testmodus mindestens 2 Wochen zeigen, damit immer etwas testbar ist
+  const wochen=testmodus?Math.max(wahlWochen,2):wahlWochen;
+  if(wochen<=0) return;
+
+  const WT=['So','Mo','Di','Mi','Do','Fr','Sa'];
+  const ferien=schuljahrConfig.ferien||[];
+  const heuteKey=isoDate(heute);
+
+  // Im Testmodus auch heute anbieten, sonst ab morgen
+  const startOffset=testmodus?0:1;
+
+  for(let offset=startOffset;offset<=wochen*7;offset++){
+    const datum=new Date(heute);
+    datum.setDate(datum.getDate()+offset);
+    const dKey=isoDate(datum);
+    const dow=datum.getDay();
+
+    if(!testmodus){
+      if(dow===0||dow===5||dow===6) continue;         // Wochenende + Freitag
+      if(sjBeginn&&dKey<sjBeginn) continue;
+      if(sjEnde&&dKey>sjEnde) continue;
+      if(ferien.some(f=>f.von&&f.bis&&dKey>=f.von&&dKey<=f.bis)) continue;
+    } else {
+      if(dow===0||dow===6) continue;                  // im Testmodus nur Wochenende raus
+    }
+
+    const btn=document.createElement('button');
+    btn.className='date-btn'+(dKey===heuteKey?' active':'');
+    btn.style.cssText='padding:6px 10px;font-size:12px;margin-right:5px;';
+    btn.innerHTML=`<div class="day">${WT[dow]}</div>${datum.getDate()}.${datum.getMonth()+1}.`;
+    btn.onclick=()=>{
+      bar.querySelectorAll('.date-btn').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      activeTag=dKey;
+      loadPlanFuerTag(dKey);
+      if(countdownBanner) countdownBanner.style.display='none';
+      if(typeof sperrePlanUI==='function') sperrePlanUI(false);
+    };
+    bar.appendChild(btn);
+  }
+
+  if(bar.children.length>0){
+    bar.style.display='';
+    const label=document.createElement('div');
+    label.style.cssText='font-size:11px;color:var(--text-soft);margin-bottom:4px;';
+    label.textContent=testmodus?'🧪 Testmodus – jeder Tag wählbar:':'📅 Auch für folgende Tage wählbar:';
+    bar.prepend(label);
+  }
 }
 
 function buildDateBar(){ initSchuelerHeuteAnsicht(); } // Rückwärtskompatibilität
@@ -1550,10 +1592,10 @@ function loadPlanFuerTag(tag){
     // Ausleihe-Chips auf Verfügbarkeit prüfen (ausblenden wenn voll)
     setTimeout(()=>pruefeAusleiheChips(),500);
 
-    // Speichern-Button: gesperrt bei vergangenen Tagen
+    // Speichern-Button: gesperrt bei vergangenen Tagen (im Testmodus nie)
     const sb=document.getElementById('save-btn');
     const heuteCheck=isoDate(new Date());
-    const istVergangenerTag=tag<heuteCheck;
+    const istVergangenerTag=(schuljahrConfig.testmodus===true)?false:(tag<heuteCheck);
     if(sb){
       sb.disabled=istVergangenerTag;
       sb.style.opacity=istVergangenerTag?'0.4':'';
@@ -1588,18 +1630,19 @@ const ALLE_ANGEBOTE = [
 const DOPPELSTUNDEN_FRUEH = ['Freizeit mit Nico']; // Doppelstunde 7. Std.+2
 
 function waehlen(zs,name,sel,icon,bg,color,fachId,maxTeilnehmer){
-  // Uhrzeit-Sperre: vor konfigurierter Uhrzeit kein Wählen erlaubt
-  const jetzt=new Date();
-  const gesamtMin=jetzt.getHours()*60+jetzt.getMinutes();
-  const [freigabeH,freigabeM]=(schuljahrConfig.wahlUhrzeit||'12:55').split(':').map(Number);
-  const freigabeMin=freigabeH*60+freigabeM;
-  if(gesamtMin<freigabeMin){
-    const uhr=(schuljahrConfig.wahlUhrzeit||'12:55');
-    toast('⏳ Wählen ist erst ab '+uhr+' Uhr möglich.',true);
-    return;
+  // Uhrzeit-Sperre: vor konfigurierter Uhrzeit kein Wählen erlaubt (im Testmodus deaktiviert)
+  const testmodusAktiv=schuljahrConfig.testmodus===true;
+  if(!testmodusAktiv){
+    const jetzt=new Date();
+    const gesamtMin=jetzt.getHours()*60+jetzt.getMinutes();
+    const [freigabeH,freigabeM]=(schuljahrConfig.wahlUhrzeit||'12:55').split(':').map(Number);
+    if(gesamtMin<freigabeH*60+freigabeM){
+      toast('⏳ Wählen ist erst ab '+(schuljahrConfig.wahlUhrzeit||'12:55')+' Uhr möglich.',true);
+      return;
+    }
   }
-  // Freitags kein Nachmittagsprogramm
-  if(activeTag){
+  // Freitags kein Nachmittagsprogramm (im Testmodus erlaubt)
+  if(activeTag && !testmodusAktiv){
     const [j,m,t]=activeTag.split('-').map(Number);
     if(new Date(j,m-1,t).getDay()===5){
       toast('Freitags gibt es kein Nachmittagsprogramm.');
@@ -1669,23 +1712,25 @@ function waehlen(zs,name,sel,icon,bg,color,fachId,maxTeilnehmer){
 }
 
 function _waehlenAusfuehren(zs,name,sel,icon,bg,color,fachId){
-  // Vergangene Tage sind nur zum Ansehen, keine Änderung möglich
-  const heute=isoDate(new Date());
-  if(activeTag && activeTag<heute){
-    toast('Vergangene Tage können nicht mehr geändert werden.');
-    return;
-  }
-
-  // Tage außerhalb des Schuljahres können nicht gewählt werden
-  const sjBeginn=schuljahrConfig.sjBeginn;
-  const sjEnde=schuljahrConfig.sjEnde;
-  if(sjEnde && activeTag && activeTag>sjEnde){
-    toast('⛔ Dieser Tag liegt nach Schuljahresende.');
-    return;
-  }
-  if(sjBeginn && activeTag && activeTag<sjBeginn){
-    toast('⛔ Dieser Tag liegt vor Schuljahresbeginn ('+sjBeginn+'). Wähle einen Tag ab dem '+new Date(sjBeginn).getDate()+'.'+(new Date(sjBeginn).getMonth()+1)+'.');
-    return;
+  const testmodus=schuljahrConfig.testmodus===true;
+  if(!testmodus){
+    // Vergangene Tage sind nur zum Ansehen, keine Änderung möglich
+    const heute=isoDate(new Date());
+    if(activeTag && activeTag<heute){
+      toast('Vergangene Tage können nicht mehr geändert werden.');
+      return;
+    }
+    // Tage außerhalb des Schuljahres können nicht gewählt werden
+    const sjBeginn=schuljahrConfig.sjBeginn;
+    const sjEnde=schuljahrConfig.sjEnde;
+    if(sjEnde && activeTag && activeTag>sjEnde){
+      toast('⛔ Dieser Tag liegt nach Schuljahresende.');
+      return;
+    }
+    if(sjBeginn && activeTag && activeTag<sjBeginn){
+      toast('⛔ Dieser Tag liegt vor Schuljahresbeginn ('+sjBeginn+'). Wähle einen Tag ab dem '+new Date(sjBeginn).getDate()+'.'+(new Date(sjBeginn).getMonth()+1)+'.');
+      return;
+    }
   }
 
   const g=currentUserData?(currentUserData.gruppe||'durchstarter'):'durchstarter';
@@ -1855,36 +1900,33 @@ function renderGewahlt(){
 function savePlan(){
   if(!activeTag)return;
   const heute=isoDate(new Date());
+  const testmodus=schuljahrConfig.testmodus===true;
 
-  // Freitags kein Speichern
-  const [jj,mm,tt]=activeTag.split('-').map(Number);
-  if(new Date(jj,mm-1,tt).getDay()===5){
-    toast('Freitags gibt es kein Nachmittagsprogramm.');
-    return;
-  }
+  if(!testmodus){
+    // Freitags kein Speichern
+    const [jj,mm,tt]=activeTag.split('-').map(Number);
+    if(new Date(jj,mm-1,tt).getDay()===5){
+      toast('Freitags gibt es kein Nachmittagsprogramm.');
+      return;
+    }
 
-  // Harte Sperre: außerhalb des Schuljahres darf NIE gespeichert werden
-  const sjBeginn=schuljahrConfig.sjBeginn;
-  const sjEnde=schuljahrConfig.sjEnde;
-  if(sjBeginn && activeTag<sjBeginn){
-    toast('⛔ Dieser Tag liegt vor Schuljahresbeginn ('+new Date(sjBeginn).toLocaleDateString('de-DE')+') und kann nicht gewählt werden.');
-    return;
-  }
-  if(sjEnde && activeTag>sjEnde){
-    toast('⛔ Dieser Tag liegt nach Schuljahresende und kann nicht gewählt werden.');
-    return;
-  }
+    // Harte Sperre: außerhalb des Schuljahres darf NIE gespeichert werden
+    const sjBeginn=schuljahrConfig.sjBeginn;
+    const sjEnde=schuljahrConfig.sjEnde;
+    if(sjBeginn && activeTag<sjBeginn){
+      toast('⛔ Dieser Tag liegt vor Schuljahresbeginn ('+new Date(sjBeginn).toLocaleDateString('de-DE')+') und kann nicht gewählt werden.');
+      return;
+    }
+    if(sjEnde && activeTag>sjEnde){
+      toast('⛔ Dieser Tag liegt nach Schuljahresende und kann nicht gewählt werden.');
+      return;
+    }
 
-  // Vergangene Tage (innerhalb des Schuljahres) dürfen nicht mehr gespeichert werden
-  if(activeTag<heute){
-    toast('⛔ Vergangene Tage können nicht mehr gespeichert werden.');
-    return;
-  }
-
-  // Vergangene Tage dürfen nicht gespeichert werden
-  if(activeTag<heute){
-    toast('⛔ Vergangene Tage können nicht mehr gespeichert werden.');
-    return;
+    // Vergangene Tage dürfen nicht mehr gespeichert werden
+    if(activeTag<heute){
+      toast('⛔ Vergangene Tage können nicht mehr gespeichert werden.');
+      return;
+    }
   }
   withFirebase(async({db,doc,setDoc})=>{
     try{
@@ -3079,6 +3121,8 @@ function loadEinstellungen(){
     if(uhrEl)uhrEl.value=schuljahrConfig.wahlUhrzeit||'12:55';
     const wochenEl=document.getElementById('einst-wahl-wochen');
     if(wochenEl)wochenEl.value=schuljahrConfig.wahlWochen??0;
+    const testEl=document.getElementById('einst-testmodus');
+    if(testEl)testEl.checked=schuljahrConfig.testmodus===true;
     renderFerienListe();
   },600);
 }
@@ -3112,11 +3156,12 @@ function saveEinstellungen(){
   const bundesland=document.getElementById('einst-bundesland')?.value.trim()||'Saarland';
   const wahlUhrzeit=document.getElementById('einst-wahl-uhrzeit')?.value||'12:55';
   const wahlWochen=parseInt(document.getElementById('einst-wahl-wochen')?.value)||0;
-  schuljahrConfig={...schuljahrConfig,schulname,sjBeginn,sjEnde,hj2Beginn,bundesland,wahlUhrzeit,wahlWochen};
+  const testmodus=document.getElementById('einst-testmodus')?.checked||false;
+  schuljahrConfig={...schuljahrConfig,schulname,sjBeginn,sjEnde,hj2Beginn,bundesland,wahlUhrzeit,wahlWochen,testmodus};
   withFirebase(async({db,doc,setDoc})=>{
     try{
-      await setDoc(doc(db,'config','schuljahr'),{schulname,sjBeginn,sjEnde,hj2Beginn,bundesland,wahlUhrzeit,wahlWochen,ferien:schuljahrConfig.ferien||[],updatedAt:new Date().toISOString()});
-      ok.textContent='✓ Einstellungen gespeichert!';ok.style.display='block';
+      await setDoc(doc(db,'config','schuljahr'),{schulname,sjBeginn,sjEnde,hj2Beginn,bundesland,wahlUhrzeit,wahlWochen,testmodus,ferien:schuljahrConfig.ferien||[],updatedAt:new Date().toISOString()});
+      ok.textContent=testmodus?'✓ Gespeichert – 🧪 Testmodus ist AKTIV!':'✓ Einstellungen gespeichert!';ok.style.display='block';
       setTimeout(()=>ok.style.display='none',3000);
     }catch(e){showErr(err,'Fehler: '+e.message);toast('❌ Fach konnte nicht gespeichert werden: '+e.message, true);}
   });
