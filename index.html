@@ -3467,6 +3467,8 @@ async function loadMeldungen(){
 
       // Abwesenheiten sammeln
       const meldungen=[];
+      // Doppelmeldungen vermeiden wenn mehrere Lehrkräfte dieselbe Abwesenheit erfassen
+      const gesehenM=new Set();
       anwSnaps.forEach(a=>{
         const d=a.data();
         if(!d.tag||!d.schueler)return;
@@ -3490,6 +3492,9 @@ async function loadMeldungen(){
             }
           }
           const lehrerUid=d.lehrerUid||null;
+          const dedupKey=uid+'|'+d.tag+'|'+fach;
+          if(gesehenM.has(dedupKey))return;
+          gesehenM.add(dedupKey);
           meldungen.push({uid,tag:d.tag,fach,lehrerUid,schueler:meineSchueler[uid]});
         });
       });
@@ -3566,11 +3571,19 @@ async function aktualisiereMeldungenBadge(){
         if(s.data().role==='schueler'&&meineKlassen.includes(s.data().klasse)) meineUids.add(s.id);
       });
       let anzahl=0;
+      const gesehenB=new Set();
       anwSnaps.forEach(a=>{
-        const schueler=a.data().schueler||{};
+        const d=a.data();
+        const schueler=d.schueler||{};
         Object.entries(schueler).forEach(([key,status])=>{
-          const uid=key.indexOf('::')>=0?key.slice(0,key.indexOf('::')):key;
-          if(status==='abwesend'&&meineUids.has(uid)) anzahl++;
+          const tr=key.indexOf('::');
+          const uid=tr>=0?key.slice(0,tr):key;
+          const fach=tr>=0?key.slice(tr+2):'';
+          if(status!=='abwesend'||!meineUids.has(uid))return;
+          const k=uid+'|'+(d.tag||'')+'|'+fach;
+          if(gesehenB.has(k))return;
+          gesehenB.add(k);
+          anzahl++;
         });
       });
       const badge=document.getElementById('l-meldungen-badge');
@@ -4523,6 +4536,9 @@ async function loadFehlzeitenUebersicht(rolle){
     schueler.forEach(s=>{
       // Alle Fehleinträge für diesen Schüler sammeln
       const eintraege=[];
+      // Doppelzählung verhindern: erfassen zwei Lehrkräfte (z.B. beide Klassenlehrer)
+      // dieselbe Abwesenheit, zählt sie trotzdem nur einmal
+      const gesehen=new Set();
       alleAnw.forEach(a=>{
         if(!filterZeitraum(a.tag))return;
         const map=a.schueler||{};
@@ -4552,6 +4568,10 @@ async function loadFehlzeitenUebersicht(rolle){
           const d=new Date(j,m-1,t);
           const tagLabel=WOCHENTAGE[d.getDay()]+' '+t+'.'+m+'.'+j;
           const uhrzeit=zsNr?ZS_ZEITEN[zsNr]:'–';
+          // Gleicher Schüler + Tag + Fach = eine Fehlstunde, egal wer sie erfasst hat
+          const dedupKey=a.tag+'|'+fach;
+          if(gesehen.has(dedupKey))return;
+          gesehen.add(dedupKey);
           eintraege.push({tag:a.tag,tagLabel,fach,uhrzeit});
         }
         });
