@@ -146,6 +146,8 @@
     .sum-zeit { font-size: 11px; color: var(--text-lighter); width: 106px; flex-shrink: 0; }
     .sum-chip { padding: 3px 12px; border-radius: 99px; font-size: 12px; font-weight: 600; }
     .sum-empty { font-size: 12px; color: var(--text-lighter); font-style: italic; }
+    .chip-kap-badge { font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 99px; margin-left: 6px; white-space: nowrap; vertical-align: middle; }
+    .chip-label { vertical-align: middle; }
     .schueler-table { width: 100%; border-collapse: collapse; font-size: 13px; }
     .schueler-table th { text-align: left; padding: 8px 10px; font-size: 11px; font-weight: 600; color: var(--text-soft); border-bottom: 0.5px solid var(--gray-border); text-transform: uppercase; letter-spacing: .05em; }
     .schueler-table td { padding: 9px 10px; border-bottom: 0.5px solid var(--gray-border); vertical-align: middle; }
@@ -296,28 +298,27 @@
     </div>
 
     <div id="s-tab-plan">
-      <!-- Jahres-/Wochennavigation -->
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:.5rem;">
-        <button class="btn btn-secondary btn-sm" onclick="navWoche(-1)" title="Vorherige Woche" style="padding:8px 12px;font-size:16px;">‹</button>
-        <div style="flex:1;position:relative;">
-          <select id="s-woche-select" class="form-control" style="font-size:13px;padding:8px 12px;cursor:pointer;"
-            onchange="sprungZuWoche(this.value)">
-            <option value="">— Schulwoche wählen —</option>
-          </select>
-        </div>
-        <button class="btn btn-secondary btn-sm" onclick="navWoche(1)" title="Nächste Woche" style="padding:8px 12px;font-size:16px;">›</button>
-        <button class="btn btn-primary btn-sm" onclick="navWoche(0)" title="Zur aktuellen Woche" style="font-size:11px;white-space:nowrap;">Heute</button>
+      <!-- Nur heutiger Tag -->
+      <div style="display:flex;align-items:center;justify-content:center;margin-bottom:.5rem;">
+        <div style="background:var(--gray-bg);border-radius:10px;padding:8px 18px;font-size:14px;font-weight:600;color:var(--text-main);" id="s-heute-label">–</div>
       </div>
-      <div class="date-bar" id="s-date-bar"></div>
+      <!-- Countdown-Banner bis 12:55 -->
+      <div id="s-countdown-banner" style="display:none;background:#FFF7ED;border:1.5px solid #EA580C;border-radius:10px;padding:10px 14px;margin-bottom:.5rem;text-align:center;">
+        <div style="font-size:13px;font-weight:600;color:#92400E;">⏳ Wählen ist ab <b>12:55 Uhr</b> möglich</div>
+        <div style="font-size:22px;font-weight:800;color:#EA580C;margin-top:2px;font-variant-numeric:tabular-nums;" id="s-countdown-zeit">–:––</div>
+      </div>
+      <!-- Vorauswahl-Leiste (nur wenn wahlWochen > 0 in Einstellungen) -->
+      <div id="s-vorauswahl-bar" style="display:none;margin-bottom:.5rem;overflow-x:auto;white-space:nowrap;padding-bottom:4px;"></div> style="display:none;background:#F3F4F6;border:1.5px solid var(--gray-border);border-radius:10px;padding:12px 14px;margin-bottom:.5rem;text-align:center;color:var(--text-soft);">
+        <div style="font-size:18px;margin-bottom:4px;">🏖️</div>
+        <div style="font-size:13px;font-weight:600;" id="s-kein-ina-text">Heute kein INA-Programm</div>
+      </div>
 
       <div class="gruppe-info hidden" id="gruppe-info-banner">
         <span class="gruppe-info-icon" id="gruppe-info-icon"></span>
         <span id="gruppe-info-text"></span>
       </div>
       <div class="section-label">Mein INA-Plan</div>
-
-      <!-- 7. Stunde -->
-      <div class="zs-wrap zs-1" id="zs-wrap-1">
+      <div id="s-plan-chips-area">
         <div class="zs-header">
           <div class="zs-nr">7.</div>
           <div><div class="zs-zeit">12:55 – 13:30</div><div class="zs-sub">Siebte Stunde</div></div>
@@ -417,8 +418,9 @@
           <div class="sum-row"><span class="sum-zs">10.</span><span class="sum-zeit">10. Std. 15:00–15:45</span><span id="sum-4" class="sum-empty">nicht gewählt</span></div>
         </div>
       </div>
+      </div><!-- end s-plan-chips-area -->
       <button class="btn btn-primary btn-full" style="margin-top:.75rem;" onclick="savePlan()" id="save-btn">
-        <i class="ti ti-device-floppy"></i> Plan speichern für <span id="save-datum-label">heute</span>
+        <i class="ti ti-device-floppy"></i> Plan speichern
       </button>
     </div><!-- end s-tab-plan -->
 
@@ -637,6 +639,23 @@
           <input type="text" id="einst-schulname" class="form-control" placeholder="z. B. Gemeinschaftsschule St. Wendel" />
         </div>
 
+        <div class="section-label" style="margin-top:.5rem;">INA-Wählregeln</div>
+        <p class="text-sm text-soft" style="margin-bottom:.75rem;">
+          Legt fest ab wann Schüler täglich wählen dürfen und ob sie auch für Folgewochen vorauswählen können (z.&nbsp;B. zum Testen).
+        </p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:1rem;">
+          <div class="form-group">
+            <label class="form-label">Wählen ab Uhrzeit</label>
+            <input type="time" id="einst-wahl-uhrzeit" class="form-control" value="12:55" step="60" />
+            <p class="text-sm text-soft" style="margin-top:3px;">Standard: 12:55 Uhr</p>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Vorauwahl (Wochen im Voraus)</label>
+            <input type="number" id="einst-wahl-wochen" class="form-control" value="0" min="0" max="52" step="1" />
+            <p class="text-sm text-soft" style="margin-top:3px;">0 = nur heutiger Tag</p>
+          </div>
+        </div>
+
         <div class="section-label" style="margin-top:.5rem;">Ferien & unterrichtsfreie Tage</div>
         <p class="text-sm text-soft" style="margin-bottom:.75rem;">
           Ferien, Feiertage und schulfreie Tage werden bei der Wochenberechnung übersprungen.
@@ -733,18 +752,26 @@
       <label class="form-label">E-Mail *</label>
       <input type="email" id="ml-email" class="form-control" placeholder="m.mueller@gms-stwend.de" />
     </div>
-    <div class="form-group" id="ml-pw-group">
-      <label class="form-label">Startpasswort</label>
-      <div style="display:flex;gap:8px;">
-        <input type="text" id="ml-pw" class="form-control" readonly
-          style="font-family:monospace;background:var(--gray-bg);" />
-        <button type="button" class="btn btn-secondary btn-sm"
-          onclick="document.getElementById('ml-pw').value=genBeruehmtheitPasswort()"
-          title="Neues Passwort würfeln">🎲</button>
+    <div id="ml-pw-group">
+      <div class="form-group">
+        <label class="form-label">Startpasswort</label>
+        <div style="display:flex;gap:8px;">
+          <input type="text" id="ml-pw" class="form-control" readonly
+            style="font-family:monospace;background:var(--gray-bg);" />
+          <button type="button" class="btn btn-secondary btn-sm"
+            onclick="document.getElementById('ml-pw').value=genBeruehmtheitPasswort()"
+            title="Neues Passwort würfeln">🎲</button>
+        </div>
+        <p class="text-sm text-soft" style="margin-top:4px;">
+          Berühmtheit + Zahl · die Lehrkraft muss es beim ersten Login ändern.
+        </p>
       </div>
-      <p class="text-sm text-soft" style="margin-top:4px;">
-        Berühmtheit + Zahl · die Lehrkraft muss es beim ersten Login ändern.
-      </p>
+    </div>
+    <div class="form-group" style="background:#FFF7ED;border:1.5px solid #EA580C;border-radius:10px;padding:10px 14px;">
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
+        <input type="checkbox" id="ml-klassenlehrer" style="accent-color:#EA580C;width:16px;height:16px;" />
+        <span><b>Ist Klassenlehrer/in</b> – sieht Abwesenheitsmeldungen seiner Klassen im Meldungen-Tab</span>
+      </label>
     </div>
     <div id="ml-error" class="text-sm" style="color:#A32D2D;display:none;margin-bottom:.5rem;"></div>
     <div style="display:flex;gap:8px;">
@@ -855,6 +882,19 @@
       <div class="klassen-add-row" style="margin-top:8px;">
         <input type="text" id="mlk-input" class="form-control" placeholder="Klasse eingeben (z. B. 7a)" style="flex:1;" />
         <button class="btn btn-primary btn-sm" onclick="addKlassenTag()"><i class="ti ti-plus"></i> Hinzufügen</button>
+      </div>
+    </div>
+
+    <!-- Klassenlehrer-Option -->
+    <div class="form-group" style="background:#FFF7ED;border:1.5px solid #EA580C;border-radius:10px;padding:10px 14px;">
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
+        <input type="checkbox" id="mlk-klassenlehrer" style="accent-color:#EA580C;width:16px;height:16px;" />
+        <span><b>Ist Klassenlehrer/in</b> – sieht Abwesenheitsmeldungen seiner Klassen</span>
+      </label>
+      <div id="mlk-klassenlehrer-klassen" style="display:none;margin-top:8px;">
+        <label class="form-label" style="font-size:11px;">Klassenlehrer-Klasse(n)</label>
+        <div id="mlk-kl-tags" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:4px;"></div>
+        <p class="text-sm text-soft" style="margin-top:4px;">Wird automatisch aus den zugewiesenen Klassen übernommen – oder hier anpassen.</p>
       </div>
     </div>
 
@@ -1026,11 +1066,9 @@ async function enterApp(){
     renderGruppeBadge();applyGruppenRegeln();
     ladeDynamischeFaecher();
     showScreen('schueler'); // Screen sofort zeigen, Inhalte folgen
-    // Erst Schuljahres-Konfiguration laden, DANN Datumsleiste aufbauen
+    // Erst Schuljahres-Konfiguration laden, DANN heutige Ansicht aufbauen
     await ladeSchuljahrConfig();
-    const sel=document.getElementById('s-woche-select');
-    if(sel)befuelleWochenDropdown(sel,getGesamtSchulwochen());
-    buildDateBar();
+    initSchuelerHeuteAnsicht();
     initHalbjahresAGChip();
   }else if(currentRole==='lehrer'){
     document.getElementById('l-name-display').textContent=currentUserData.vorname+' '+currentUserData.nachname;
@@ -1110,122 +1148,165 @@ function getMontag(datum){
   d.setDate(d.getDate()-(dow===0?6:dow-1));d.setHours(0,0,0,0);return d;
 }
 
-function buildDateBar(startDatum){
-  const bar=document.getElementById('s-date-bar');bar.innerHTML='';
+// buildDateBar → jetzt initSchuelerHeuteAnsicht (weiter unten)
 
-  const sjBeginn=schuljahrConfig.sjBeginn||null; // "2026-08-10"
+let _countdownInterval=null;
+
+function initSchuelerHeuteAnsicht(){
+  // Countdown-Intervall aufräumen falls vorhanden
+  if(_countdownInterval){clearInterval(_countdownInterval);_countdownInterval=null;}
+
+  const heute=new Date();
+  const wochentag=heute.getDay(); // 0=So, 1=Mo, …, 5=Fr, 6=Sa
+  const heuteKey=isoDate(heute);
+
+  // Label aktualisieren
+  const label=document.getElementById('s-heute-label');
+  if(label){
+    const WTLANG=['Sonntag','Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag'];
+    label.textContent=WTLANG[wochentag]+', '+heute.getDate()+'.'+(heute.getMonth()+1)+'.'+heute.getFullYear();
+  }
+
+  // Schuljahr prüfen
+  const sjBeginn=schuljahrConfig.sjBeginn||null;
   const sjEnde=schuljahrConfig.sjEnde||null;
+  const ausserhalbSchuljahr=(sjBeginn&&heuteKey<sjBeginn)||(sjEnde&&heuteKey>sjEnde);
 
-  let mo=startDatum?new Date(startDatum):getMontag(new Date());
+  const countdownBanner=document.getElementById('s-countdown-banner');
+  const keinInaBanner=document.getElementById('s-kein-ina-banner');
+  const keinInaText=document.getElementById('s-kein-ina-text');
+  const planBereich=document.getElementById('s-plan-chips-area');
+  const saveBtn=document.getElementById('save-btn');
 
-  // Wenn vor Schuljahresbeginn → auf erste Schulwoche springen
-  if(sjBeginn){
-    const moKey=isoDate(mo);
-    if(moKey<sjBeginn || !startDatum){
-      // Beim allerersten Aufruf (kein startDatum) oder wenn Zielwoche vor Schuljahr liegt:
-      // heutiges Datum prüfen statt Montag-Woche
-      const heuteKey=isoDate(new Date());
-      if(heuteKey<sjBeginn){
-        mo=getMontag(new Date(sjBeginn));
+  function sperrePlanUI(sperren){
+    if(planBereich) planBereich.style.pointerEvents=sperren?'none':'';
+    if(planBereich) planBereich.style.opacity=sperren?'0.4':'';
+    if(saveBtn) saveBtn.disabled=sperren;
+    if(saveBtn) saveBtn.style.opacity=sperren?'0.4':'';
+  }
+
+  // Wochenende oder Freitag oder außerhalb Schuljahr
+  if(wochentag===0||wochentag===5||wochentag===6||ausserhalbSchuljahr){
+    if(countdownBanner) countdownBanner.style.display='none';
+    if(keinInaBanner) keinInaBanner.style.display='';
+    if(keinInaText){
+      if(wochentag===6||wochentag===0) keinInaText.textContent='Am Wochenende gibt es kein INA-Programm.';
+      else if(wochentag===5) keinInaText.textContent='Freitags gibt es kein INA-Programm.';
+      else keinInaText.textContent='Heute außerhalb des Schuljahres.';
+    }
+    sperrePlanUI(true);
+    activeTag=heuteKey;
+    loadPlanFuerTag(heuteKey);
+    return;
+  }
+
+  // Ferienprüfung
+  const ferien=schuljahrConfig.ferien||[];
+  const inFerien=ferien.some(f=>{
+    if(!f.von||!f.bis)return false;
+    return heuteKey>=f.von&&heuteKey<=f.bis;
+  });
+  if(inFerien){
+    if(countdownBanner) countdownBanner.style.display='none';
+    if(keinInaBanner) keinInaBanner.style.display='';
+    if(keinInaText) keinInaText.textContent='Heute sind Ferien – kein INA-Programm.';
+    sperrePlanUI(true);
+    activeTag=heuteKey;
+    loadPlanFuerTag(heuteKey);
+    return;
+  }
+
+  // Vorauswahl-Leiste wenn wahlWochen > 0
+  const wahlWochen=parseInt(schuljahrConfig.wahlWochen)||0;
+  const vorauswahlBar=document.getElementById('s-vorauswahl-bar');
+  if(vorauswahlBar){
+    vorauswahlBar.innerHTML='';
+    vorauswahlBar.style.display='none';
+    if(wahlWochen>0){
+      vorauswahlBar.style.display='';
+      const WTLANG2=['So','Mo','Di','Mi','Do','Fr','Sa'];
+      for(let w=0;w<=wahlWochen;w++){
+        for(let d=0;d<5;d++){ // Mo–Fr
+          const datum=new Date(heute);
+          datum.setDate(datum.getDate()+w*7+d+(1-wochentag||0));
+          // Wochentag-Offset zum nächsten Montag berechnen
+        }
+      }
+      // Einfache Implementierung: alle Schultage bis wahlWochen Wochen voraus
+      const ferien2=schuljahrConfig.ferien||[];
+      for(let offset=1;offset<=wahlWochen*5;offset++){
+        const datum=new Date(heute);
+        datum.setDate(datum.getDate()+offset);
+        const dKey=isoDate(datum);
+        const dow=datum.getDay();
+        if(dow===0||dow===5||dow===6) continue; // Wochenende + Freitag
+        if(sjBeginn&&dKey<sjBeginn) continue;
+        if(sjEnde&&dKey>sjEnde) continue;
+        const inF=ferien2.some(f=>f.von&&f.bis&&dKey>=f.von&&dKey<=f.bis);
+        if(inF) continue;
+        const btn=document.createElement('button');
+        btn.className='date-btn';
+        btn.style.cssText='padding:6px 10px;font-size:12px;';
+        btn.innerHTML=`<div class="day">${WTLANG2[dow]}</div>${datum.getDate()}.${datum.getMonth()+1}.`;
+        btn.onclick=()=>{
+          vorauswahlBar.querySelectorAll('.date-btn').forEach(b=>b.classList.remove('active'));
+          btn.classList.add('active');
+          activeTag=dKey;
+          loadPlanFuerTag(dKey);
+          // Countdown ausblenden für Zukunftstage
+          if(countdownBanner) countdownBanner.style.display='none';
+          sperrePlanUI(false);
+        };
+        vorauswahlBar.appendChild(btn);
+      }
+      if(vorauswahlBar.children.length>0){
+        const label=document.createElement('div');
+        label.style.cssText='font-size:11px;color:var(--text-soft);margin-bottom:4px;';
+        label.textContent='📅 Auch für folgende Tage wählbar (Testmodus):';
+        vorauswahlBar.prepend(label);
       }
     }
-    // Begrenzung: niemals vor Schuljahresbeginn-Woche
-    const sjBeginnMo=getMontag(new Date(sjBeginn));
-    if(mo<sjBeginnMo) mo=sjBeginnMo;
-  }
-  if(sjEnde){
-    const sjEndeMo=getMontag(new Date(sjEnde));
-    if(mo>sjEndeMo) mo=sjEndeMo;
   }
 
-  aktiverMontag=isoDate(mo);
+  // Normaler Schultag – konfigurierbare Uhrzeit Sperre
+  if(keinInaBanner) keinInaBanner.style.display='none';
+  activeTag=heuteKey;
+  loadPlanFuerTag(heuteKey);
 
-  // Dropdown aktualisieren
-  const sw=getSchuljahrWoche(aktiverMontag);
-  const gs=getGesamtSchulwochen();
-  const sel=document.getElementById('s-woche-select');
-  if(sel){
-    if(sel.options.length<=1) befuelleWochenDropdown(sel,gs);
-    sel.value=aktiverMontag;
-    if(!sel.value) sel.value='';
-  }
+  const [freigabeH,freigabeM]=(schuljahrConfig.wahlUhrzeit||'12:55').split(':').map(Number);
+  const FREIGABE_MIN=freigabeH*60+freigabeM;
+  const uhrLabel=String(freigabeH).padStart(2,'0')+':'+String(freigabeM).padStart(2,'0');
 
-  // Navigationspfeile sperren an den Schuljahresgrenzen
-  const btnZurueck=document.querySelector('button[onclick="navWoche(-1)"]');
-  const btnVor=document.querySelector('button[onclick="navWoche(1)"]');
-  if(sjBeginn){
-    const istErsteWoche = aktiverMontag<=isoDate(getMontag(new Date(sjBeginn)));
-    if(btnZurueck){btnZurueck.disabled=istErsteWoche;btnZurueck.style.opacity=istErsteWoche?'0.3':'';}
-  }
-  if(sjEnde){
-    const istLetzteWoche = aktiverMontag>=isoDate(getMontag(new Date(sjEnde)));
-    if(btnVor){btnVor.disabled=istLetzteWoche;btnVor.style.opacity=istLetzteWoche?'0.3':'';}
-  }
+  // Countdown-Banner Text anpassen
+  const countdownTitel=countdownBanner?.querySelector('div:first-child');
+  if(countdownTitel) countdownTitel.innerHTML='⏳ Wählen ist ab <b>'+uhrLabel+' Uhr</b> möglich';
 
-  const heute=isoDate(new Date());
-  let gesetzt=false;
-  for(let i=0;i<5;i++){
-    const d=new Date(mo);d.setDate(mo.getDate()+i);
-    const key=isoDate(d);
-    const isToday=key===heute;
-    // "Vergangen" nur innerhalb des Schuljahres relevant - vor Schuljahresbeginn gibt's nichts zu sperren extra,
-    // da diese Tage ohnehin nicht erreichbar sind
-    const istVergangen=key<heute && (!sjBeginn || key>=sjBeginn);
-    const ausserhalbSchuljahr = (sjBeginn&&key<sjBeginn) || (sjEnde&&key>sjEnde);
+  function pruefeUhrzeit(){
+    const jetzt=new Date();
+    const gesamtMin=jetzt.getHours()*60+jetzt.getMinutes();
 
-    const btn=document.createElement('button');
-    btn.className='date-btn'+(isToday?' active':'')+(istVergangen?' date-btn-past':'')+(ausserhalbSchuljahr?' date-btn-past':'');
-    btn.innerHTML=`<div class="day">${WOCHENTAGE[d.getDay()]}</div>${d.getDate()}.${String(d.getMonth()+1).padStart(2,'0')}.`;
-
-    if(ausserhalbSchuljahr){
-      btn.disabled=true;
-      btn.style.cursor='not-allowed';
-      btn.title='Außerhalb des Schuljahres';
-    } else if(istVergangen){
-      btn.title='Vergangener Tag – nur ansehen, keine Änderung möglich';
-      btn.onclick=()=>{
-        document.querySelectorAll('#s-date-bar .date-btn').forEach(b=>b.classList.remove('active'));
-        btn.classList.add('active');
-        activeTag=key;
-        loadPlanFuerTag(key);
-      };
+    if(gesamtMin<FREIGABE_MIN){
+      if(countdownBanner) countdownBanner.style.display='';
+      sperrePlanUI(true);
+      const restMin=Math.floor(FREIGABE_MIN-gesamtMin-1);
+      const restSek=59-jetzt.getSeconds();
+      const zzMin=String(restMin).padStart(2,'0');
+      const zzSek=String(restSek).padStart(2,'0');
+      const zeitEl=document.getElementById('s-countdown-zeit');
+      if(zeitEl) zeitEl.textContent=zzMin+':'+zzSek;
     } else {
-      btn.onclick=()=>{
-        document.querySelectorAll('#s-date-bar .date-btn').forEach(b=>b.classList.remove('active'));
-        btn.classList.add('active');
-        activeTag=key;
-        loadPlanFuerTag(key);
-      };
-    }
-    bar.appendChild(btn);
-    if(isToday){activeTag=key;loadPlanFuerTag(key);gesetzt=true;}
-  }
-  if(!gesetzt){
-    const ersterAuswaehlbar=bar.querySelector('.date-btn:not([disabled])')||bar.querySelector('.date-btn');
-    if(ersterAuswaehlbar){
-      ersterAuswaehlbar.classList.add('active');
-      activeTag=isoDate(mo);
-      loadPlanFuerTag(activeTag);
+      if(countdownBanner) countdownBanner.style.display='none';
+      sperrePlanUI(false);
+      if(_countdownInterval){clearInterval(_countdownInterval);_countdownInterval=null;}
     }
   }
+
+  pruefeUhrzeit();
+  _countdownInterval=setInterval(pruefeUhrzeit,1000);
 }
 
-function navWoche(richtung){
-  const mo=aktiverMontag?new Date(aktiverMontag):getMontag(new Date());
-  if(richtung===0){
-    const heuteKey=isoDate(new Date());
-    const sjBeginn=schuljahrConfig.sjBeginn;
-    // "Heute"-Button: wenn vor Schuljahresbeginn, zur ersten Schulwoche springen
-    if(sjBeginn && heuteKey<sjBeginn){
-      buildDateBar(getMontag(new Date(sjBeginn)));
-    } else {
-      buildDateBar(getMontag(new Date()));
-    }
-  } else {
-    mo.setDate(mo.getDate()+richtung*7);
-    buildDateBar(mo);
-  }
-}
+function buildDateBar(){ initSchuelerHeuteAnsicht(); } // Rückwärtskompatibilität
+function navWoche(){ /* Für Schüler deaktiviert – nur heutiger Tag */ }
 
 // ═══ JAHRESPLAN-MODAL ═══
 function openJahresplan(){
@@ -1482,7 +1563,17 @@ const ALLE_ANGEBOTE = [
 ];
 const DOPPELSTUNDEN_FRUEH = ['Freizeit mit Nico']; // Doppelstunde 7. Std.+2
 
-function waehlen(zs,name,sel,icon,bg,color,fachId){
+function waehlen(zs,name,sel,icon,bg,color,fachId,maxTeilnehmer){
+  // Uhrzeit-Sperre: vor konfigurierter Uhrzeit kein Wählen erlaubt
+  const jetzt=new Date();
+  const gesamtMin=jetzt.getHours()*60+jetzt.getMinutes();
+  const [freigabeH,freigabeM]=(schuljahrConfig.wahlUhrzeit||'12:55').split(':').map(Number);
+  const freigabeMin=freigabeH*60+freigabeM;
+  if(gesamtMin<freigabeMin){
+    const uhr=(schuljahrConfig.wahlUhrzeit||'12:55');
+    toast('⏳ Wählen ist erst ab '+uhr+' Uhr möglich.',true);
+    return;
+  }
   // Freitags kein Nachmittagsprogramm
   if(activeTag){
     const [j,m,t]=activeTag.split('-').map(Number);
@@ -1521,6 +1612,35 @@ function waehlen(zs,name,sel,icon,bg,color,fachId){
     });
     return; // async – Ausführung läuft in withFirebase weiter
   }
+
+  // Kapazitätsprüfung für normale Fächer mit maxTeilnehmer
+  if(maxTeilnehmer && activeTag){
+    withFirebase(async({db,getDocsFromServer,collection})=>{
+      try{
+        const planSnaps=await getDocsFromServer(collection(db,'plans'));
+        let belegt=0;
+        planSnaps.forEach(p=>{
+          const d=p.data();
+          if(d.tag!==activeTag||d.uid===currentUser?.uid) return;
+          if(d['zs'+zs]&&d['zs'+zs].name===name) belegt++;
+        });
+        if(belegt>=maxTeilnehmer){
+          toast('⛔ '+name+' ist heute leider bereits ausgebucht ('+maxTeilnehmer+'/'+maxTeilnehmer+' Plätze belegt).',true);
+          // Badge sofort rot zeigen
+          _ladeKapazitaeten();
+          return;
+        }
+        _waehlenAusfuehren(zs,name,sel,icon,bg,color,fachId);
+        // Badge nach Wählen aktualisieren
+        setTimeout(_ladeKapazitaeten,800);
+      }catch(e){
+        // Bei Fehler trotzdem wählen lassen
+        _waehlenAusfuehren(zs,name,sel,icon,bg,color,fachId);
+      }
+    });
+    return;
+  }
+
   _waehlenAusfuehren(zs,name,sel,icon,bg,color,fachId);
 }
 
@@ -2538,11 +2658,13 @@ function saveLehrer(){
         await signOut2(secondaryAuth); // Sekundäre Session sofort beenden
 
         // Firestore-Dokument mit Admin-Session schreiben
+        const istKlassenlehrer=document.getElementById('ml-klassenlehrer')?.checked||false;
         await setDoc(doc(db,'users',newUid),{
           vorname,nachname,email,
           role:'lehrer',
           klassen:[],
           angebote:[],
+          istKlassenlehrer, // für Meldungen-Tab
           mustSetPassword:true,
           passwort:pw,
           createdAt:new Date().toISOString()
@@ -2672,7 +2794,9 @@ function renderLehrerKlassenListe(lehrer, gueltigeFaecher=null){
 
     html+=`<tr>
       <td>
-        <div style="font-weight:500;font-size:13px;">${l.vorname} ${l.nachname}</div>
+        <div style="font-weight:500;font-size:13px;">${l.vorname} ${l.nachname}
+          ${l.istKlassenlehrer?'<span style="font-size:10px;font-weight:600;color:#7C2D12;background:#FFF7ED;padding:1px 6px;border-radius:99px;margin-left:4px;border:1px solid #EA580C;">KL</span>':''}
+        </div>
         <div id="${emailId}" style="display:none;font-size:11px;color:var(--text-soft);margin-top:2px;">${l.email||''}</div>
         <button onclick="document.getElementById('${emailId}').style.display=document.getElementById('${emailId}').style.display==='none'?'block':'none'"
           style="font-size:10px;color:var(--text-lighter);background:none;border:none;cursor:pointer;padding:0;margin-top:2px;">
@@ -2700,14 +2824,25 @@ let _alleKlassenVerfuegbar=[];
 
 function openKlassenModal(uid,name,klassen){
   editLehrerUid=uid;
-  // Defensiv: klassen kann undefined/null sein wenn neu angelegt
   editLehrerKlassen=Array.isArray(klassen)?[...klassen]:[];
   document.getElementById('mlk-titel').textContent='Klassen zuweisen: '+name;
   document.getElementById('mlk-name').textContent='';
   document.getElementById('mlk-input').value='';
   document.getElementById('mlk-error').style.display='none';
 
-  // Schnellauswahl aus vorhandenen Schüler-Klassen laden
+  // Klassenlehrer-Status aus Firestore laden
+  withFirebase(async({db,doc,getDoc})=>{
+    const snap=await getDoc(doc(db,'users',uid));
+    const istKl=snap.exists()?snap.data().istKlassenlehrer===true:false;
+    const cb=document.getElementById('mlk-klassenlehrer');
+    if(cb){
+      cb.checked=istKl;
+      const kDiv=document.getElementById('mlk-klassenlehrer-klassen');
+      if(kDiv) kDiv.style.display=istKl?'block':'none';
+      cb.onchange=()=>{if(kDiv)kDiv.style.display=cb.checked?'block':'none';};
+    }
+  });
+
   _ladeKlassenSchnellauswahl();
   renderKlassenTags();
   document.getElementById('modal-lehrer-klassen').classList.remove('hidden');
@@ -2785,10 +2920,16 @@ function removeKlassenTag(i){editLehrerKlassen.splice(i,1);renderKlassenTags();}
 function closeKlassenModal(){document.getElementById('modal-lehrer-klassen').classList.add('hidden');editLehrerUid=null;editLehrerKlassen=[];}
 function saveKlassen(){
   if(!editLehrerUid)return;
+  const istKlassenlehrer=document.getElementById('mlk-klassenlehrer')?.checked||false;
   withFirebase(async({db,doc,updateDoc})=>{
     try{
-      await updateDoc(doc(db,'users',editLehrerUid),{klassen:editLehrerKlassen});
-      toast('Klassenzuordnung gespeichert ✓');closeKlassenModal();loadLehrerKlassenListe();
+      await updateDoc(doc(db,'users',editLehrerUid),{
+        klassen:editLehrerKlassen,
+        istKlassenlehrer // für Meldungen-Tab: sieht Abwesenheiten seiner Klassen
+      });
+      toast('Klassenzuordnung gespeichert ✓');
+      closeKlassenModal();
+      loadLehrerKlassenListe();
     }catch(e){showErr(document.getElementById('mlk-error'),e.message);}
   });
 }
@@ -2834,6 +2975,8 @@ let schuljahrConfig={
   schulname:'Gemeinschaftsschule St. Wendel',
   sjBeginn:'2026-08-10',
   sjEnde:'2027-07-09',
+  wahlUhrzeit:'12:55',   // ab wann Schüler täglich wählen dürfen
+  wahlWochen:0,          // wie viele Wochen im Voraus gewählt werden darf (0=nur heute)
   ferien:[
     // Schulferien Saarland 2026/2027
     {name:'Herbstferien',      von:'2026-10-05', bis:'2026-10-16'},
@@ -2878,6 +3021,10 @@ function loadEinstellungen(){
     if(hj2El)hj2El.value=schuljahrConfig.hj2Beginn||'';
     const blEl=document.getElementById('einst-bundesland');
     if(blEl)blEl.value=schuljahrConfig.bundesland||'Saarland';
+    const uhrEl=document.getElementById('einst-wahl-uhrzeit');
+    if(uhrEl)uhrEl.value=schuljahrConfig.wahlUhrzeit||'12:55';
+    const wochenEl=document.getElementById('einst-wahl-wochen');
+    if(wochenEl)wochenEl.value=schuljahrConfig.wahlWochen??0;
     renderFerienListe();
   },600);
 }
@@ -2909,10 +3056,12 @@ function saveEinstellungen(){
   if(new Date(sjBeginn)>=new Date(sjEnde)){showErr(err,'Schuljahresbeginn muss vor dem Ende liegen.');return;}
   const hj2Beginn=document.getElementById('einst-hj2-beginn')?.value||'';
   const bundesland=document.getElementById('einst-bundesland')?.value.trim()||'Saarland';
-  schuljahrConfig={...schuljahrConfig,schulname,sjBeginn,sjEnde,hj2Beginn,bundesland};
+  const wahlUhrzeit=document.getElementById('einst-wahl-uhrzeit')?.value||'12:55';
+  const wahlWochen=parseInt(document.getElementById('einst-wahl-wochen')?.value)||0;
+  schuljahrConfig={...schuljahrConfig,schulname,sjBeginn,sjEnde,hj2Beginn,bundesland,wahlUhrzeit,wahlWochen};
   withFirebase(async({db,doc,setDoc})=>{
     try{
-      await setDoc(doc(db,'config','schuljahr'),{schulname,sjBeginn,sjEnde,hj2Beginn,bundesland,ferien:schuljahrConfig.ferien||[],updatedAt:new Date().toISOString()});
+      await setDoc(doc(db,'config','schuljahr'),{schulname,sjBeginn,sjEnde,hj2Beginn,bundesland,wahlUhrzeit,wahlWochen,ferien:schuljahrConfig.ferien||[],updatedAt:new Date().toISOString()});
       ok.textContent='✓ Einstellungen gespeichert!';ok.style.display='block';
       setTimeout(()=>ok.style.display='none',3000);
     }catch(e){showErr(err,'Fehler: '+e.message);toast('❌ Fach konnte nicht gespeichert werden: '+e.message, true);}
@@ -3162,8 +3311,14 @@ async function loadMeldungen(){
   cont.innerHTML='<p class="text-sm text-soft">Lade…</p>';
 
   const meineKlassen=currentUserData?.klassen||[];
-  if(!meineKlassen.length){
-    cont.innerHTML='<p class="text-sm text-soft">Dir sind keine Klassen zugewiesen – keine Meldungen verfügbar.</p>';
+  const istKlassenlehrer=currentUserData?.istKlassenlehrer===true;
+
+  if(!meineKlassen.length||!istKlassenlehrer){
+    cont.innerHTML=`<div style="text-align:center;padding:2rem;color:var(--text-soft);">
+      <i class="ti ti-bell-off" style="font-size:32px;"></i>
+      <p style="margin-top:.5rem;">${!istKlassenlehrer?'Du bist nicht als Klassenlehrer/in eingetragen.':'Dir sind keine Klassen zugewiesen.'}</p>
+      <p class="text-sm text-soft" style="margin-top:.25rem;">Die Schulleitung kann dies unter Lehrkräfte → Klassen anpassen.</p>
+    </div>`;
     return;
   }
 
@@ -3278,7 +3433,8 @@ async function loadMeldungen(){
 // Meldungen-Badge beim Login aktualisieren
 async function aktualisiereMeldungenBadge(){
   const meineKlassen=currentUserData?.klassen||[];
-  if(!meineKlassen.length||currentRole!=='lehrer')return;
+  const istKlassenlehrer=currentUserData?.istKlassenlehrer===true;
+  if(!meineKlassen.length||!istKlassenlehrer||currentRole!=='lehrer')return;
   withFirebase(async({db,getDocs,collection})=>{
     try{
       const [userSnaps,anwSnaps]=await Promise.all([
@@ -4323,29 +4479,23 @@ function ladeDynamischeFaecher(){
 
 function renderDynamischeChips(){
   const gruppe=currentUserData?.gruppe||'durchstarter';
-  // Wochentag des aktiven Tags ermitteln (1=Mo...4=Do)
   let aktiverWochentag=null;
   if(activeTag){
     const [j,m,t]=activeTag.split('-').map(Number);
-    aktiverWochentag=new Date(j,m-1,t).getDay(); // 1=Mo,2=Di,3=Mi,4=Do
+    aktiverWochentag=new Date(j,m-1,t).getDay();
   }
 
-  // ALLE alten dynamischen Chips entfernen bevor neue erstellt werden
   document.querySelectorAll('.fach-chip-dyn').forEach(c=>c.remove());
 
   dynamischeFaecher.forEach(f=>{
     if(f.gruppen && !f.gruppen.includes(gruppe)) return;
 
-    // Klassen-Einschränkung prüfen
     const schuelerKlasse=currentUserData?.klasse||'';
     if(f.klassen && f.klassen.length>0 && schuelerKlasse && !f.klassen.includes(schuelerKlasse)) return;
 
-    // Tag×Stunde-Einschränkung prüfen (präzise: {tag, zs} Paare)
     if(f.tagStunden && f.tagStunden.length>0 && aktiverWochentag!==null){
-      // Prüfe ob für heute + diese ZS eine Kombination erlaubt ist
-      // (wird per ZS-Schleife weiter unten geprüft)
+      // wird per ZS-Schleife geprüft
     } else if(f.wochentage && f.wochentage.length>0 && aktiverWochentag!==null){
-      // Altes Format: nur Wochentage ohne Stundeneinschränkung
       if(!f.wochentage.includes(aktiverWochentag)) return;
     }
 
@@ -4355,10 +4505,9 @@ function renderDynamischeChips(){
     zsNummern.forEach((zs,idx)=>{
       if(isDoppel && idx>0) return;
 
-      // Tag×Stunde-Prüfung: Ist diese konkrete Kombination erlaubt?
       if(f.tagStunden && f.tagStunden.length>0 && aktiverWochentag!==null){
         const erlaubt=f.tagStunden.some(ts=>ts.tag===aktiverWochentag && ts.zs===zs);
-        if(!erlaubt) return; // Diese Stunde an diesem Tag nicht erlaubt
+        if(!erlaubt) return;
       }
 
       const container=document.getElementById('chips-'+zs);
@@ -4372,14 +4521,22 @@ function renderDynamischeChips(){
       btn.setAttribute('data-fach-id',chipKey);
       btn.setAttribute('data-fach-bg',f.bg||'#FAECE7');
       btn.setAttribute('data-fach-color',f.color||'#4A1B0C');
-      btn.textContent=(f.icon||'📌')+' '+f.name+(isDoppel?' 🔁':'')+(f.isEinzelnWaehlbar&&zsNummern.length>1?'':'' );
-      // Ausleihe-Fächer nutzen das Buchungsmodal
+      if(f.maxTeilnehmer) btn.setAttribute('data-max',f.maxTeilnehmer);
+
+      // Chip-Inhalt mit Kapazitäts-Badge wenn maxTeilnehmer gesetzt
+      const labelText=(f.icon||'📌')+' '+f.name+(isDoppel?' 🔁':'');
+      if(f.maxTeilnehmer){
+        btn.innerHTML=`<span class="chip-label">${labelText}</span><span class="chip-kap-badge" id="kap-${chipKey.replace(/[^a-z0-9]/gi,'_')}">… / ${f.maxTeilnehmer}</span>`;
+      } else {
+        btn.textContent=labelText;
+      }
+
       const istAusleihe=(f.name==='Spielausleihe'||f.name==='Sportgeräteausleihe');
       btn.onclick=()=>{
         if(istAusleihe){
           openAusleiheModal(f.name, zs);
         } else {
-          waehlen(zs, f.name, f.sel||'sel-custom', f.icon||'📌', f.bg||'#FAECE7', f.color||'#4A1B0C', f.id);
+          waehlen(zs, f.name, f.sel||'sel-custom', f.icon||'📌', f.bg||'#FAECE7', f.color||'#4A1B0C', f.id, f.maxTeilnehmer||null);
           if(isDoppel){
             const zsZwei=zsNummern[1];
             gewahlt[zsZwei]={name:f.name,sel:f.sel||'sel-custom',icon:f.icon||'📌',bg:f.bg||'#FAECE7',color:f.color||'#4A1B0C',fachId:f.id};
@@ -4389,6 +4546,77 @@ function renderDynamischeChips(){
       };
       container.appendChild(btn);
     });
+  });
+
+  // Kapazitäten asynchron nachladen und Badges befüllen
+  if(activeTag) _ladeKapazitaeten();
+}
+
+// Zählt für jeden Tag wie viele Schüler ein Fach gewählt haben
+async function _ladeKapazitaeten(){
+  if(!activeTag) return;
+  withFirebase(async({db,getDocs,collection,getDocsFromServer})=>{
+    try{
+      const planSnaps=await getDocsFromServer(collection(db,'plans'));
+      // Zähler: fachName_zs → Anzahl Schüler (die NICHT der aktuelle Schüler sind, damit er selbst nicht zählt)
+      const zaehler={};
+      planSnaps.forEach(p=>{
+        const d=p.data();
+        if(d.tag!==activeTag) return;
+        [1,2,3,4].forEach(zs=>{
+          const val=d['zs'+zs];
+          if(!val||!val.name) return;
+          const key=val.name+'_'+zs;
+          zaehler[key]=(zaehler[key]||0)+(d.uid===currentUser?.uid?0:1);
+        });
+      });
+      // Eigene Wahl des aktuellen Schülers miteinbeziehen
+      [1,2,3,4].forEach(zs=>{
+        const g=gewahlt[zs];
+        if(g&&g.name){
+          const key=g.name+'_'+zs;
+          zaehler[key]=(zaehler[key]||0); // schon korrekt ohne eigene uid
+        }
+      });
+
+      // Badges aktualisieren
+      document.querySelectorAll('.fach-chip-dyn[data-max]').forEach(btn=>{
+        const chipKey=btn.getAttribute('data-fach-id');
+        const max=parseInt(btn.getAttribute('data-max'));
+        // ZS aus chipKey (Format: fachId-zs)
+        const zs=parseInt(chipKey.split('-').pop());
+        // Fachname aus dynamischeFaecher anhand fachId
+        const fachId=chipKey.slice(0,chipKey.lastIndexOf('-'));
+        const fach=dynamischeFaecher.find(f=>f.id===fachId);
+        if(!fach) return;
+
+        // Belegt: Zähler für dieses Fach und diese Zeitschiene
+        // Falls Doppelstunde: belegt = max über beide ZS (gleicher Eintrag)
+        const zsNummern=(fach.zeitschiene||''+zs).split(',').map(Number);
+        let belegt=0;
+        zsNummern.forEach(z=>{ belegt=Math.max(belegt, zaehler[fach.name+'_'+z]||0); });
+
+        const badgeEl=btn.querySelector('.chip-kap-badge');
+        if(!badgeEl) return;
+        const frei=max-belegt;
+        if(frei<=0){
+          badgeEl.textContent='ausgebucht';
+          badgeEl.style.background='#A32D2D';
+          badgeEl.style.color='#fff';
+          btn.style.opacity='0.5';
+          btn.style.cursor='not-allowed';
+          btn.onclick=()=>toast('⛔ '+fach.name+' ist heute bereits ausgebucht.',true);
+        } else {
+          const farbe=frei<=2?'#92400E':'#085041';
+          const bg=frei<=2?'#FEF3C7':'#D1FAE5';
+          badgeEl.textContent=frei+' / '+max+' frei';
+          badgeEl.style.background=bg;
+          badgeEl.style.color=farbe;
+          btn.style.opacity='';
+          btn.style.cursor='';
+        }
+      });
+    }catch(e){console.warn('_ladeKapazitaeten Fehler:',e);}
   });
 }
 
