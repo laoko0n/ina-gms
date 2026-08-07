@@ -308,7 +308,9 @@
         <div style="font-size:22px;font-weight:800;color:#EA580C;margin-top:2px;font-variant-numeric:tabular-nums;" id="s-countdown-zeit">–:––</div>
       </div>
       <!-- Vorauswahl-Leiste (nur wenn wahlWochen > 0 in Einstellungen) -->
-      <div id="s-vorauswahl-bar" style="display:none;margin-bottom:.5rem;overflow-x:auto;white-space:nowrap;padding-bottom:4px;"></div> style="display:none;background:#F3F4F6;border:1.5px solid var(--gray-border);border-radius:10px;padding:12px 14px;margin-bottom:.5rem;text-align:center;color:var(--text-soft);">
+      <div id="s-vorauswahl-bar" style="display:none;margin-bottom:.5rem;overflow-x:auto;white-space:nowrap;padding-bottom:4px;"></div>
+      <!-- Gesperrt-Banner außerhalb Schulzeit / Wochenende -->
+      <div id="s-kein-ina-banner" style="display:none;background:#F3F4F6;border:1.5px solid var(--gray-border);border-radius:10px;padding:12px 14px;margin-bottom:.5rem;text-align:center;color:var(--text-soft);">
         <div style="font-size:18px;margin-bottom:4px;">🏖️</div>
         <div style="font-size:13px;font-weight:600;" id="s-kein-ina-text">Heute kein INA-Programm</div>
       </div>
@@ -319,6 +321,9 @@
       </div>
       <div class="section-label">Mein INA-Plan</div>
       <div id="s-plan-chips-area">
+
+      <!-- 7. Stunde -->
+      <div class="zs-wrap zs-1" id="zs-wrap-1">
         <div class="zs-header">
           <div class="zs-nr">7.</div>
           <div><div class="zs-zeit">12:55 – 13:30</div><div class="zs-sub">Siebte Stunde</div></div>
