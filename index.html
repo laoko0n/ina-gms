@@ -1066,15 +1066,27 @@ function showScreen(name){
 // ═══ APP BETRETEN ═══
 async function enterApp(){
   if(currentRole==='schueler'){
-    document.getElementById('s-name-display').textContent=currentUserData.vorname+' '+currentUserData.nachname;
-    document.getElementById('s-klasse-display').textContent='Klasse '+currentUserData.klasse;
-    renderGruppeBadge();applyGruppenRegeln();
-    ladeDynamischeFaecher();
-    showScreen('schueler'); // Screen sofort zeigen, Inhalte folgen
-    // Erst Schuljahres-Konfiguration laden, DANN heutige Ansicht aufbauen
-    await ladeSchuljahrConfig();
-    initSchuelerHeuteAnsicht();
-    initHalbjahresAGChip();
+    try{
+      document.getElementById('s-name-display').textContent=currentUserData.vorname+' '+currentUserData.nachname;
+      document.getElementById('s-klasse-display').textContent='Klasse '+(currentUserData.klasse||'–');
+      showScreen('schueler'); // Screen zuerst zeigen, damit ein Fehler danach nicht blockiert
+      try{renderGruppeBadge();}catch(e){console.error('renderGruppeBadge:',e);}
+      try{applyGruppenRegeln();}catch(e){console.error('applyGruppenRegeln:',e);}
+      try{ladeDynamischeFaecher();}catch(e){console.error('ladeDynamischeFaecher:',e);}
+      await ladeSchuljahrConfig();
+      try{initSchuelerHeuteAnsicht();}catch(e){console.error('initSchuelerHeuteAnsicht:',e);}
+      try{initHalbjahresAGChip();}catch(e){console.error('initHalbjahresAGChip:',e);}
+    }catch(e){
+      console.error('Fehler beim Betreten der Schüleransicht:',e);
+      const errEl=document.getElementById('login-error');
+      if(errEl){
+        showErr(errEl,'Fehler beim Laden der Schüleransicht: '+(e.message||e));
+        showScreen('login');
+      }
+      // Session zurücksetzen, damit ein erneuter Versuch möglich ist
+      currentUser=null;currentUserData=null;
+      withFirebase(({auth,signOut})=>{signOut(auth).catch(()=>{});});
+    }
   }else if(currentRole==='lehrer'){
     document.getElementById('l-name-display').textContent=currentUserData.vorname+' '+currentUserData.nachname;
     const klassen=(currentUserData.klassen||[]).join(', ')||'–';
@@ -1097,18 +1109,24 @@ async function enterApp(){
 // ═══ GRUPPEN ═══
 function renderGruppeBadge(){
   const g=currentUserData.gruppe||'durchstarter';
-  const cfg=GRUPPEN[g];
+  const cfg=GRUPPEN[g]||GRUPPEN['durchstarter'];
   const badge=document.getElementById('s-gruppe-badge');
+  if(!badge||!cfg) return;
   badge.textContent=cfg.label;badge.className='gruppe-badge '+cfg.klasse;
 }
 function applyGruppenRegeln(){
   const g=currentUserData.gruppe||'durchstarter';
-  const cfg=GRUPPEN[g];
+  const cfg=GRUPPEN[g]||GRUPPEN['durchstarter'];
+  if(!cfg){console.warn('Unbekannte Gruppe:',g);return;}
   const banner=document.getElementById('gruppe-info-banner');
-  banner.className='gruppe-info gruppe-info-'+g;
-  document.getElementById('gruppe-info-icon').textContent=cfg.info;
-  document.getElementById('gruppe-info-text').innerHTML=cfg.infoText;
-  banner.classList.remove('hidden');
+  if(banner){
+    banner.className='gruppe-info gruppe-info-'+g;
+    banner.classList.remove('hidden');
+  }
+  const iconEl=document.getElementById('gruppe-info-icon');
+  if(iconEl) iconEl.textContent=cfg.info;
+  const textEl=document.getElementById('gruppe-info-text');
+  if(textEl) textEl.innerHTML=cfg.infoText;
 
   // Chips in 7. Std.+2 je nach Gruppe ein-/ausblenden (nur feste Chips, keine dynamischen)
   const erlaubt=cfg.erlaubteChips; // null = alle, array = nur diese
@@ -1126,6 +1144,7 @@ function applyGruppenRegeln(){
 
   [1,2,3,4].forEach(zs=>{
     const wrap=document.getElementById('zs-wrap-'+zs);
+    if(!wrap) return; // Element fehlt – überspringen statt abstürzen
     if(cfg.freiZS.includes(zs)){
       wrap.classList.remove('zs-locked');
     } else {
