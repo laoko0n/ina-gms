@@ -1618,6 +1618,8 @@ const ALLE_ANGEBOTE = [
   'Späte Freizeit','Späte AG','Späte Lernzeit','Feste Halbjahres-AG'
 ];
 const DOPPELSTUNDEN_FRUEH = ['Freizeit mit Nico']; // Doppelstunde 7. Std.+2
+// Ausleihe-Fächer: feste Buchung über eigenes Modal, klassenübergreifend
+const AUSLEIHE_FAECHER = ['Spielausleihe','Sportgeräteausleihe'];
 
 function waehlen(zs,name,sel,icon,bg,color,fachId,maxTeilnehmer){
   // Uhrzeit-Sperre: vor konfigurierter Uhrzeit kein Wählen erlaubt (im Testmodus deaktiviert)
@@ -1740,6 +1742,31 @@ function _waehlenAusfuehren(zs,name,sel,icon,bg,color,fachId){
     if(zs3 && DOPPELSTUNDEN.includes(zs3.name)){
       toast('10. Std. ist durch die Doppelstunde in der 9. Std. bereits belegt.');
       return;
+    }
+  }
+
+  // ── Doppelstunde würde die Nachbarstunde überschreiben → vorher nachfragen ──
+  const partnerZS=(zs===1 && DOPPELSTUNDEN_FRUEH.includes(name)) ? 2
+                : (zs===3 && DOPPELSTUNDEN.includes(name))       ? 4 : null;
+  if(partnerZS){
+    const bisher=gewahlt[partnerZS];
+    if(bisher && bisher.name && bisher.name!==name){
+      const partnerLabel=partnerZS===2?'8.':'10.';
+      const beideLabel  =zs===1?'7. + 8.':'9. + 10.';
+
+      // Ausleihe ist eine feste Buchung – die muss erst storniert werden
+      if(AUSLEIHE_FAECHER.includes(bisher.name)){
+        toast('⛔ In der '+partnerLabel+' Std. hast du '+bisher.name+' fest gebucht. '+
+              'Storniere die Buchung zuerst über den '+bisher.name+'-Chip, dann kannst du '+name+' wählen.',true);
+        return;
+      }
+
+      const weiter=confirm(
+        name+' ist eine Doppelstunde und belegt die '+beideLabel+' Stunde.\n\n'+
+        'Deine bisherige Wahl "'+bisher.name+'" in der '+partnerLabel+' Std. wird dabei überschrieben.\n\n'+
+        'Möchtest du fortfahren?'
+      );
+      if(!weiter) return;
     }
   }
 
@@ -4116,6 +4143,7 @@ async function buecheAusleihe(fachName, zs){
       toast('✅ '+fachName+' gebucht für '+gespeichert+' Tage'+(uebersprungen?' ('+uebersprungen+' bereits voll/gebucht)':'')+'!');
       document.getElementById('modal-ausleihe').classList.add('hidden');
       pruefeAusleiheChips();
+      _ladeKapazitaeten(); // Kapazitäts-Badges sofort neu berechnen
     }catch(e){
       console.error('Buchungsfehler:',e);
       toast('❌ Fehler: '+(e.message||e),true);
@@ -4151,6 +4179,7 @@ async function storniereAusleihe(fachName,zs){
       toast('✓ Buchung storniert.');
       document.getElementById('modal-ausleihe').classList.add('hidden');
       pruefeAusleiheChips();
+      _ladeKapazitaeten(); // Kapazitäts-Badges sofort neu berechnen
     }catch(e){toast('❌ Fehler: '+(e.message||e),true);}
   });
 }
@@ -4717,8 +4746,11 @@ async function _ladeKapazitaeten(){
   withFirebase(async({db,getDocs,collection,getDocsFromServer})=>{
     try{
       const planSnaps=await getDocsFromServer(collection(db,'plans'));
-      // Zähler: fachName_zs → Anzahl Schüler (die NICHT der aktuelle Schüler sind, damit er selbst nicht zählt)
+      // Zähler: fachName_zs → Anzahl belegter Plätze (ALLE Schüler, auch der eigene –
+      // sonst sieht ein Schüler nach seiner eigenen Buchung fälschlich noch einen freien Platz)
       const zaehler={};
+      const eigeneUid=currentUser?.uid;
+      const eigeneFaecher=new Set(); // Fächer die ich selbst belege
       planSnaps.forEach(p=>{
         const d=p.data();
         if(d.tag!==activeTag) return;
@@ -4726,15 +4758,18 @@ async function _ladeKapazitaeten(){
           const val=d['zs'+zs];
           if(!val||!val.name) return;
           const key=val.name+'_'+zs;
-          zaehler[key]=(zaehler[key]||0)+(d.uid===currentUser?.uid?0:1);
+          zaehler[key]=(zaehler[key]||0)+1;
+          if(d.uid===eigeneUid) eigeneFaecher.add(key);
         });
       });
-      // Eigene Wahl des aktuellen Schülers miteinbeziehen
+      // Noch nicht gespeicherte eigene Auswahl ebenfalls berücksichtigen
       [1,2,3,4].forEach(zs=>{
         const g=gewahlt[zs];
-        if(g&&g.name){
-          const key=g.name+'_'+zs;
-          zaehler[key]=(zaehler[key]||0); // schon korrekt ohne eigene uid
+        if(!g||!g.name) return;
+        const key=g.name+'_'+zs;
+        if(!eigeneFaecher.has(key)){
+          zaehler[key]=(zaehler[key]||0)+1;
+          eigeneFaecher.add(key);
         }
       });
 
@@ -4757,14 +4792,25 @@ async function _ladeKapazitaeten(){
 
         const badgeEl=btn.querySelector('.chip-kap-badge');
         if(!badgeEl) return;
+
+        // Belege ich diesen Platz selbst?
+        const ichSelbst=zsNummern.some(z=>eigeneFaecher.has(fach.name+'_'+z));
         const frei=max-belegt;
-        if(frei<=0){
+
+        if(ichSelbst){
+          // Eigener Platz – nicht sperren, sondern als gebucht kennzeichnen
+          badgeEl.textContent='dein Platz ✓';
+          badgeEl.style.background='#D1FAE5';
+          badgeEl.style.color='#085041';
+          btn.style.opacity='';
+          btn.style.cursor='';
+        } else if(frei<=0){
           badgeEl.textContent='ausgebucht';
           badgeEl.style.background='#A32D2D';
           badgeEl.style.color='#fff';
           btn.style.opacity='0.5';
           btn.style.cursor='not-allowed';
-          btn.onclick=()=>toast('⛔ '+fach.name+' ist heute bereits ausgebucht.',true);
+          btn.onclick=()=>toast('⛔ '+fach.name+' ist an diesem Tag bereits ausgebucht.',true);
         } else {
           const farbe=frei<=2?'#92400E':'#085041';
           const bg=frei<=2?'#FEF3C7':'#D1FAE5';
@@ -4924,7 +4970,7 @@ function saveAngebote(){
 
 // ═══ LEHRER: ANGEBOT-TAB (Teilnehmerliste) ═══
 // Fächer die immer für alle Klassen angezeigt werden (klassenübergreifende Angebote)
-const AUSLEIHE_FAECHER=['Spielausleihe','Sportgeräteausleihe'];
+// AUSLEIHE_FAECHER ist weiter oben definiert
 let _angebotNurEigeneKlasse=true;
 
 function initAngebotTab(){
