@@ -246,8 +246,8 @@
       <button class="role-btn" onclick="selectRole('lehrer')" id="rbtn-lehrer"><i class="ti ti-chalkboard"></i>Lehrkraft</button>
       <button class="role-btn" onclick="selectRole('leitung')" id="rbtn-leitung"><i class="ti ti-clipboard-list"></i>Schulleitung</button>
     </div>
-    <div class="form-group"><label class="form-label">E-Mail</label><input type="email" id="login-email" class="form-control" placeholder="name@gms-stwend.de" /></div>
-    <div class="form-group"><label class="form-label">Passwort</label><input type="password" id="login-pw" class="form-control" placeholder="Dein Passwort" /></div>
+    <div class="form-group"><label class="form-label">E-Mail</label><input type="email" id="login-email" class="form-control" placeholder="name@gms-stwend.de" onkeydown="if(event.key==='Enter')doLogin()" /></div>
+    <div class="form-group"><label class="form-label">Passwort</label><input type="password" id="login-pw" class="form-control" placeholder="Dein Passwort" onkeydown="if(event.key==='Enter')doLogin()" /></div>
     <div id="login-error" class="text-sm" style="color:#A32D2D;margin-bottom:.75rem;display:none;"></div>
     <button class="btn btn-primary btn-full" onclick="doLogin()"><i class="ti ti-login"></i> Anmelden</button>
   </div>
@@ -952,7 +952,7 @@ function selectRole(role) {
   ['schueler','lehrer','leitung'].forEach(r=>document.getElementById('rbtn-'+r).classList.toggle('active',r===role));
 }
 function doLogin() {
-  const email=document.getElementById('login-email').value.trim();
+  const email=document.getElementById('login-email').value.trim().toLowerCase();
   const pw=document.getElementById('login-pw').value;
   const errEl=document.getElementById('login-error');
   errEl.style.display='none';
@@ -968,11 +968,11 @@ function doLogin() {
       }
       const data=snap.data();
       if(data.role!==selectedLoginRole){
-        showErr(errEl,`Dieses Konto ist kein ${roleLabel(selectedLoginRole)}-Konto.`);
-        await auth.signOut();return;
+        await auth.signOut();
+        showErr(errEl,`Dieses Konto ist ein ${roleLabel(data.role)}-Konto – bitte oben die richtige Rolle auswählen.`);
+        return;
       }
       currentUser=cred.user;currentRole=data.role;currentUserData=data;
-      // Schüler kommen direkt zur App – kein Passwort-Setzen-Screen
       if(data.mustSetPassword && data.role!=='schueler'){
         const hint=document.getElementById('setpw-hint');
         if(data.tempPw&&hint) hint.style.display='block';
@@ -987,7 +987,7 @@ function doLogin() {
 }
 function roleLabel(r){return r==='schueler'?'Schüler':r==='lehrer'?'Lehrkraft':'Schulleitung';}
 function loginErrMsg(code){
-  if(code==='auth/wrong-password'||code==='auth/invalid-credential')return 'Passwort falsch.';
+  if(code==='auth/wrong-password'||code==='auth/invalid-credential')return 'Passwort falsch oder E-Mail nicht gefunden.';
   if(code==='auth/user-not-found')return 'E-Mail nicht gefunden.';
   if(code==='auth/invalid-email')return 'Ungültige E-Mail-Adresse.';
   if(code==='auth/too-many-requests')return 'Zu viele Versuche. Bitte warte kurz.';
@@ -2444,7 +2444,7 @@ function saveSchueler(){
   const nachname=document.getElementById('ms-nachname').value.trim();
   const klasse=document.getElementById('ms-klasse').value.trim();
   const gruppe=document.getElementById('ms-gruppe').value;
-  const email=document.getElementById('ms-email').value.trim();
+  const email=document.getElementById('ms-email').value.trim().toLowerCase(); // immer Kleinschreibung
   const pw=document.getElementById('ms-pw').value.trim();
   const err=document.getElementById('ms-error');
   err.style.display='none';
@@ -2504,21 +2504,44 @@ function saveSchueler(){
       return;
     }
 
-    // NEU ANLEGEN: Secondary Auth damit Admin eingeloggt bleibt
-    if(!pw||pw.length<4){showErr(err,'Bitte Passwort generieren lassen.');return;}
+    // NEU ANLEGEN: Secondary Auth damit Admin/Lehrer eingeloggt bleibt
+    if(!pw||pw.length<6){showErr(err,'Passwort muss mindestens 6 Zeichen haben.');return;}
     const saveBtn=document.getElementById('ms-save-btn');
     if(saveBtn){saveBtn.disabled=true;saveBtn.textContent='Wird angelegt...';}
+
+    // Aktuellen Admin/Lehrer merken – falls onAuthStateChanged feuert
+    const adminUser=currentUser;
+    const adminRole=currentRole;
+    const adminData=currentUserData;
+
     try{
-      const {initializeApp,getApp}=await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js');
+      const {initializeApp,getApp,deleteApp}=await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js');
       const {getAuth:getAuth2,createUserWithEmailAndPassword:createUser2,signOut:signOut2}=
         await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js');
-      let secondaryApp;
-      try{secondaryApp=getApp('secondary-schueler');}
-      catch(e){secondaryApp=initializeApp(window._firebase.auth.app.options,'secondary-schueler');}
+
+      // Neue sekundäre App mit eindeutigem Namen (vermeidet State-Übertragung)
+      const appName='tmp-schueler-'+Date.now();
+      const secondaryApp=initializeApp(window._firebase.auth.app.options, appName);
       const secondaryAuth=getAuth2(secondaryApp);
-      const cred=await createUser2(secondaryAuth,email,pw);
-      await signOut2(secondaryAuth);
-      await setDoc(doc(db,'users',cred.user.uid),{
+
+      let newUid=null;
+      try{
+        const cred=await createUser2(secondaryAuth,email,pw);
+        newUid=cred.user.uid;
+        await signOut2(secondaryAuth);
+      }finally{
+        // App sofort löschen – verhindert State-Konflikte
+        try{await deleteApp(secondaryApp);}catch(e){}
+      }
+
+      // Haupt-Session wiederherstellen falls nötig
+      if(currentUser?.uid!==adminUser?.uid){
+        currentUser=adminUser;
+        currentRole=adminRole;
+        currentUserData=adminData;
+      }
+
+      await setDoc(doc(db,'users',newUid),{
         vorname,nachname,klasse,gruppe,email,
         role:'schueler',mustSetPassword:false,
         passwort:pw,
@@ -2528,10 +2551,12 @@ function saveSchueler(){
       closeSchuelerModal();
       loadSchuelerListe(currentRole==='lehrer'?'l-schueler-liste':'sl-schueler-liste');
     }catch(e){
+      // Haupt-Session sichern
+      if(adminUser&&!currentUser){currentUser=adminUser;currentRole=adminRole;currentUserData=adminData;}
       if(e.code==='auth/email-already-in-use') showErr(err,'Diese E-Mail ist bereits registriert.');
-      else if(e.code==='auth/invalid-email')   showErr(err,'Ungueltige E-Mail-Adresse.');
-      else if(e.code==='auth/weak-password')   showErr(err,'Passwort zu schwach - mindestens 6 Zeichen.');
-      else showErr(err,'Fehler: '+e.message);toast('❌ Fach konnte nicht gespeichert werden: '+e.message, true);
+      else if(e.code==='auth/invalid-email')   showErr(err,'Ungültige E-Mail-Adresse.');
+      else if(e.code==='auth/weak-password')   showErr(err,'Passwort zu schwach – mindestens 6 Zeichen.');
+      else showErr(err,'Fehler: '+(e.message||e.code));
     }finally{
       if(saveBtn){saveBtn.disabled=false;saveBtn.textContent='Speichern';}
     }
@@ -2641,21 +2666,26 @@ function saveLehrer(){
         // Neu anlegen: Secondary Auth Instance verwenden damit Admin eingeloggt bleibt!
         if(!pw||pw.length<6){showErr(err,'Bitte Passwort generieren.');saveBtn.disabled=false;saveBtn.innerHTML='<i class="ti ti-check"></i> Speichern';return;}
 
-        const {initializeApp,getApp} = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js');
+        const adminUser2=currentUser, adminRole2=currentRole, adminData2=currentUserData;
+
+        const {initializeApp,deleteApp} = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js');
         const {getAuth:getAuth2,createUserWithEmailAndPassword:createUser2,signOut:signOut2} =
           await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js');
 
-        // Zweite App-Instanz für den neuen Nutzer
-        let secondaryApp;
-        try { secondaryApp=getApp('secondary-lehrer'); }
-        catch(e) {
-          secondaryApp=initializeApp(window._firebase.auth.app.options,'secondary-lehrer');
-        }
+        const appName2='tmp-lehrer-'+Date.now();
+        const secondaryApp=initializeApp(window._firebase.auth.app.options, appName2);
         const secondaryAuth=getAuth2(secondaryApp);
 
-        const cred=await createUser2(secondaryAuth,email,pw);
-        const newUid=cred.user.uid;
-        await signOut2(secondaryAuth); // Sekundäre Session sofort beenden
+        let newUid;
+        try{
+          const cred=await createUser2(secondaryAuth,email,pw);
+          newUid=cred.user.uid;
+          await signOut2(secondaryAuth);
+        }finally{
+          try{await deleteApp(secondaryApp);}catch(e){}
+        }
+
+        if(currentUser?.uid!==adminUser2?.uid){currentUser=adminUser2;currentRole=adminRole2;currentUserData=adminData2;}
 
         // Firestore-Dokument mit Admin-Session schreiben
         const istKlassenlehrer=document.getElementById('ml-klassenlehrer')?.checked||false;
@@ -2664,7 +2694,7 @@ function saveLehrer(){
           role:'lehrer',
           klassen:[],
           angebote:[],
-          istKlassenlehrer, // für Meldungen-Tab
+          istKlassenlehrer,
           mustSetPassword:true,
           passwort:pw,
           createdAt:new Date().toISOString()
