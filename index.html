@@ -303,6 +303,11 @@
         <div style="font-size:13px;font-weight:600;color:#92400E;">⏳ Wählen ist ab <b>12:55 Uhr</b> möglich</div>
         <div style="font-size:22px;font-weight:800;color:#EA580C;margin-top:2px;font-variant-numeric:tabular-nums;" id="s-countdown-zeit">–:––</div>
       </div>
+      <!-- Wahl bereits verbindlich gespeichert -->
+      <div id="s-gesperrt-banner" style="display:none;background:#E6F1FB;border:1.5px solid #0C447C;border-radius:10px;padding:10px 14px;margin-bottom:.5rem;text-align:center;">
+        <div style="font-size:13px;font-weight:700;color:#0C447C;">🔒 Deine Wahl für diesen Tag ist gespeichert</div>
+        <div style="font-size:12px;color:#0C447C;margin-top:2px;">Sie kann nicht mehr geändert werden. Bei Problemen wende dich an deine Klassenlehrkraft.</div>
+      </div>
       <!-- Testmodus-Hinweis -->
       <div id="s-testmodus-hinweis" style="display:none;background:#FEF3C7;border:1.5px solid #D97706;border-radius:10px;padding:8px 14px;margin-bottom:.5rem;text-align:center;font-size:12px;font-weight:600;color:#78350F;">
         🧪 Testmodus aktiv – alle Zeitsperren sind aufgehoben
@@ -564,6 +569,20 @@
       </div>
     </div>
 
+    <div id="sl-tab-angebot" class="hidden">
+      <div class="card">
+        <div class="card-title"><i class="ti ti-clipboard-check"></i> Mein eigenes Angebot</div>
+        <p class="text-sm text-soft" style="margin-bottom:.75rem;">
+          Wenn du selbst ein Angebot leitest, wähle es hier aus. Du siehst dann die Teilnehmer
+          und kannst die Anwesenheit erfassen – ohne zusätzliches Lehrerkonto.
+        </p>
+        <div id="sl-angebot-auswahl" style="margin-bottom:1rem;"></div>
+        <div id="sl-angebot-header"></div>
+        <div class="date-bar" id="sl-angebot-tage" style="margin-bottom:.75rem;"></div>
+        <div id="sl-angebot-inhalt"></div>
+      </div>
+    </div>
+
     <div id="sl-tab-einstellungen" class="hidden">
       <div class="card">
         <div class="card-title"><i class="ti ti-settings"></i> Rahmenbedingungen & Einstellungen</div>
@@ -695,6 +714,7 @@
     <button class="nav-btn" id="sl-nav-schueler" onclick="slShowTab('schueler')"><i class="ti ti-users"></i>Schüler</button>
     <button class="nav-btn" id="sl-nav-lehrer" onclick="slShowTab('lehrer')"><i class="ti ti-chalkboard"></i>Lehrkräfte</button>
     <button class="nav-btn" id="sl-nav-faecher" onclick="slShowTab('faecher')"><i class="ti ti-books"></i>Fächer</button>
+    <button class="nav-btn" id="sl-nav-angebot" onclick="slShowTab('angebot')"><i class="ti ti-clipboard-check"></i>Mein Angebot</button>
     <button class="nav-btn" id="sl-nav-fehlzeiten" onclick="slShowTab('fehlzeiten')"><i class="ti ti-clipboard-x"></i>Fehlzeiten</button>
     <button class="nav-btn" id="sl-nav-einstellungen" onclick="slShowTab('einstellungen')"><i class="ti ti-settings"></i>Rahmen</button>
     <button class="nav-btn" id="sl-nav-pw" onclick="slShowTab('pw')"><i class="ti ti-lock"></i>Passwort</button>
@@ -1378,10 +1398,14 @@ function sprungZuWoche(montagKey){
   buildDateBar(new Date(montagKey));
 }
 function isoDate(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+// Ist die Wahl für den angezeigten Tag bereits verbindlich gespeichert?
+let _planGesperrt=false;
+
 function loadPlanFuerTag(tag){
   // Sofort alles zurücksetzen
   activeTag=tag;
   gewahlt={1:null,2:null,3:null,4:null};
+  _planGesperrt=false;
 
   // Speichern-Button sperren
   const saveBtn=document.getElementById('save-btn');
@@ -1455,6 +1479,8 @@ function loadPlanFuerTag(tag){
           if(snap.exists()){
             const d=snap.data();
             if(d.tag === tag){
+              // Verbindlich gespeichert? Dann Tag sperren (im Testmodus nie)
+              _planGesperrt = (d.gesperrt===true) && schuljahrConfig.testmodus!==true;
               (cfg.freiZS||[1,2,3,4]).forEach(zs=>{
                 const val=d['zs'+zs];
                 if(!val || !val.name) return;
@@ -1482,15 +1508,36 @@ function loadPlanFuerTag(tag){
     // Ausleihe-Chips auf Verfügbarkeit prüfen (ausblenden wenn voll)
     setTimeout(()=>pruefeAusleiheChips(),500);
 
-    // Speichern-Button: gesperrt bei vergangenen Tagen (im Testmodus nie)
+    // Speichern-Button: gesperrt bei vergangenen Tagen oder bereits verbindlicher Wahl
     const sb=document.getElementById('save-btn');
     const heuteCheck=isoDate(new Date());
     const istVergangenerTag=(schuljahrConfig.testmodus===true)?false:(tag<heuteCheck);
+    const gesperrt=istVergangenerTag||_planGesperrt;
     if(sb){
-      sb.disabled=istVergangenerTag;
-      sb.style.opacity=istVergangenerTag?'0.4':'';
-      sb.style.cursor=istVergangenerTag?'not-allowed':'';
+      sb.disabled=gesperrt;
+      sb.style.opacity=gesperrt?'0.4':'';
+      sb.style.cursor=gesperrt?'not-allowed':'';
+      sb.innerHTML=_planGesperrt
+        ? '<i class="ti ti-lock"></i> Wahl gespeichert – nicht mehr änderbar'
+        : '<i class="ti ti-device-floppy"></i> Plan speichern';
     }
+
+    // Chips sperren wenn die Wahl verbindlich ist
+    const chipBereich=document.getElementById('s-plan-chips-area');
+    if(chipBereich){
+      chipBereich.style.opacity=_planGesperrt?'0.75':'';
+    }
+    document.querySelectorAll('.fach-chip').forEach(c=>{
+      if(_planGesperrt){
+        c.style.cursor='not-allowed';
+      } else {
+        c.style.cursor='';
+      }
+    });
+
+    // Hinweisbanner
+    const sperrBanner=document.getElementById('s-gesperrt-banner');
+    if(sperrBanner) sperrBanner.style.display=_planGesperrt?'':'none';
 
     // Datum im Speichern-Button
     try{
@@ -1519,6 +1566,11 @@ const DOPPELSTUNDEN_FRUEH = ['Freizeit mit Nico']; // Doppelstunde 7. Std.+2
 const AUSLEIHE_FAECHER = ['Spielausleihe','Sportgeräteausleihe'];
 
 function waehlen(zs,name,sel,icon,bg,color,fachId,maxTeilnehmer){
+  // Wahl für diesen Tag bereits verbindlich gespeichert
+  if(_planGesperrt){
+    toast('🔒 Deine Wahl für diesen Tag wurde gespeichert und kann nicht mehr geändert werden.',true);
+    return;
+  }
   // Uhrzeit-Sperre: vor konfigurierter Uhrzeit kein Wählen erlaubt (im Testmodus deaktiviert)
   const testmodusAktiv=schuljahrConfig.testmodus===true;
   if(!testmodusAktiv){
@@ -1856,13 +1908,33 @@ function savePlan(){
       toast('⛔ Vergangene Tage können nicht mehr gespeichert werden.');
       return;
     }
+
+    // Bereits verbindlich gespeichert – keine Änderung mehr möglich
+    if(_planGesperrt){
+      toast('🔒 Deine Wahl für diesen Tag wurde bereits gespeichert und kann nicht mehr geändert werden.',true);
+      return;
+    }
+
+    // Letzte Rückfrage – danach ist die Wahl verbindlich
+    const gewaehlteFaecher=[1,2,3,4].map(zs=>gewahlt[zs]?.name).filter(Boolean);
+    const d0=new Date(activeTag);
+    const datumText=WOCHENTAGE[d0.getDay()]+', '+d0.getDate()+'.'+(d0.getMonth()+1)+'.';
+    const ok=confirm(
+      'Deine Wahl für '+datumText+':\n\n'+
+      (gewaehlteFaecher.length?'• '+gewaehlteFaecher.join('\n• '):'(nichts gewählt)')+'\n\n'+
+      'Nach dem Speichern kannst du diesen Tag NICHT mehr ändern.\n\nJetzt verbindlich speichern?'
+    );
+    if(!ok) return;
   }
   withFirebase(async({db,doc,setDoc})=>{
     try{
       const data={
         uid:currentUser.uid,
         tag:activeTag,
-        gruppeSnapshot: currentUserData.gruppe||'durchstarter'
+        gruppeSnapshot: currentUserData.gruppe||'durchstarter',
+        // Nach dem Speichern ist die Wahl für diesen Tag verbindlich
+        gesperrt: schuljahrConfig.testmodus===true ? false : true,
+        gespeichertAm: new Date().toISOString()
       };
       [1,2,3,4].forEach(zs=>{
         const g=gewahlt[zs];
@@ -1908,7 +1980,7 @@ function lShowTab(tab){
   if(tab==='meldungen')     loadMeldungen();
 }
 function slShowTab(tab){
-  ['uebersicht','schueler','lehrer','faecher','fehlzeiten','einstellungen','pw'].forEach(t=>{
+  ['uebersicht','schueler','lehrer','faecher','angebot','fehlzeiten','einstellungen','pw'].forEach(t=>{
     const tabEl=document.getElementById('sl-tab-'+t);
     const navEl=document.getElementById('sl-nav-'+t);
     if(tabEl)tabEl.classList.toggle('hidden',t!==tab);
@@ -1917,6 +1989,7 @@ function slShowTab(tab){
   if(tab==='einstellungen') loadEinstellungen();
   if(tab==='faecher')       loadFaecherListe();
   if(tab==='fehlzeiten')    loadFehlzeitenUebersicht('sl');
+  if(tab==='angebot')       initLeitungAngebotTab();
 }
 function sShowTab(tab){
   ['plan','stats','fehlzeiten','pw'].forEach(t=>{
@@ -3883,6 +3956,10 @@ function ausleiheDocId(fachName, zs, tag){
 }
 
 async function openAusleiheModal(fachName, zs){
+  if(_planGesperrt){
+    toast('🔒 Deine Wahl für diesen Tag wurde gespeichert und kann nicht mehr geändert werden.',true);
+    return;
+  }
   const modal=document.getElementById('modal-ausleihe');
   const title=document.getElementById('ausleihe-modal-title');
   const desc=document.getElementById('ausleihe-modal-desc');
@@ -4969,6 +5046,195 @@ function saveAngebote(){
       closeAngeboteModal();
       loadLehrerKlassenListe();
     }catch(e){showErr(document.getElementById('ma-error'),e.message);}
+  });
+}
+
+// ═══ SCHULLEITUNG: EIGENES ANGEBOT ═══
+function initLeitungAngebotTab(){
+  const auswahl=document.getElementById('sl-angebot-auswahl');
+  const header=document.getElementById('sl-angebot-header');
+  const inhalt=document.getElementById('sl-angebot-inhalt');
+  if(!auswahl)return;
+
+  auswahl.innerHTML='<p class="text-sm text-soft">Lade Fächer…</p>';
+
+  withFirebase(async({db,getDocs,collection})=>{
+    try{
+      const snaps=await getDocs(collection(db,'faecher'));
+      const faecher=[];
+      snaps.forEach(s=>{
+        const d=s.data();
+        if(d.name && d.aktiv!==false) faecher.push({name:d.name,icon:d.icon||'📌'});
+      });
+      // Doppelte Namen entfernen
+      const gesehen=new Set();
+      const liste=faecher.filter(f=>{
+        if(gesehen.has(f.name))return false;
+        gesehen.add(f.name);return true;
+      }).sort((a,b)=>a.name.localeCompare(b.name));
+
+      const meine=currentUserData?.angebote||[];
+
+      if(!liste.length){
+        auswahl.innerHTML='<p class="text-sm text-soft">Noch keine Fächer angelegt – lege zuerst im Reiter „Fächer" eines an.</p>';
+        header.innerHTML='';inhalt.innerHTML='';
+        return;
+      }
+
+      auswahl.innerHTML=`
+        <label class="form-label">Welche Angebote leitest du selbst?</label>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;">
+          ${liste.map(f=>{
+            const aktiv=meine.includes(f.name);
+            return `<button type="button" onclick="toggleLeitungAngebot('${f.name.replace(/'/g,"\\'")}')"
+              style="padding:6px 12px;border-radius:99px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;
+                     border:1.5px solid ${aktiv?'var(--orange-dark)':'var(--gray-border)'};
+                     background:${aktiv?'var(--orange-light)':'#fff'};
+                     color:${aktiv?'var(--orange-dark)':'var(--text-soft)'};">
+              ${f.icon} ${f.name}${aktiv?' ✓':''}
+            </button>`;
+          }).join('')}
+        </div>`;
+
+      if(!meine.length){
+        header.innerHTML='<p class="text-sm text-soft">Wähle oben mindestens ein Angebot aus, das du selbst leitest.</p>';
+        inhalt.innerHTML='';
+        const tage=document.getElementById('sl-angebot-tage');
+        if(tage)tage.innerHTML='';
+        return;
+      }
+
+      header.innerHTML='<p class="text-sm text-soft">Wähle einen Tag um die Teilnehmer zu sehen und die Anwesenheit zu erfassen.</p>';
+      buildPlanTagLeiste('sl-angebot-tage',(tag)=>loadLeitungAngebot(tag,meine));
+    }catch(e){
+      console.error('initLeitungAngebotTab:',e);
+      auswahl.innerHTML='<p class="text-sm" style="color:#A32D2D;">Fehler: '+(e.message||e)+'</p>';
+    }
+  });
+}
+
+// Angebot der Schulleitung zuordnen bzw. entfernen
+function toggleLeitungAngebot(name){
+  const aktuell=currentUserData?.angebote||[];
+  const neu=aktuell.includes(name)?aktuell.filter(a=>a!==name):[...aktuell,name];
+  withFirebase(async({db,doc,updateDoc})=>{
+    try{
+      await updateDoc(doc(db,'users',currentUser.uid),{angebote:neu});
+      currentUserData.angebote=neu;
+      toast(neu.includes(name)?'✓ „'+name+'" als eigenes Angebot übernommen.':'„'+name+'" entfernt.');
+      initLeitungAngebotTab();
+    }catch(e){
+      toast('❌ Fehler: '+(e.message||e),true);
+    }
+  });
+}
+
+// Teilnehmerliste + Anwesenheit für die Schulleitung (analog Lehrer, ohne Klassenfilter)
+function loadLeitungAngebot(tag,meineAngebote){
+  const cont=document.getElementById('sl-angebot-inhalt');
+  if(!cont)return;
+  cont.innerHTML='<p class="text-sm text-soft">Lade…</p>';
+  window._anwCache={};
+
+  withFirebase(async({db,getDocs,getDocsFromServer,collection,doc,getDoc})=>{
+    try{
+      const [userSnaps,planSnaps,anwSnap]=await Promise.all([
+        getDocs(collection(db,'users')),
+        getDocsFromServer(collection(db,'plans')),
+        getDoc(doc(db,'anwesenheit',tag+'_'+currentUser.uid))
+      ]);
+
+      const alleSchueler=[];
+      userSnaps.forEach(s=>{
+        const d=s.data();
+        if(d.role==='schueler') alleSchueler.push({uid:s.id,...d});
+      });
+
+      const planMap={};
+      planSnaps.forEach(p=>{
+        const d=p.data();
+        if(d.tag===tag) planMap[d.uid]=d;
+      });
+
+      const anwData=anwSnap.exists()?(anwSnap.data().schueler||{}):{};
+      window._anwCache={...anwData};
+
+      const zsLabels={1:'7. Std.',2:'8. Std.',3:'9. Std.',4:'10. Std.'};
+      let html='';
+
+      meineAngebote.forEach(angebot=>{
+        const teilnehmer=alleSchueler.filter(s=>{
+          const plan=planMap[s.uid];
+          if(!plan)return false;
+          return [1,2,3,4].some(zs=>plan['zs'+zs]&&plan['zs'+zs].name===angebot);
+        }).sort((a,b)=>(a.klasse||'').localeCompare(b.klasse||'')||a.nachname.localeCompare(b.nachname));
+
+        html+=`<div style="margin-bottom:1.25rem;">
+          <div style="font-size:12px;font-weight:700;color:var(--text-soft);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px;">
+            ${angebot} · ${teilnehmer.length} Schüler
+          </div>`;
+
+        if(!teilnehmer.length){
+          html+='<p class="text-sm text-soft" style="padding:8px 12px;background:var(--gray-bg);border-radius:8px;">Niemand hat dieses Angebot an diesem Tag gewählt.</p></div>';
+          return;
+        }
+
+        html+='<div style="display:flex;flex-direction:column;gap:6px;">';
+        teilnehmer.forEach((s,idx)=>{
+          const plan=planMap[s.uid]||{};
+          const zsNr=[1,2,3,4].find(zs=>plan['zs'+zs]&&plan['zs'+zs].name===angebot);
+          const status=anwData[anwKey(s.uid,angebot)]??anwData[s.uid]??null;
+          const rowId='sl-anw-row-'+s.uid+'-'+anwSlug(angebot);
+          const btnBase='padding:6px 14px;border-radius:99px;border:1.5px solid;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;';
+          const esc=angebot.replace(/'/g,"\\'");
+
+          html+=`<div id="${rowId}" style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--gray-bg);border-radius:10px;border:0.5px solid var(--gray-border);flex-wrap:wrap;">
+            <span style="width:22px;height:22px;border-radius:50%;background:var(--orange-light);color:var(--orange-dark);font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0;">${idx+1}</span>
+            <div style="flex:1;min-width:100px;">
+              <div style="font-size:13px;font-weight:600;">${s.vorname} ${s.nachname}</div>
+              <div style="font-size:11px;color:var(--text-soft);">${s.klasse}${zsNr?' · '+zsLabels[zsNr]:''}</div>
+            </div>
+            <div style="display:flex;gap:6px;">
+              <button class="anw-btn" data-status="anwesend" onclick="setAnwesenheitSL('${s.uid}','${esc}','anwesend')"
+                style="${btnBase}${status==='anwesend'?'background:#E1F5EE;border-color:#1D9E75;color:#085041;':'background:#fff;border-color:var(--gray-border);color:var(--text-soft);'}">✓ Anwesend</button>
+              <button class="anw-btn" data-status="abwesend" onclick="setAnwesenheitSL('${s.uid}','${esc}','abwesend')"
+                style="${btnBase}${status==='abwesend'?'background:#FCEBEB;border-color:#A32D2D;color:#A32D2D;':'background:#fff;border-color:var(--gray-border);color:var(--text-soft);'}">✗ Nicht anwesend</button>
+            </div>
+          </div>`;
+        });
+        html+='</div></div>';
+      });
+
+      html+=`<button class="btn btn-primary btn-full" onclick="saveAnwesenheit('${tag}')">
+        <i class="ti ti-device-floppy"></i> Anwesenheit speichern
+      </button>`;
+
+      cont.innerHTML=html;
+    }catch(e){
+      console.error('loadLeitungAngebot:',e);
+      cont.innerHTML='<p class="text-sm" style="color:#A32D2D;">Fehler: '+(e.message||e)+'</p>';
+    }
+  });
+}
+
+// Anwesenheit in der Schulleitungsansicht setzen (eigene Zeilen-IDs)
+function setAnwesenheitSL(uid,angebot,status){
+  if(!window._anwCache)window._anwCache={};
+  window._anwCache[anwKey(uid,angebot)]=status;
+  const row=document.getElementById('sl-anw-row-'+uid+'-'+anwSlug(angebot));
+  if(!row)return;
+  row.querySelectorAll('.anw-btn').forEach(b=>{
+    const bs=b.getAttribute('data-status');
+    const active=bs===status;
+    if(bs==='anwesend'){
+      b.style.background=active?'#E1F5EE':'#fff';
+      b.style.borderColor=active?'#1D9E75':'var(--gray-border)';
+      b.style.color=active?'#085041':'var(--text-soft)';
+    } else {
+      b.style.background=active?'#FCEBEB':'#fff';
+      b.style.borderColor=active?'#A32D2D':'var(--gray-border)';
+      b.style.color=active?'#A32D2D':'var(--text-soft)';
+    }
   });
 }
 
