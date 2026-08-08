@@ -2945,8 +2945,8 @@ function renderLehrerKlassenListe(lehrer, gueltigeFaecher=null){
       <td>
         <div class="flex-row" style="gap:4px;justify-content:flex-end;flex-wrap:wrap;">
           <button class="btn btn-secondary btn-sm" title="Name bearbeiten" onclick="openLehrerModal('${l.uid}')"><i class="ti ti-edit"></i></button>
-          <button class="btn btn-secondary btn-sm" title="Klassen" onclick="openKlassenModal('${l.uid}','${l.vorname} ${l.nachname}',${JSON.stringify(klassen)})"><i class="ti ti-school"></i></button>
-          <button class="btn btn-secondary btn-sm" title="Angebote" onclick="openAngeboteModal('${l.uid}','${l.vorname} ${l.nachname}',${JSON.stringify(angebote)})"><i class="ti ti-target"></i></button>
+          <button class="btn btn-secondary btn-sm" title="Klassen" onclick="openKlassenModal('${l.uid}')"><i class="ti ti-school"></i></button>
+          <button class="btn btn-secondary btn-sm" title="Angebote" onclick="openAngeboteModal('${l.uid}')"><i class="ti ti-target"></i></button>
           <button class="btn btn-secondary btn-sm" title="Passwort" onclick="openPwResetModal('${l.uid}','${l.vorname} ${l.nachname}','lehrer')"><i class="ti ti-key"></i></button>
           <button class="btn btn-danger btn-sm" title="Löschen" onclick="deleteLehrer('${l.uid}','${l.vorname} ${l.nachname}')"><i class="ti ti-trash"></i></button>
         </div>
@@ -2962,27 +2962,38 @@ let _alleKlassenVerfuegbar=[];
 function openKlassenModal(uid,name,klassen){
   editLehrerUid=uid;
   editLehrerKlassen=Array.isArray(klassen)?[...klassen]:[];
-  document.getElementById('mlk-titel').textContent='Klassen zuweisen: '+name;
+  document.getElementById('mlk-titel').textContent=name?('Klassen zuweisen: '+name):'Klassen zuweisen';
   document.getElementById('mlk-name').textContent='';
   document.getElementById('mlk-input').value='';
   document.getElementById('mlk-error').style.display='none';
-
-  // Klassenlehrer-Status aus Firestore laden
-  withFirebase(async({db,doc,getDoc})=>{
-    const snap=await getDoc(doc(db,'users',uid));
-    const istKl=snap.exists()?snap.data().istKlassenlehrer===true:false;
-    const cb=document.getElementById('mlk-klassenlehrer');
-    if(cb){
-      cb.checked=istKl;
-      const kDiv=document.getElementById('mlk-klassenlehrer-klassen');
-      if(kDiv) kDiv.style.display=istKl?'block':'none';
-      cb.onchange=()=>{if(kDiv)kDiv.style.display=cb.checked?'block':'none';};
-    }
-  });
-
   _ladeKlassenSchnellauswahl();
   renderKlassenTags();
   document.getElementById('modal-lehrer-klassen').classList.remove('hidden');
+
+  // Name, Klassen und Klassenlehrer-Status frisch aus Firestore laden
+  withFirebase(async({db,doc,getDoc})=>{
+    try{
+      const snap=await getDoc(doc(db,'users',uid));
+      if(!snap.exists())return;
+      const d=snap.data();
+      const vollerName=((d.vorname||'')+' '+(d.nachname||'')).trim();
+      if(vollerName) document.getElementById('mlk-titel').textContent='Klassen zuweisen: '+vollerName;
+      if(!klassen){
+        editLehrerKlassen=Array.isArray(d.klassen)?[...d.klassen]:[];
+        renderKlassenTags();
+      }
+      const cb=document.getElementById('mlk-klassenlehrer');
+      if(cb){
+        cb.checked=d.istKlassenlehrer===true;
+        const kDiv=document.getElementById('mlk-klassenlehrer-klassen');
+        if(kDiv) kDiv.style.display=cb.checked?'block':'none';
+        cb.onchange=()=>{if(kDiv)kDiv.style.display=cb.checked?'block':'none';};
+      }
+    }catch(e){
+      console.error('openKlassenModal:',e);
+      showErr(document.getElementById('mlk-error'),'Daten konnten nicht geladen werden: '+(e.message||e));
+    }
+  });
 }
 
 function _ladeKlassenSchnellauswahl(){
@@ -4945,12 +4956,30 @@ let editAngeboteAuswahl=[];
 
 function openAngeboteModal(uid,name,angebote){
   editAngeboteUid=uid;
-  editAngeboteAuswahl=[...angebote];
-  document.getElementById('ma-name').textContent='Lehrkraft: '+name;
+  editAngeboteAuswahl=Array.isArray(angebote)?[...angebote]:[];
+  document.getElementById('ma-name').textContent=name?('Lehrkraft: '+name):'Lehrkraft wird geladen…';
   document.getElementById('ma-error').style.display='none';
   document.getElementById('ma-neues-angebot').value='';
   renderAngeboteCheckboxen();
   document.getElementById('modal-angebote').classList.remove('hidden');
+
+  // Name und Angebote frisch aus Firestore laden
+  withFirebase(async({db,doc,getDoc})=>{
+    try{
+      const snap=await getDoc(doc(db,'users',uid));
+      if(!snap.exists())return;
+      const d=snap.data();
+      const vollerName=((d.vorname||'')+' '+(d.nachname||'')).trim();
+      document.getElementById('ma-name').textContent='Lehrkraft: '+(vollerName||'–');
+      if(!angebote){
+        editAngeboteAuswahl=Array.isArray(d.angebote)?[...d.angebote]:[];
+        renderAngeboteCheckboxen();
+      }
+    }catch(e){
+      console.error('openAngeboteModal:',e);
+      showErr(document.getElementById('ma-error'),'Daten konnten nicht geladen werden: '+(e.message||e));
+    }
+  });
 }
 
 function renderAngeboteCheckboxen(){
@@ -5052,9 +5081,14 @@ function saveAngebote(){
 }
 
 // ═══ LEHRER: ANGEBOT-TAB (Teilnehmerliste) ═══
-// Fächer die immer für alle Klassen angezeigt werden (klassenübergreifende Angebote)
-// AUSLEIHE_FAECHER ist weiter oben definiert
-let _angebotNurEigeneKlasse=true;
+// Anzeigefilter im Lehrer-Tab "INA Angebot"
+// 'angebot' = nur eigene Angebote | 'klasse' = nur eigene Klasse | 'alle' = alles
+let _angebotFilter='angebot';
+
+function setAngebotFilter(wert){
+  _angebotFilter=wert;
+  initAngebotTab();
+}
 
 function initAngebotTab(){
   const header=document.getElementById('l-angebot-header');
@@ -5071,7 +5105,6 @@ function initAngebotTab(){
       if(AUSLEIHE_FAECHER.includes(d.name)) vorhandeneAusleihe.push(d.name);
     });
 
-    // Eigene Angebote + "für alle Lehrkräfte" + die Ausleihe-Fächer
     const meineAngebote=[...new Set([
       ...(currentUserData.angebote||[]),
       ...alleLehrerFaecher,
@@ -5085,21 +5118,21 @@ function initAngebotTab(){
     }
 
     const eigeneKlassen=currentUserData?.klassen||[];
-    const hatKlassen=eigeneKlassen.length>0;
+    const klassenText=eigeneKlassen.length?eigeneKlassen.join(', '):'keine zugewiesen';
+    const opt=(wert,text,zusatz)=>`
+      <label style="display:flex;align-items:center;gap:7px;font-size:13px;cursor:pointer;padding:5px 0;">
+        <input type="radio" name="l-angebot-filter" value="${wert}" ${_angebotFilter===wert?'checked':''}
+          onchange="setAngebotFilter('${wert}')"
+          style="accent-color:var(--orange-dark);width:16px;height:16px;flex-shrink:0;" />
+        <span>${text}${zusatz?`<span style="color:var(--text-soft);font-size:12px;"> ${zusatz}</span>`:''}</span>
+      </label>`;
 
     header.innerHTML=`
-      ${hatKlassen?`
-      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
-        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
-          <input type="checkbox" id="l-angebot-nur-eigene" ${_angebotNurEigeneKlasse?'checked':''}
-            onchange="_angebotNurEigeneKlasse=this.checked;initAngebotTab();"
-            style="accent-color:var(--orange-dark);width:16px;height:16px;" />
-          <span>Fremde Angebote nur für meine Klasse${eigeneKlassen.length>1?'n':''} (${eigeneKlassen.join(', ')})</span>
-        </label>
+      <div style="background:var(--gray-bg);border-radius:10px;padding:8px 14px;margin-bottom:10px;">
+        ${opt('angebot','Nur die Schüler meines INA-Angebots','(alle Klassen)')}
+        ${opt('klasse','Nur die Schüler meiner Klasse',eigeneKlassen.length?`(${klassenText})`:'(keine Klasse zugewiesen)')}
+        ${opt('alle','Alles anzeigen','')}
       </div>
-      <p class="text-sm text-soft" style="margin-bottom:6px;font-size:11px;">
-        Deine eigenen Angebote und die Ausleihe zeigen immer alle Klassen.
-      </p>`:''}
       <p class="text-sm text-soft">Wähle einen Tag um die Teilnehmer zu sehen und die Anwesenheit zu erfassen.</p>`;
 
     buildPlanTagLeiste('l-angebot-tage',(tag)=>loadAngebotMitAnwesenheit(tag,meineAngebote));
@@ -5127,14 +5160,14 @@ function loadAngebotMitAnwesenheit(tag,meineAngebote){
 
     let html='';
     const eigeneKlassen=currentUserData?.klassen||[];
-    const filternAktiv=_angebotNurEigeneKlasse && eigeneKlassen.length>0;
+    const meineEigenen=currentUserData?.angebote||[];
 
     meineAngebote.forEach(angebot=>{
-      // Ausleihe-Fächer immer klassenübergreifend anzeigen
       const istAusleihe=AUSLEIHE_FAECHER.includes(angebot);
-      // Eigenes zugewiesenes Angebot? Dann IMMER alle Teilnehmer zeigen –
-      // die Lehrkraft leitet das Angebot und braucht die vollständige Liste
-      const istEigenesAngebot=(currentUserData?.angebote||[]).includes(angebot);
+      const istEigenesAngebot=meineEigenen.includes(angebot);
+
+      // Modus 1: nur eigene Angebote – fremde Fächer komplett überspringen
+      if(_angebotFilter==='angebot' && !istEigenesAngebot) return;
 
       let teilnehmer=alleSchueler.filter(s=>{
         const plan=planMap[s.uid];
@@ -5142,19 +5175,17 @@ function loadAngebotMitAnwesenheit(tag,meineAngebote){
         return [1,2,3,4].some(zs=>plan['zs'+zs]&&plan['zs'+zs].name===angebot);
       });
 
-      // Klassenfilter nur bei fremden Angeboten (z.B. "für alle Lehrkräfte")
-      const filtereDieses=filternAktiv && !istAusleihe && !istEigenesAngebot;
+      // Modus 2: nur eigene Klasse – Ausleihe bleibt klassenübergreifend
+      const filtereDieses=(_angebotFilter==='klasse' && eigeneKlassen.length>0 && !istAusleihe);
       if(filtereDieses){
         teilnehmer=teilnehmer.filter(s=>eigeneKlassen.includes(s.klasse));
+        if(!teilnehmer.length && !istEigenesAngebot) return;
       }
-
-      // Nur fremde Angebote ohne Teilnehmer ausblenden – eigene bleiben immer sichtbar
-      if(!teilnehmer.length && filtereDieses) return;
 
       const zsLabels={1:'7. Std.',2:'8. Std.',3:'9. Std.',4:'10. Std.'};
       let badge='';
       if(istEigenesAngebot){
-        badge='<span style="font-size:10px;font-weight:600;background:#E1F5EE;color:#085041;padding:1px 7px;border-radius:99px;margin-left:6px;text-transform:none;letter-spacing:0;">dein Angebot · alle Klassen</span>';
+        badge='<span style="font-size:10px;font-weight:600;background:#E1F5EE;color:#085041;padding:1px 7px;border-radius:99px;margin-left:6px;text-transform:none;letter-spacing:0;">dein Angebot</span>';
       } else if(istAusleihe){
         badge='<span style="font-size:10px;font-weight:600;background:#F3E8FF;color:#4C1D95;padding:1px 7px;border-radius:99px;margin-left:6px;text-transform:none;letter-spacing:0;">alle Klassen</span>';
       }
@@ -5201,11 +5232,19 @@ function loadAngebotMitAnwesenheit(tag,meineAngebote){
     });
 
     if(!html){
-      cont.innerHTML=filternAktiv
-        ? `<p class="text-sm text-soft" style="padding:12px;background:var(--gray-bg);border-radius:8px;">
-             An diesem Tag gibt es nichts anzuzeigen. Entferne oben den Haken, um auch fremde Angebote
-             mit Schülern anderer Klassen zu sehen.</p>`
-        : '<p class="text-sm text-soft">An diesem Tag hat noch niemand eines dieser Angebote gewählt.</p>';
+      let text;
+      if(_angebotFilter==='angebot'){
+        text='Dir ist kein eigenes Angebot zugewiesen, oder es wurde für diesen Tag nichts gewählt. '+
+             'Wähle oben „Alles anzeigen" um auch andere Angebote zu sehen.';
+      } else if(_angebotFilter==='klasse'){
+        text=eigeneKlassen.length
+          ? `Aus deiner Klasse${eigeneKlassen.length>1?'n':''} (${eigeneKlassen.join(', ')}) hat an diesem Tag niemand gewählt. `+
+            'Wähle oben „Alles anzeigen" um alle Klassen zu sehen.'
+          : 'Dir ist keine Klasse zugewiesen. Wähle oben „Alles anzeigen".';
+      } else {
+        text='An diesem Tag hat noch niemand eines dieser Angebote gewählt.';
+      }
+      cont.innerHTML=`<p class="text-sm text-soft" style="padding:12px;background:var(--gray-bg);border-radius:8px;">${text}</p>`;
       return;
     }
 
