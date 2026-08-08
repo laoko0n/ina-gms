@@ -124,10 +124,6 @@
     .fach-chip.sel-nico { background: var(--teal-light); border-color: var(--teal); color: #085041; font-weight:600; }
     .fach-chip.sel-spielausleihe { background: #F3E8FF; border-color: #7C3AED; color: #4C1D95; font-weight:600; }
     .fach-chip.sel-sportausleihe { background: #E0F2FE; border-color: #0284C7; color: #0C4A6E; font-weight:600; }
-    .fach-chip.sel-halbag { background: #FFF7ED; border-color: #EA580C; color: #7C2D12; font-weight:600; }
-    /* Halbjahres-AG Chip besonders hervorgehoben */
-    #chip-halbag-3 { border-color: #EA580C; color: #7C2D12; background: #FFF7ED; }
-    #chip-halbag-3:hover { background: #FED7AA; }
     .sum-chip.sel-webuntis { background: #F1EFE8; color: #4A4A4A; }
     /* Webuntis-Karte in gesperrten ZS */
     .webuntis-hinweis { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: #F1EFE8; border-radius: 8px; font-size: 13px; color: #4A4A4A; }
@@ -352,7 +348,7 @@
         </div>
       </div>
 
-      <!-- 9. Stunde: s. Webuntis + Feste AG -->
+      <!-- 9. Stunde -->
       <div class="zs-wrap zs-3" id="zs-wrap-3">
         <div class="zs-header">
           <div class="zs-nr">9.</div>
@@ -365,7 +361,7 @@
         </div>
       </div>
 
-      <!-- 10. Stunde: s. Webuntis + Feste AG -->
+      <!-- 10. Stunde -->
       <div class="zs-wrap zs-4" id="zs-wrap-4">
         <div class="zs-header">
           <div class="zs-nr">10.</div>
@@ -375,46 +371,6 @@
         <div class="zs-body">
           <div class="fach-chips" id="chips-4"></div>
           <div class="zs-hint" id="hint-4">Bei Späte AG oder Späte Lernzeit in 9. Std. wird 10. Std. automatisch mitgesetzt.</div>
-        </div>
-      </div>
-
-      <!-- ══ FESTE AG (9. + 10. Stunde) – nur am gewählten AG-Tag sichtbar ══ -->
-      <div style="border:2px solid #EA580C;border-radius:var(--radius-lg);overflow:hidden;margin-bottom:10px;margin-top:4px;display:none;" id="halbag-block">
-        <div style="background:#FFF7ED;padding:10px 14px;display:flex;align-items:center;gap:10px;border-bottom:1px solid #FED7AA;">
-          <span style="font-size:22px;">⭐</span>
-          <div style="flex:1;">
-            <div style="font-size:14px;font-weight:700;color:#7C2D12;" id="halbag-titel">Feste AG</div>
-            <div style="font-size:11px;color:#92400E;margin-top:1px;">9. + 10. Stunde · Doppelstunde</div>
-          </div>
-          <span style="font-size:11px;font-weight:600;background:#FED7AA;color:#7C2D12;padding:3px 10px;border-radius:99px;flex-shrink:0;">🔁 Halbjahr</span>
-        </div>
-        <div style="background:#fff;padding:12px 14px;">
-          <div id="halbag-status-anzeige" style="margin-bottom:10px;">
-            <span style="font-size:13px;color:var(--text-soft);">Noch keine feste AG eingetragen.</span>
-          </div>
-          <button onclick="openHalbjahresAGModal()" id="halbag-open-btn"
-            style="display:inline-flex;align-items:center;gap:6px;padding:9px 16px;
-              background:#FFF7ED;border:1.5px solid #EA580C;color:#7C2D12;
-              border-radius:var(--radius-md);font-size:14px;font-weight:500;
-              cursor:pointer;font-family:inherit;">
-            ✏️ Feste AG eintragen
-          </button>
-          <p style="font-size:11px;color:var(--text-lighter);margin-top:6px;">
-            Du gibst der AG selbst einen Namen und wählst den Wochentag – z.&nbsp;B. Fußball-AG, dienstags.
-          </p>
-        </div>
-      </div>
-
-      <!-- Hinweis-Karte wenn heute KEIN AG-Tag ist, aber AG existiert -->
-      <div style="border:1px solid var(--gray-border);border-radius:var(--radius-md);padding:10px 14px;margin-bottom:10px;display:none;background:var(--gray-bg);" id="halbag-hinweis-andere-tage">
-        <span style="font-size:12px;color:var(--text-soft);">⭐ Deine feste AG <b id="halbag-hinweis-name"></b> findet <b id="halbag-hinweis-tag"></b> statt – nicht heute.</span>
-      </div>
-
-      <!-- Hinweis wenn noch keine AG eingetragen (an Tagen ohne AG) -->
-      <div style="border:1.5px dashed #EA580C;border-radius:var(--radius-md);padding:10px 14px;margin-bottom:10px;display:none;" id="halbag-hinweis-eintragen">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
-          <span style="font-size:12px;color:#92400E;">⭐ Du hast noch keine feste AG (9.+10. Std.) eingetragen.</span>
-          <button onclick="openHalbjahresAGModal()" style="background:none;border:none;color:#EA580C;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;">Jetzt eintragen ›</button>
         </div>
       </div>
 
@@ -832,32 +788,6 @@
       </div>
       <p class="text-sm text-soft" style="margin-top:4px;">Automatisch generiertes Tier-Passwort · klicke 🎲 für ein anderes.</p>
     </div>
-    <div class="form-group" id="ms-halbag-group" style="display:none;background:#FFF7ED;border:1.5px solid #EA580C;border-radius:10px;padding:12px 14px;">
-      <label class="form-label" style="color:#7C2D12;">⭐ Feste AG (9.+10. Std.) – Halbjahr</label>
-      <p class="text-sm" style="color:#92400E;margin-bottom:8px;">Hier kann die feste AG des Schülers geändert oder entfernt werden.</p>
-      <div style="display:flex;gap:8px;margin-bottom:8px;">
-        <input type="text" id="ms-halbag" class="form-control" placeholder="z. B. Fußball-AG – leer lassen = AG entfernen" />
-        <button type="button" class="btn btn-danger btn-sm" onclick="document.getElementById('ms-halbag').value=''" title="AG entfernen">✕ Entfernen</button>
-      </div>
-      <label class="form-label" style="color:#7C2D12;font-size:12px;">Wochentag der AG</label>
-      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:5px;margin-top:4px;">
-        <label style="display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 2px;border:1.5px solid #FED7AA;border-radius:6px;cursor:pointer;font-size:11px;background:#fff;">
-          <input type="radio" name="ms-halbag-tag" value="1" style="accent-color:#EA580C;" /> Mo
-        </label>
-        <label style="display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 2px;border:1.5px solid #FED7AA;border-radius:6px;cursor:pointer;font-size:11px;background:#fff;">
-          <input type="radio" name="ms-halbag-tag" value="2" style="accent-color:#EA580C;" /> Di
-        </label>
-        <label style="display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 2px;border:1.5px solid #FED7AA;border-radius:6px;cursor:pointer;font-size:11px;background:#fff;">
-          <input type="radio" name="ms-halbag-tag" value="3" style="accent-color:#EA580C;" /> Mi
-        </label>
-        <label style="display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 2px;border:1.5px solid #FED7AA;border-radius:6px;cursor:pointer;font-size:11px;background:#fff;">
-          <input type="radio" name="ms-halbag-tag" value="4" style="accent-color:#EA580C;" /> Do
-        </label>
-        <label style="display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 2px;border:1.5px solid #FED7AA;border-radius:6px;cursor:pointer;font-size:11px;background:#fff;">
-          <input type="radio" name="ms-halbag-tag" value="5" style="accent-color:#EA580C;" /> Fr
-        </label>
-      </div>
-    </div>
     <div id="ms-error" class="text-sm" style="color:#A32D2D;display:none;margin-bottom:.5rem;"></div>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeSchuelerModal()">Abbrechen</button>
@@ -1082,7 +1012,6 @@ async function enterApp(){
       try{ladeDynamischeFaecher();}catch(e){console.error('ladeDynamischeFaecher:',e);}
       await ladeSchuljahrConfig();
       try{initSchuelerHeuteAnsicht();}catch(e){console.error('initSchuelerHeuteAnsicht:',e);}
-      try{initHalbjahresAGChip();}catch(e){console.error('initHalbjahresAGChip:',e);}
     }catch(e){
       console.error('Fehler beim Betreten der Schüleransicht:',e);
       const errEl=document.getElementById('login-error');
@@ -1496,12 +1425,6 @@ function loadPlanFuerTag(tag){
   }
   frHinweis.style.display=istFreitag?'block':'none';
 
-  // AG-Block und Hinweise ebenfalls ausblenden freitags
-  ['halbag-block','halbag-hinweis-andere-tage','halbag-hinweis-eintragen'].forEach(id=>{
-    const el=document.getElementById(id);
-    if(el&&istFreitag)el.style.display='none';
-  });
-
   // Speichern-Button freitags dauerhaft sperren
   if(saveBtn){
     if(istFreitag){
@@ -1522,31 +1445,9 @@ function loadPlanFuerTag(tag){
       const cfg=GRUPPEN[gr]||GRUPPEN.durchstarter;
       gewahlt={1:null,2:null,3:null,4:null};
 
-      // Feste AG vorbelegen – NUR am Wochentag an dem sie stattfindet
-      // (alte Einträge ohne Tag: immer vorbelegen, Rückwärtskompatibilität)
-      const ag=currentUserData.halbjahresAG;
-      const agTag=currentUserData.halbjahresAGTag;
-      let agHeute=false;
-      if(ag && agTag){
-        const [jahr,monat,tagNr]=tag.split('-').map(Number);
-        const d=new Date(jahr,monat-1,tagNr);
-        const dow=d.getDay();
-        if(dow===agTag){
-          agHeute=true;
-          const agE={name:'Feste AG: '+ag,sel:'sel-halbag',icon:'⭐',bg:'#FFF7ED',color:'#7C2D12'};
-          gewahlt[3]=agE; gewahlt[4]=agE;
-        }
-      } else if(ag && !agTag){
-        // Alter Eintrag ohne Tag - vorbelegen wie früher
-        agHeute=true;
-        const agE={name:'Feste AG: '+ag,sel:'sel-halbag',icon:'⭐',bg:'#FFF7ED',color:'#7C2D12'};
-        gewahlt[3]=agE; gewahlt[4]=agE;
-      }
-
-      // Feste ZS der Gruppe (Webuntis) – nur wenn heute nicht der AG-Tag ist
+      // Feste ZS der Gruppe (Webuntis)
       Object.entries(cfg.festZS||{}).forEach(([zs,val])=>{
         const n=parseInt(zs);
-        if((n===3||n===4)&&agHeute) return;
         if(val && val.icon && val.name) gewahlt[n]=val;
       });
 
@@ -1555,18 +1456,18 @@ function loadPlanFuerTag(tag){
             const d=snap.data();
             if(d.tag === tag){
               (cfg.freiZS||[1,2,3,4]).forEach(zs=>{
-                if(agHeute && (zs===3||zs===4)) return;
                 const val=d['zs'+zs];
-                if(val && val.name){
-                  gewahlt[zs]={
-                    name:   val.name,
-                    sel:    val.sel   || 'sel-default',
-                    icon:   val.icon  || '📌',
-                    bg:     val.bg    || '#F5F4F1',
-                    color:  val.color || '#1a1a1a',
-                    fachId: val.fachId|| null  // aus Firestore wiederherstellen
-                  };
-                }
+                if(!val || !val.name) return;
+                // Altlasten aus der entfernten "Feste AG"-Funktion ignorieren
+                if(String(val.name).startsWith('Feste AG')) return;
+                gewahlt[zs]={
+                  name:   val.name,
+                  sel:    val.sel   || 'sel-default',
+                  icon:   val.icon  || '📌',
+                  bg:     val.bg    || '#F5F4F1',
+                  color:  val.color || '#1a1a1a',
+                  fachId: val.fachId|| null  // aus Firestore wiederherstellen
+                };
               });
             }
           }
@@ -1576,7 +1477,6 @@ function loadPlanFuerTag(tag){
     }
 
     try{renderGewahlt();}catch(e){console.warn('renderGewahlt:',e);}
-    try{updateHalbAGAnzeige();}catch(e){}
     // Dynamische Chips neu rendern (Wochentag-Filter anwenden)
     renderDynamischeChips();
     // Ausleihe-Chips auf Verfügbarkeit prüfen (ausblenden wenn voll)
@@ -1609,14 +1509,11 @@ function loadPlanFuerTag(tag){
   });
 }
 // Angebote die als Doppelstunde über 9. + 10. Std. laufen
-const DOPPELSTUNDEN = ['Späte AG', 'Späte Lernzeit', 'Feste Halbjahres-AG'];
+const DOPPELSTUNDEN = ['Späte AG', 'Späte Lernzeit'];
 
-// Alle wählbaren Angebote (für Zuweisung durch Schulleitung)
-const ALLE_ANGEBOTE = [
-  'Mittagessen','Frühe Freizeit','Frühe AG','Frühe Lernzeit',
-  'Freizeit mit Nico','Spielausleihe',
-  'Späte Freizeit','Späte AG','Späte Lernzeit','Feste Halbjahres-AG'
-];
+// Angebote werden ausschließlich aus der Fächer-Sammlung geladen –
+// keine fest einprogrammierte Liste mehr (sonst entstehen Angebote ohne Fach-Eintrag)
+const ALLE_ANGEBOTE = [];
 const DOPPELSTUNDEN_FRUEH = ['Freizeit mit Nico']; // Doppelstunde 7. Std.+2
 // Ausleihe-Fächer: feste Buchung über eigenes Modal, klassenübergreifend
 const AUSLEIHE_FAECHER = ['Spielausleihe','Sportgeräteausleihe'];
@@ -2252,55 +2149,20 @@ function renderPlanTabelle(cont,schueler,planMap,tag){
   if(!schueler.length){cont.innerHTML='<p class="text-sm text-soft">Keine Schüler angelegt.</p>';return;}
   const ZS_KURZ=['7.','8.','9.','10.'];
 
-  // Wochentag des angezeigten Tages ermitteln (1=Mo...5=Fr), für Feste-AG-Ableitung
-  let wochentagDesTages=null;
-  if(tag){
-    const [jahr,monat,tagNr]=tag.split('-').map(Number);
-    wochentagDesTages=new Date(jahr,monat-1,tagNr).getDay();
-  }
-
   let html='<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;">';
   schueler.forEach(s=>{
     const plan=planMap[s.uid]||{};
 
-    // Feste AG ableiten: gilt nur am hinterlegten Wochentag
-    let agHeute=null;
-    if(s.halbjahresAG){
-      if(s.halbjahresAGTag && wochentagDesTages===s.halbjahresAGTag){
-        agHeute=s.halbjahresAG;
-      } else if(!s.halbjahresAGTag){
-        // Altdaten ohne Wochentag: immer anzeigen (Rückwärtskompatibilität)
-        agHeute=s.halbjahresAG;
-      }
-    }
-
-    html+=`<div style="border:0.5px solid var(--gray-border);border-radius:var(--radius-lg);overflow:hidden;${(s.halbjahresAG&&!s.halbjahresAGTag)?'border:1.5px solid #A32D2D;':''}">
+    html+=`<div style="border:0.5px solid var(--gray-border);border-radius:var(--radius-lg);overflow:hidden;">
       <div style="background:var(--gray-bg);padding:8px 12px;border-bottom:0.5px solid var(--gray-border);">
         <div style="font-weight:600;font-size:13px;color:var(--text);">${s.vorname} ${s.nachname}</div>
         <div style="display:flex;gap:5px;margin-top:4px;flex-wrap:wrap;">
           <span class="klasse-badge">${s.klasse}</span>${gruppenBadgeHtml(s.gruppe)}
-          ${(s.halbjahresAG&&!s.halbjahresAGTag)?'<span style="background:#FCEBEB;color:#A32D2D;font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px;">⚠️ AG ohne Wochentag!</span>':''}
         </div>
       </div>
       <div style="padding:8px 12px;display:flex;flex-direction:column;gap:5px;">`;
 
     [1,2,3,4].forEach((zs,i)=>{
-      // An ZS 3/4 hat die Feste AG (falls heute ihr Tag ist) Vorrang vor allem anderen
-      if((zs===3||zs===4) && agHeute){
-        if(zs===3){
-          html+=`<div style="display:flex;align-items:center;gap:6px;">
-            <span style="font-size:10px;font-weight:600;color:var(--text-lighter);width:28px;flex-shrink:0;">${ZS_KURZ[i]}</span>
-            <span style="background:#FFF7ED;color:#7C2D12;font-size:11px;font-weight:600;padding:3px 8px;border-radius:99px;flex:1;">⭐ ${agHeute} (Feste AG)</span>
-          </div>`;
-        } else {
-          html+=`<div style="display:flex;align-items:center;gap:6px;">
-            <span style="font-size:10px;font-weight:600;color:var(--text-lighter);width:28px;flex-shrink:0;">${ZS_KURZ[i]}</span>
-            <span style="background:#FFF7ED;color:#7C2D12;font-size:11px;font-weight:600;padding:3px 8px;border-radius:99px;flex:1;">⭐ ${agHeute} (Feste AG)</span>
-          </div>`;
-        }
-        return;
-      }
-
       const g=plan['zs'+zs];
       if(g){
         html+=`<div style="display:flex;align-items:center;gap:6px;">
@@ -2453,8 +2315,8 @@ function renderSchuelerListe(containerId,liste){
       <td class="text-soft" style="font-size:12px;">${s.email||''}</td>
       <td>
         <div class="flex-row" style="gap:6px;justify-content:flex-end;align-items:center;">
-          ${volleRechte?'':'<span style="font-size:11px;color:var(--text-lighter);margin-right:4px;" title="Nur Feste AG bearbeitbar – nicht deine Klasse"><i class="ti ti-lock" style="font-size:12px;"></i></span>'}
-          <button class="btn btn-secondary btn-sm" title="${volleRechte?'Bearbeiten':'Feste AG bearbeiten (nur diese, da nicht deine Klasse)'}" onclick="openSchuelerModal('${s.uid}')"><i class="ti ti-edit"></i></button>
+          ${volleRechte?'':'<span style="font-size:11px;color:var(--text-lighter);margin-right:4px;" title="Nicht deine Klasse – nur Ansicht"><i class="ti ti-lock" style="font-size:12px;"></i></span>'}
+          <button class="btn btn-secondary btn-sm" title="${volleRechte?'Bearbeiten':'Nur Ansicht – nicht deine Klasse'}" onclick="openSchuelerModal('${s.uid}')"><i class="ti ti-edit"></i></button>
           <button class="btn btn-secondary btn-sm" title="Passwort zurücksetzen" onclick="openPwResetModal('${s.uid}','${s.vorname} ${s.nachname}','schueler')"><i class="ti ti-key"></i></button>
           ${volleRechte?`<button class="btn btn-danger btn-sm" title="Löschen" onclick="deleteSchueler('${s.uid}','${s.vorname} ${s.nachname}')"><i class="ti ti-trash"></i></button>`:''}
         </div>
@@ -2471,17 +2333,14 @@ function openSchuelerModal(uid){
   if(uid){
     title.textContent='Schüler bearbeiten';
     document.getElementById('ms-pw-group').style.display='none';
-    // AG-Feld für Schulleitung immer zeigen, für Lehrer nur eigene Klassen
-    const zeigeAGFeld = currentRole==='leitung' || currentRole==='lehrer';
-    document.getElementById('ms-halbag-group').style.display= zeigeAGFeld ? 'block' : 'none';
     withFirebase(async({db,doc,getDoc})=>{
      try{
       const snap=await getDoc(doc(db,'users',uid));
       if(snap.exists()){
         const d=snap.data();
-        // Lehrer darf nur eigene Klassen bearbeiten (außer AG-Feld)
+        // Lehrer darf nur eigene Klassen bearbeiten
         if(currentRole==='lehrer' && !lehrerDarfBearbeiten(d.klasse)){
-          // Fremde Klasse: alle Felder sperren inkl. AG-Feld
+          // Fremde Klasse: alle Felder sperren
           document.getElementById('ms-vorname').value=d.vorname||'';
           document.getElementById('ms-nachname').value=d.nachname||'';
           document.getElementById('ms-klasse').value=d.klasse||'';
@@ -2491,8 +2350,6 @@ function openSchuelerModal(uid){
             const el=document.getElementById(id);
             if(el)el.disabled=true;
           });
-          // AG-Feld ebenfalls sperren (keine Berechtigung für fremde Klassen)
-          document.getElementById('ms-halbag-group').style.display='none';
           // Hinweis anzeigen
           showErr(document.getElementById('ms-error'),'⚠️ Klasse '+d.klasse+' ist dir nicht zugewiesen – nur Ansicht, keine Änderungen möglich.');
         } else {
@@ -2503,12 +2360,6 @@ function openSchuelerModal(uid){
           document.getElementById('ms-email').value=d.email||'';
         }
         document.getElementById('ms-email').disabled=true;
-        document.getElementById('ms-halbag').value=d.halbjahresAG||'';
-        // Wochentag-Radio setzen
-        const agTag=d.halbjahresAGTag||null;
-        document.querySelectorAll('input[name="ms-halbag-tag"]').forEach(r=>{
-          r.checked=(parseInt(r.value)===agTag);
-        });
       } else {
         toast('⚠️ Schülerdaten nicht gefunden (UID: '+uid+').');
       }
@@ -2520,12 +2371,10 @@ function openSchuelerModal(uid){
   }else{
     title.textContent='Schüler hinzufügen';
     document.getElementById('ms-pw-group').style.display='';
-    document.getElementById('ms-halbag-group').style.display='none';
     document.getElementById('ms-email').disabled=false;
     ['ms-vorname','ms-nachname','ms-klasse','ms-email'].forEach(id=>document.getElementById(id).value='');
     document.getElementById('ms-pw').value=genTierPasswort(); // automatisch generieren
     document.getElementById('ms-gruppe').value='durchstarter';
-    document.querySelectorAll('input[name="ms-halbag-tag"]').forEach(r=>{r.checked=false;});
   }
   document.getElementById('modal-schueler').classList.remove('hidden');
   // Zum Anfang scrollen
@@ -2570,34 +2419,14 @@ function saveSchueler(){
 
         const schuelerKlasse=schuelerSnap?.exists()?schuelerSnap.data().klasse:klasse;
 
-        // Lehrer darf nur Schüler eigener Klassen bearbeiten (inkl. AG-Feld)
+        // Lehrer darf nur Schüler eigener Klassen bearbeiten
         if(currentRole==='lehrer' && !lehrerDarfBearbeiten(schuelerKlasse)){
           showErr(err,'⛔ Du hast keine Berechtigung, Schüler der Klasse '+schuelerKlasse+' zu bearbeiten. Diese Klasse ist dir nicht zugewiesen.');
           err.scrollIntoView({behavior:'smooth',block:'center'});
           return;
         }
 
-        const halbagGroupSichtbar = document.getElementById('ms-halbag-group')?.style.display!=='none';
-        const halbagVal=document.getElementById('ms-halbag')?.value.trim()||null;
-        const halbagTagRadio=document.querySelector('input[name="ms-halbag-tag"]:checked');
-        const halbagTag=halbagTagRadio?parseInt(halbagTagRadio.value):null;
-
-        // Lehrer darf nur AG-Feld ändern, keine anderen Felder (bei fremden Klassen bereits oben geblockt)
-        // Bei eigenen Klassen: alle Felder erlaubt
-        const updateData = lehrerDarfBearbeiten(schuelerKlasse)||currentRole==='leitung'
-          ? {vorname,nachname,klasse,gruppe}
-          : {}; // Nur AG (wird unten hinzugefügt)
-
-        if(halbagGroupSichtbar){
-          if(halbagVal && !halbagTag){
-            showErr(err,'⚠️ Bitte den Wochentag für die Feste AG auswählen (Mo–Fr unter dem Namensfeld).');
-            err.scrollIntoView({behavior:'smooth',block:'center'});
-            return;
-          }
-          updateData.halbjahresAG = halbagVal||null;
-          updateData.halbjahresAGTag = halbagVal ? halbagTag : null;
-          updateData.halbjahresAGSeit = halbagVal ? isoDate(new Date()) : null;
-        }
+        const updateData={vorname,nachname,klasse,gruppe};
 
         await updateDoc(doc(db,'users',editSchuelerUid),updateData);
         toast('✓ Schüler aktualisiert.');
@@ -3352,7 +3181,6 @@ const ALLE_FAECHER=[
   {name:'Späte Lernzeit', icon:'📖', bg:'#EEEDFE',color:'#26215C'},
   {name:'Freizeit mit Nico',  icon:'🤸', bg:'#E1F5EE',color:'#085041'},
   {name:'Spielausleihe',       icon:'🎲', bg:'#F3E8FF',color:'#4C1D95'},
-  {name:'Feste Halbjahres-AG', icon:'⭐', bg:'#FFF7ED',color:'#7C2D12'},
 ];
 
 function getWochenRange(startMontag){
@@ -4984,20 +4812,79 @@ function openAngeboteModal(uid,name,angebote){
 
 function renderAngeboteCheckboxen(){
   const cont=document.getElementById('ma-checkboxen');
-  // Kombination aus festen Angeboten + Firestore-Fächern
+  cont.innerHTML='<p class="text-sm text-soft">Lade Fächer…</p>';
+
   withFirebase(async({db,getDocs,collection})=>{
-    const snaps=await getDocs(collection(db,'faecher'));
-    const dbFaecher=[];
-    snaps.forEach(s=>dbFaecher.push(s.data().name));
-    // Alle Angebote: fest definierte + aus Firestore + bereits zugewiesene
-    const alle=[...new Set([...ALLE_ANGEBOTE,...dbFaecher,...editAngeboteAuswahl])].sort();
-    cont.innerHTML=alle.map(a=>`
-      <label style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--gray-bg);border-radius:8px;cursor:pointer;font-size:14px;">
-        <input type="checkbox" value="${a}" ${editAngeboteAuswahl.includes(a)?'checked':''}
-          onchange="toggleAngebot('${a}',this.checked)"
-          style="width:16px;height:16px;accent-color:var(--orange);cursor:pointer;flex-shrink:0;" />
-        ${a}
-      </label>`).join('');
+    try{
+      const snaps=await getDocs(collection(db,'faecher'));
+      const faecher=[];
+      snaps.forEach(s=>{
+        const d=s.data();
+        if(!d.name) return;
+        faecher.push({
+          name:d.name,
+          icon:d.icon||'📌',
+          // Ein Fach ist erst für Schüler sichtbar wenn Zeitschiene UND Gruppen gesetzt sind
+          vollstaendig: !!(d.zeitschiene && Array.isArray(d.gruppen) && d.gruppen.length>0),
+          aktiv: d.aktiv!==false
+        });
+      });
+      // Doppelte Namen zusammenfassen
+      const nachName={};
+      faecher.forEach(f=>{ if(!nachName[f.name]) nachName[f.name]=f; });
+      const liste=Object.values(nachName).sort((a,b)=>a.name.localeCompare(b.name));
+      const vorhandeneNamen=new Set(liste.map(f=>f.name));
+
+      // Zugewiesene Angebote ohne zugehöriges Fach = Altlasten
+      const verwaist=editAngeboteAuswahl.filter(a=>!vorhandeneNamen.has(a));
+
+      let html='';
+
+      if(verwaist.length){
+        html+=`<div style="background:#FCEBEB;border:1.5px solid #A32D2D;border-radius:8px;padding:10px 12px;margin-bottom:10px;">
+          <div style="font-size:12px;font-weight:700;color:#7C2D12;margin-bottom:6px;">
+            ⚠️ ${verwaist.length} zugewiesene${verwaist.length===1?'s':''} Angebot${verwaist.length===1?'':'e'} ohne Fach-Eintrag
+          </div>
+          <p class="text-sm" style="color:#A32D2D;margin-bottom:8px;font-size:11px;">
+            Diese Namen existieren nicht im Reiter „Fächer" – Schüler können sie deshalb nicht wählen.
+            Lege sie unten neu an oder entferne die Zuweisung.
+          </p>`;
+        verwaist.forEach(a=>{
+          html+=`<div style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:#fff;border-radius:6px;margin-bottom:4px;">
+            <span style="flex:1;font-size:13px;color:#7C2D12;">${a}</span>
+            <button type="button" class="btn btn-danger btn-sm" style="font-size:11px;padding:3px 9px;"
+              onclick="toggleAngebot('${a.replace(/'/g,"\\'")}',false);renderAngeboteCheckboxen();">✕ Zuweisung entfernen</button>
+          </div>`;
+        });
+        html+='</div>';
+      }
+
+      if(!liste.length){
+        html+=`<p class="text-sm text-soft" style="padding:10px;background:var(--gray-bg);border-radius:8px;">
+          Es sind noch keine Fächer angelegt. Lege unten ein neues Angebot an – es wird automatisch
+          auch im Reiter „Fächer" eingetragen.</p>`;
+      } else {
+        html+=liste.map(f=>{
+          const gewaehlt=editAngeboteAuswahl.includes(f.name);
+          const warnung=!f.vollstaendig
+            ? '<span style="font-size:10px;font-weight:600;background:#FEF3C7;color:#92400E;padding:1px 7px;border-radius:99px;margin-left:6px;">unvollständig</span>'
+            : (!f.aktiv
+              ? '<span style="font-size:10px;font-weight:600;background:var(--gray-bg);color:var(--text-soft);padding:1px 7px;border-radius:99px;margin-left:6px;">inaktiv</span>'
+              : '');
+          return `<label style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--gray-bg);border-radius:8px;cursor:pointer;font-size:14px;margin-bottom:4px;">
+            <input type="checkbox" value="${f.name}" ${gewaehlt?'checked':''}
+              onchange="toggleAngebot('${f.name.replace(/'/g,"\\'")}',this.checked)"
+              style="width:16px;height:16px;accent-color:var(--orange);cursor:pointer;flex-shrink:0;" />
+            <span style="flex:1;">${f.icon} ${f.name}${warnung}</span>
+          </label>`;
+        }).join('');
+      }
+
+      cont.innerHTML=html;
+    }catch(e){
+      console.error('renderAngeboteCheckboxen:',e);
+      cont.innerHTML='<p class="text-sm" style="color:#A32D2D;">Fächer konnten nicht geladen werden: '+(e.message||e)+'</p>';
+    }
   });
 }
 
@@ -5025,8 +4912,19 @@ async function addNeuesAngebot(){
   if(!ALLE_ANGEBOTE.includes(name)) ALLE_ANGEBOTE.push(name);
   if(!editAngeboteAuswahl.includes(name)) editAngeboteAuswahl.push(name);
 
-  withFirebase(async({db,collection})=>{
+  withFirebase(async({db,collection,getDocs})=>{
     try{
+      // Prüfen ob ein Fach mit diesem Namen bereits existiert
+      const snaps=await getDocs(collection(db,'faecher'));
+      let existiert=false;
+      snaps.forEach(s=>{ if((s.data().name||'').toLowerCase()===name.toLowerCase()) existiert=true; });
+      if(existiert){
+        showErr(err,'Ein Fach mit diesem Namen existiert bereits – bitte oben in der Liste auswählen.');
+        editAngeboteAuswahl=editAngeboteAuswahl.filter(a=>a!==name);
+        renderAngeboteCheckboxen();
+        return;
+      }
+
       const {addDoc}=await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
       await addDoc(collection(db,'faecher'),{
         name, icon:'📌', sel,
@@ -5038,8 +4936,10 @@ async function addNeuesAngebot(){
         maxTeilnehmer:null, beschreibung:'', gruppen, wochentage:wochentage.length>0?wochentage:null, aktiv:true,
         createdAt:new Date().toISOString()
       });
-      toast('✓ Angebot „'+name+'" angelegt – erscheint jetzt bei Schülern!');
-      ladeDynamischeFaecher(); // direkt für aktuell offene Sessions aktualisieren (eigene Session)
+      toast('✓ „'+name+'" angelegt – erscheint jetzt auch im Reiter „Fächer" und bei den Schülern!');
+      ladeDynamischeFaecher();
+      renderAngeboteCheckboxen(); // Liste neu aufbauen, damit das Fach regulär erscheint
+      if(typeof loadFaecherListe==='function') loadFaecherListe();
     }catch(e){
       console.warn('Fach Firestore-Fehler:',e);
       showErr(err,'Fehler beim Speichern: '+(e.message||'unbekannt'));
@@ -5048,16 +4948,8 @@ async function addNeuesAngebot(){
   });
 
   input.value='';
-  document.getElementById('ma-neues-zeitschiene').value='';
-
-  // Checkbox sofort hinzufügen ohne neu zu laden
-  const cont=document.getElementById('ma-checkboxen');
-  const label=document.createElement('label');
-  label.style.cssText='display:flex;align-items:center;gap:10px;padding:8px 12px;background:#E1F5EE;border-radius:8px;cursor:pointer;font-size:14px;border:1px solid #1D9E75;';
-  label.innerHTML=`<input type="checkbox" checked style="width:16px;height:16px;accent-color:var(--orange);cursor:pointer;flex-shrink:0;"
-    onchange="toggleAngebot('${name}',this.checked)" /> ${name} <span style="font-size:11px;color:#085041;">(neu)</span>`;
-  cont.appendChild(label);
-  cont.scrollTop=cont.scrollHeight;
+  const zsEl=document.getElementById('ma-neues-zeitschiene');
+  if(zsEl) zsEl.value='';
 }
 
 function toggleAngebot(name,checked){
@@ -5258,226 +5150,6 @@ function loadAngebotMitAnwesenheit(tag,meineAngebote){
 
 function loadAngebotTeilnehmer(tag,meineAngebote){
   loadAngebotMitAnwesenheit(tag,meineAngebote);
-}
-
-// ═══ FESTE HALBJAHRES-AG (an einem bestimmten Wochentag) ═══
-const WOCHENTAG_NAMEN={1:'montags',2:'dienstags',3:'mittwochs',4:'donnerstags',5:'freitags'};
-const WOCHENTAG_KURZ={1:'Mo',2:'Di',3:'Mi',4:'Do',5:'Fr'};
-
-function openHalbjahresAGModal(){
-  const aktuell=currentUserData.halbjahresAG||null;
-  const agTag=currentUserData.halbjahresAGTag||null; // 1-5
-  const agSeitDatum=currentUserData.halbjahresAGSeit||null;
-  const input=document.getElementById('halbag-name-input');
-  const aktuellEl=document.getElementById('halbag-aktuell');
-  const loeschBtn=document.getElementById('halbag-loeschen-btn');
-  const saveBtn=document.querySelector('#modal-halbag .btn-primary');
-  const tagAuswahl=document.getElementById('halbag-tag-auswahl');
-  document.getElementById('halbag-error').style.display='none';
-
-  if(aktuell){
-    input.value=aktuell;
-    input.disabled=true;
-    // Tag-Radios sperren
-    tagAuswahl.querySelectorAll('input[type=radio]').forEach(r=>{
-      r.disabled=true;
-      r.checked=(parseInt(r.value)===agTag);
-    });
-
-    const hj2=schuljahrConfig.hj2Beginn||null;
-    const sjEnde=schuljahrConfig.sjEnde||null;
-    const heute=isoDate(new Date());
-    const istHj1=hj2&&heute<hj2;
-    const sperrtBis=istHj1?(hj2||'Halbjahresende'):(sjEnde||'Schuljahresende');
-    const eingetragen=agSeitDatum?new Date(agSeitDatum).toLocaleDateString('de-DE'):'diesem Halbjahr';
-    const tagText=agTag?WOCHENTAG_NAMEN[agTag]:'';
-
-    aktuellEl.innerHTML='✅ Eingetragen seit: <b>'+eingetragen+'</b><br>'
-      +'📅 Findet statt: <b>'+tagText+'</b><br>'
-      +'🔒 Gesperrt bis: <b>'+sperrtBis+'</b>';
-    aktuellEl.style.display='block';
-    aktuellEl.style.color='#085041';
-
-    if(saveBtn)saveBtn.style.display='none';
-    loeschBtn.style.display='none';
-
-  } else {
-    input.value='';
-    input.disabled=false;
-    tagAuswahl.querySelectorAll('input[type=radio]').forEach(r=>{r.disabled=false;r.checked=false;});
-    aktuellEl.style.display='none';
-    loeschBtn.style.display='none';
-    if(saveBtn)saveBtn.style.display='';
-  }
-  document.getElementById('modal-halbag').classList.remove('hidden');
-  if(!aktuell)setTimeout(()=>input.focus(),100);
-}
-function closeHalbjahresAGModal(){
-  document.getElementById('modal-halbag').classList.add('hidden');
-}
-function saveHalbjahresAG(){
-  const name=document.getElementById('halbag-name-input').value.trim();
-  const tagRadio=document.querySelector('input[name="halbag-tag"]:checked');
-  const err=document.getElementById('halbag-error');
-  err.style.display='none';
-  if(!name){showErr(err,'Bitte einen AG-Namen eingeben.');return;}
-  if(!tagRadio){showErr(err,'Bitte den Wochentag auswählen, an dem die AG stattfindet.');return;}
-  const tag=parseInt(tagRadio.value);
-
-  withFirebase(async({db,doc,updateDoc})=>{
-    try{
-      if(currentUserData.halbjahresAG){
-        showErr(err,'Du hast bereits eine Feste AG eingetragen. Änderungen sind für dieses Halbjahr gesperrt.');
-        return;
-      }
-      await updateDoc(doc(db,'users',currentUser.uid),{
-        halbjahresAG:name,
-        halbjahresAGTag:tag,
-        halbjahresAGSeit:isoDate(new Date())
-      });
-      currentUserData.halbjahresAG=name;
-      currentUserData.halbjahresAGTag=tag;
-      currentUserData.halbjahresAGSeit=isoDate(new Date());
-
-      updateHalbAGAnzeige();
-      // Aktuellen Tag neu laden, damit Block korrekt erscheint/verschwindet
-      if(activeTag) loadPlanFuerTag(activeTag);
-      toast('⭐ Feste AG „'+name+'" eingetragen für '+WOCHENTAG_NAMEN[tag]+'!');
-      closeHalbjahresAGModal();
-    }catch(e){showErr(err,'Fehler beim Speichern: '+e.message);}
-  });
-}
-function loescheHalbjahresAG(){
-  if(!confirm('Feste AG wirklich entfernen?'))return;
-  withFirebase(async({db,doc,updateDoc})=>{
-    await updateDoc(doc(db,'users',currentUser.uid),{
-      halbjahresAG:null, halbjahresAGTag:null, halbjahresAGSeit:null
-    });
-    currentUserData.halbjahresAG=null;
-    currentUserData.halbjahresAGTag=null;
-    updateHalbAGAnzeige();
-    if(activeTag) loadPlanFuerTag(activeTag);
-    toast('Feste AG entfernt.');
-    closeHalbjahresAGModal();
-  });
-}
-
-// Steuert Sichtbarkeit der drei Block-Varianten je nach aktivem Tag
-function updateHalbAGAnzeige(){
-  const ag=currentUserData.halbjahresAG;
-  const agTag=currentUserData.halbjahresAGTag;
-  const btn=document.getElementById('halbag-open-btn');
-
-  const blockEl=document.getElementById('halbag-block');
-  const hinweisAndereEl=document.getElementById('halbag-hinweis-andere-tage');
-  const hinweisEintragenEl=document.getElementById('halbag-hinweis-eintragen');
-
-  // Wochentag des aktiven Tages ermitteln (1=Mo...5=Fr)
-  // WICHTIG: "YYYY-MM-DD" als String wird von JS als UTC interpretiert -> Zeitzone kann Tag verschieben!
-  // Deshalb manuell als lokales Datum parsen.
-  let aktiverWochentag=null;
-  if(activeTag){
-    const [jahr,monat,tagNr]=activeTag.split('-').map(Number);
-    const d=new Date(jahr,monat-1,tagNr); // lokales Datum, keine UTC-Verschiebung
-    const dow=d.getDay(); // 0=So,1=Mo,...6=Sa
-    aktiverWochentag = dow>=1&&dow<=5 ? dow : null;
-  }
-
-  // Alle drei ausblenden, dann gezielt einblenden
-  if(blockEl)blockEl.style.display='none';
-  if(hinweisAndereEl)hinweisAndereEl.style.display='none';
-  if(hinweisEintragenEl)hinweisEintragenEl.style.display='none';
-
-  // 9./10. Std.-Blöcke: standardmäßig wieder einblenden, werden unten ggf. ausgeblendet
-  const zsWrap3=document.getElementById('zs-wrap-3');
-  const zsWrap4=document.getElementById('zs-wrap-4');
-  if(zsWrap3)zsWrap3.style.display='';
-  if(zsWrap4)zsWrap4.style.display='';
-
-  if(ag && agTag){
-    if(aktiverWochentag===agTag){
-      // Heute ist AG-Tag → vollen Block zeigen, 9./10. Std.-Felder ausblenden
-      if(blockEl)blockEl.style.display='block';
-      if(zsWrap3)zsWrap3.style.display='none';
-      if(zsWrap4)zsWrap4.style.display='none';
-      const statusEl=document.getElementById('halbag-status-anzeige');
-      const seit=currentUserData.halbjahresAGSeit;
-      const seitTxt=seit?new Date(seit).toLocaleDateString('de-DE'):'';
-      if(statusEl){
-        statusEl.innerHTML='<span style="font-size:14px;font-weight:600;color:#7C2D12;">⭐ '+ag+'</span>'
-          +'<span style="font-size:12px;color:#92400E;margin-left:6px;">· heute, 9.+10. Std.</span>'
-          +(seitTxt?'<div style="font-size:11px;color:var(--text-lighter);margin-top:2px;">Eingetragen am: '+seitTxt+'</div>':'');
-      }
-      if(btn)btn.textContent='🔒 Feste AG ansehen';
-    } else {
-      // Anderer Tag → kleiner Hinweis dass AG an anderem Tag ist, 9./10. Std. bleiben normal wählbar
-      if(hinweisAndereEl){
-        hinweisAndereEl.style.display='block';
-        document.getElementById('halbag-hinweis-name').textContent=ag;
-        document.getElementById('halbag-hinweis-tag').textContent=WOCHENTAG_NAMEN[agTag];
-      }
-    }
-  } else if(ag && !agTag){
-    // Alte AG ohne Wochentag (vor diesem Update eingetragen) → immer anzeigen + 9./10. Std. ausblenden
-    // ABER: deutliche Warnung, da dies vermutlich nicht gewünscht ist
-    if(blockEl){
-      blockEl.style.display='block';
-      blockEl.style.borderColor='#A32D2D';
-    }
-    if(zsWrap3)zsWrap3.style.display='none';
-    if(zsWrap4)zsWrap4.style.display='none';
-    const statusEl=document.getElementById('halbag-status-anzeige');
-    if(statusEl){
-      statusEl.innerHTML='<span style="font-size:14px;font-weight:600;color:#7C2D12;">⭐ '+ag+'</span>'
-        +'<div style="background:#FCEBEB;border:1px solid #A32D2D;border-radius:6px;padding:8px 10px;margin-top:6px;font-size:12px;color:#A32D2D;font-weight:600;">'
-        +'⚠️ KEIN WOCHENTAG HINTERLEGT – diese AG wird deshalb fälschlich an jedem Tag angezeigt!<br>'
-        +'<span style="font-weight:400;">Bitte Lehrkraft/Schulleitung bitten, im Bearbeiten-Formular den Wochentag (Mo–Fr) nachzutragen.</span>'
-        +'</div>';
-    }
-    if(btn)btn.textContent='🔒 Feste AG ansehen';
-  } else {
-    // Keine AG eingetragen → den vollen Block mit Eintragen-Button anzeigen
-    // (nicht nur einen kleinen Hinweis - der Button muss klar sichtbar sein!)
-    if(blockEl)blockEl.style.display='block';
-    const statusEl=document.getElementById('halbag-status-anzeige');
-    if(statusEl){
-      statusEl.innerHTML='<span style="font-size:13px;color:var(--text-soft);">Noch keine feste AG eingetragen.</span>';
-    }
-    if(btn)btn.textContent='✏️ Feste AG eintragen';
-  }
-}
-
-// Dropdown mit allen Schulwochen befüllen
-function befuelleWochenDropdown(sel, gesamtWochen){
-  if(!schuljahrConfig.sjBeginn)return;
-  const gs=gesamtWochen||getGesamtSchulwochen()||40;
-  const startMo=getMontag(new Date(schuljahrConfig.sjBeginn));
-  sel.innerHTML='<option value="">— Schulwoche wählen —</option>';
-  for(let w=1;w<=gs;w++){
-    const wMo=new Date(startMo);wMo.setDate(startMo.getDate()+(w-1)*7);
-    const wFr=new Date(wMo);wFr.setDate(wMo.getDate()+4);
-    const key=isoDate(wMo);
-    // Ferien?
-    const istFerien=(schuljahrConfig.ferien||[]).some(f=>f.von&&f.bis&&new Date(f.von)<=wMo&&new Date(f.bis)>=wMo);
-    const swLabel=w+'. Schulwoche'+(istFerien?' 🌴':'')
-      +' · '+wMo.getDate()+'.'+String(wMo.getMonth()+1).padStart(2,'0')+'.'
-      +' – '+wFr.getDate()+'.'+String(wFr.getMonth()+1).padStart(2,'0')+'.'+wFr.getFullYear();
-    const opt=document.createElement('option');
-    opt.value=key;
-    opt.textContent=swLabel;
-    if(istFerien)opt.style.color='#92400E';
-    sel.appendChild(opt);
-  }
-}
-
-// (Alte updateHalbAGAnzeige entfernt - aktuelle Version mit Wochentag-Logik weiter oben)
-
-// Halbjahres-AG beim App-Start nachladen
-function initHalbjahresAGChip(){
-  // gewahlt[3]/[4] werden bereits korrekt tagesabhängig in loadPlanFuerTag() gesetzt.
-  // Hier nur die Anzeige (Block/Hinweis) aktualisieren - KEINE gewahlt-Manipulation mehr,
-  // da das sonst die Wochentag-Logik überschreibt und die AG an jedem Tag zeigt.
-  updateHalbAGAnzeige();
 }
 
 // ═══ SPIELAUSLEIHE – LEHRER-ÜBERSICHT ═══
@@ -5877,49 +5549,6 @@ function savePwReset(){
   </div>
 </div>
 
-<!-- ═══ MODAL: FESTE HALBJAHRES-AG ═══ -->
-<div id="modal-halbag" class="modal-backdrop hidden">
-  <div class="modal">
-    <div class="modal-title">⭐ Feste Halbjahres-AG</div>
-    <p class="text-sm text-soft" style="margin-bottom:.875rem;">
-      Diese AG gilt für das gesamte Halbjahr und belegt die 9. und 10. Std. als Doppelstunde –
-      an dem Wochentag, an dem sie stattfindet.
-    </p>
-    <div class="form-group">
-      <label class="form-label">Name deiner AG</label>
-      <input type="text" id="halbag-name-input" class="form-control"
-             placeholder="z. B. Fußball-AG, Theater-AG, Robotik-AG …"
-             onkeydown="if(event.key==='Enter')saveHalbjahresAG()" />
-    </div>
-    <div class="form-group">
-      <label class="form-label">An welchem Wochentag findet die AG statt?</label>
-      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:4px;" id="halbag-tag-auswahl">
-        <label style="display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 4px;border:1.5px solid var(--gray-border);border-radius:8px;cursor:pointer;font-size:12px;">
-          <input type="radio" name="halbag-tag" value="1" style="accent-color:#EA580C;" /> Mo
-        </label>
-        <label style="display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 4px;border:1.5px solid var(--gray-border);border-radius:8px;cursor:pointer;font-size:12px;">
-          <input type="radio" name="halbag-tag" value="2" style="accent-color:#EA580C;" /> Di
-        </label>
-        <label style="display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 4px;border:1.5px solid var(--gray-border);border-radius:8px;cursor:pointer;font-size:12px;">
-          <input type="radio" name="halbag-tag" value="3" style="accent-color:#EA580C;" /> Mi
-        </label>
-        <label style="display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 4px;border:1.5px solid var(--gray-border);border-radius:8px;cursor:pointer;font-size:12px;">
-          <input type="radio" name="halbag-tag" value="4" style="accent-color:#EA580C;" /> Do
-        </label>
-        <label style="display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 4px;border:1.5px solid var(--gray-border);border-radius:8px;cursor:pointer;font-size:12px;">
-          <input type="radio" name="halbag-tag" value="5" style="accent-color:#EA580C;" /> Fr
-        </label>
-      </div>
-    </div>
-    <div id="halbag-aktuell" class="text-sm" style="color:#085041;display:none;margin-bottom:.5rem;"></div>
-    <div id="halbag-error" class="text-sm" style="color:#A32D2D;display:none;margin-bottom:.5rem;"></div>
-    <div class="modal-actions">
-      <button class="btn btn-secondary" onclick="closeHalbjahresAGModal()">Abbrechen</button>
-      <button class="btn btn-danger btn-sm" id="halbag-loeschen-btn" onclick="loescheHalbjahresAG()" style="display:none;">Entfernen</button>
-      <button class="btn btn-primary" onclick="saveHalbjahresAG()"><i class="ti ti-check"></i> Speichern</button>
-    </div>
-  </div>
-</div>
 
 <!-- ═══ MODAL: ANGEBOTE ZUWEISEN (Schulleitung) ═══ -->
 <div id="modal-angebote" class="modal-backdrop hidden">
@@ -5929,6 +5558,10 @@ function savePwReset(){
 
     <div class="form-group">
       <label class="form-label">Bestehende Angebote auswählen</label>
+      <p class="text-sm text-soft" style="font-size:11px;margin-bottom:6px;">
+        Zeigt alle Fächer aus dem Reiter „Fächer". Ein hier neu angelegtes Angebot wird
+        automatisch auch dort eingetragen – es gibt nur eine gemeinsame Fächerliste.
+      </p>
       <div id="ma-checkboxen" style="display:flex;flex-direction:column;gap:6px;max-height:220px;overflow-y:auto;"></div>
     </div>
 
