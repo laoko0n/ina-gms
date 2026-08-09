@@ -5372,6 +5372,7 @@ async function addNeuesAngebot(){
         isDoppelstunde:isDoppel,
         isEinzelnWaehlbar:istEinzeln,
         maxTeilnehmer, beschreibung:'', gruppen, wochentage:wochentage.length>0?wochentage:null, aktiv:true,
+        alleLehrer:document.getElementById('ma-neues-alle-lehrer')?.checked||false,
         createdAt:new Date().toISOString()
       });
       toast('✓ „'+name+'" angelegt'+(maxTeilnehmer?(' · max. '+maxTeilnehmer+' Teilnehmer'):'')+' – erscheint jetzt auch im Reiter „Fächer"!');
@@ -5401,6 +5402,8 @@ async function addNeuesAngebot(){
   if(zsEl) zsEl.value='';
   const maxEl=document.getElementById('ma-neues-max');
   if(maxEl) maxEl.value='';
+  const alEl=document.getElementById('ma-neues-alle-lehrer');
+  if(alEl) alEl.checked=false;
 }
 
 function toggleAngebot(name,checked){
@@ -6281,6 +6284,12 @@ function savePwReset(){
         Schüler sehen am Chip wie viele Plätze frei sind. Ist die Zahl erreicht, ist das Fach nicht mehr wählbar.
       </p>
 
+      <label style="display:flex;align-items:center;gap:7px;font-size:12px;cursor:pointer;margin-bottom:8px;
+        background:#E1F5EE;border:1.5px solid #1D9E75;border-radius:8px;padding:7px 10px;">
+        <input type="checkbox" id="ma-neues-alle-lehrer" style="accent-color:#1D9E75;width:15px;height:15px;flex-shrink:0;" />
+        <span>👥 <b>Für alle Lehrkräfte sichtbar</b> – jede Lehrkraft sieht die Teilnehmer</span>
+      </label>
+
       <label class="form-label" style="font-size:12px;">Für welche Gruppen? *</label>
       <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
         <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;padding:5px 9px;border:1px solid var(--gray-border);border-radius:7px;">
@@ -6509,11 +6518,19 @@ function savePwReset(){
     <div class="form-group">
       <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
         <input type="checkbox" id="fm-aktiv" checked style="accent-color:var(--orange);width:16px;height:16px;" />
+        <span><b>Fach aktiv</b> – wird den Schülern zur Wahl angeboten</span>
+      </label>
+    </div>
+
+    <div class="form-group" style="background:#E1F5EE;border:1.5px solid #1D9E75;border-radius:10px;padding:10px 14px;">
       <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
         <input type="checkbox" id="fm-alle-lehrer" style="accent-color:#1D9E75;width:16px;height:16px;" />
-        <span><b>Alle Lehrkräfte</b> können die Belegung dieses Fachs sehen</span>
+        <span><b>👥 Für alle Lehrkräfte sichtbar</b></span>
       </label>
-      <p class="text-sm text-soft" style="margin-top:4px;margin-left:24px;">Wenn aktiv, können alle eingeloggten Lehrer dieses Fach im Angebot-Tab sehen – ohne individuelle Zuweisung.</p>
+      <p class="text-sm" style="margin-top:4px;margin-left:24px;color:#085041;font-size:11px;">
+        Jede Lehrkraft sieht dieses Fach im Reiter „INA-Angebot" mit Teilnehmerliste und kann dort
+        die Anwesenheit erfassen – ohne dass du es einzeln zuweisen musst.
+      </p>
     </div>
 
     <div id="fm-error" class="text-sm" style="color:#A32D2D;display:none;margin-bottom:.5rem;"></div>
