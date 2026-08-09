@@ -457,6 +457,9 @@
       <div class="card">
         <div class="card-title"><i class="ti ti-clipboard-x"></i> Fehlzeiten meiner Schüler</div>
         <div style="display:flex;gap:8px;margin-bottom:.75rem;flex-wrap:wrap;">
+          <select id="l-fehlzeiten-filter" class="form-control" style="max-width:200px;" onchange="loadFehlzeitenUebersicht('l')">
+            <option value="all">Alle Klassen</option>
+          </select>
           <select id="l-fehlzeiten-zeitraum" class="form-control" style="max-width:200px;" onchange="loadFehlzeitenUebersicht('l')">
             <option value="all">Gesamtes Schuljahr</option>
             <option value="hj1">1. Halbjahr</option>
@@ -686,7 +689,7 @@
         <p class="text-sm text-soft" style="margin-bottom:.75rem;">Übersicht aller Fehlzeiten – entschuldigt (Tage/Stunden) und unentschuldigt.</p>
         <div style="display:flex;gap:8px;margin-bottom:.75rem;flex-wrap:wrap;">
           <select id="sl-fehlzeiten-filter" class="form-control" style="max-width:200px;" onchange="loadFehlzeitenUebersicht('sl')">
-            <option value="all">Alle Schüler</option>
+            <option value="all">Alle Klassen</option>
           </select>
           <select id="sl-fehlzeiten-zeitraum" class="form-control" style="max-width:200px;" onchange="loadFehlzeitenUebersicht('sl')">
             <option value="all">Gesamtes Schuljahr</option>
@@ -1045,7 +1048,8 @@ function leereKontoAnsichten(){
   if(typeof _angebotFilter!=='undefined') _angebotFilter='angebot';
 
   // Klassenfilter zurücksetzen damit die Vorauswahl neu greift
-  ['l-klassen-filter','sl-klassen-filter','l-schueler-klassen-filter'].forEach(id=>{
+  ['l-klassen-filter','sl-klassen-filter','l-schueler-klassen-filter',
+   'l-fehlzeiten-filter','sl-fehlzeiten-filter'].forEach(id=>{
     const sel=document.getElementById(id);
     if(sel){sel.innerHTML='<option value="">Alle Klassen</option>';delete sel.dataset.initialisiert;}
   });
@@ -4636,6 +4640,23 @@ async function loadFehlzeitenUebersicht(rolle){
         const meineKlassen=currentUserData.klassen||[];
         schueler=schueler.filter(s=>meineKlassen.includes(s.klasse));
       }
+
+      // Klassen-Dropdown befüllen (Auswahl bleibt erhalten)
+      const klassenSel=document.getElementById(rolle+'-fehlzeiten-filter');
+      if(klassenSel){
+        const gewaehlt=klassenSel.value||'all';
+        const klassen=[...new Set(schueler.map(s=>s.klasse).filter(Boolean))].sort((a,b)=>{
+          const nA=parseInt(a),nB=parseInt(b);
+          if(nA!==nB)return nA-nB;
+          return a.localeCompare(b);
+        });
+        klassenSel.innerHTML='<option value="all">Alle Klassen</option>'+
+          klassen.map(k=>`<option value="${k}"${k===gewaehlt?' selected':''}>Klasse ${k}</option>`).join('');
+        // Falls die vorher gewählte Klasse nicht mehr existiert: zurück auf "alle"
+        if(gewaehlt!=='all'&&!klassen.includes(gewaehlt)) klassenSel.value='all';
+        // Auf gewählte Klasse einschränken
+        if(klassenSel.value!=='all') schueler=schueler.filter(s=>s.klasse===klassenSel.value);
+      }
     }
     schueler.sort((a,b)=>(a.klasse+a.nachname).localeCompare(b.klasse+b.nachname));
 
@@ -4729,7 +4750,9 @@ async function loadFehlzeitenUebersicht(rolle){
     });
 
     if(!irgendwer){
-      html+='<p class="text-sm text-soft">Keine Fehlzeiten erfasst.</p>';
+      const selEl=document.getElementById(rolle+'-fehlzeiten-filter');
+      const klasseTxt=(selEl&&selEl.value!=='all')?' in Klasse '+selEl.value:'';
+      html+='<p class="text-sm text-soft" style="padding:12px;background:var(--gray-bg);border-radius:8px;">✓ Keine Fehlzeiten erfasst'+klasseTxt+'.</p>';
     }
     html+='</div>';
     cont.innerHTML=html;
@@ -5098,6 +5121,9 @@ async function addNeuesAngebot(){
         return;
       }
 
+      const maxRoh=document.getElementById('ma-neues-max')?.value;
+      const maxTeilnehmer=(maxRoh&&parseInt(maxRoh)>0)?parseInt(maxRoh):null;
+
       const {addDoc}=await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
       await addDoc(collection(db,'faecher'),{
         name, icon:'📌', sel,
@@ -5106,10 +5132,10 @@ async function addNeuesAngebot(){
         zeitschieneName:zsNummern.map(z=>({1:'7. Std.',2:'8. Std.',3:'9. Std.',4:'10. Std.'}[z])).join(istEinzeln?' + ':'+'),
         isDoppelstunde:isDoppel,
         isEinzelnWaehlbar:istEinzeln,
-        maxTeilnehmer:null, beschreibung:'', gruppen, wochentage:wochentage.length>0?wochentage:null, aktiv:true,
+        maxTeilnehmer, beschreibung:'', gruppen, wochentage:wochentage.length>0?wochentage:null, aktiv:true,
         createdAt:new Date().toISOString()
       });
-      toast('✓ „'+name+'" angelegt – erscheint jetzt auch im Reiter „Fächer" und bei den Schülern!');
+      toast('✓ „'+name+'" angelegt'+(maxTeilnehmer?(' · max. '+maxTeilnehmer+' Teilnehmer'):'')+' – erscheint jetzt auch im Reiter „Fächer"!');
       ladeDynamischeFaecher();
       renderAngeboteCheckboxen(); // Liste neu aufbauen, damit das Fach regulär erscheint
       if(typeof loadFaecherListe==='function') loadFaecherListe();
@@ -5123,6 +5149,8 @@ async function addNeuesAngebot(){
   input.value='';
   const zsEl=document.getElementById('ma-neues-zeitschiene');
   if(zsEl) zsEl.value='';
+  const maxEl=document.getElementById('ma-neues-max');
+  if(maxEl) maxEl.value='';
 }
 
 function toggleAngebot(name,checked){
@@ -5947,6 +5975,14 @@ function savePwReset(){
         <option value="3,4">9.+10. Std. 🔁 Doppelstunde</option>
         <option value="einzeln:3,4">9. + 10. Std. – einzeln wählbar ✓</option>
       </select>
+
+      <label class="form-label" style="font-size:12px;">Max. Teilnehmerzahl</label>
+      <input type="number" id="ma-neues-max" class="form-control" min="1" max="200" step="1"
+        placeholder="leer = unbegrenzt"
+        style="margin-bottom:4px;font-size:13px;" />
+      <p class="text-sm text-soft" style="font-size:11px;margin-bottom:8px;">
+        Schüler sehen am Chip wie viele Plätze frei sind. Ist die Zahl erreicht, ist das Fach nicht mehr wählbar.
+      </p>
 
       <label class="form-label" style="font-size:12px;">Für welche Gruppen? *</label>
       <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
