@@ -562,8 +562,9 @@
       <div class="card">
         <div class="card-title"><i class="ti ti-user-off"></i> Abwesende Lehrkräfte &amp; Ausfälle</div>
         <p class="text-sm text-soft" style="margin-bottom:.75rem;">
-          Markiere hier, welche Lehrkräfte heute fehlen. Ihre Angebote werden für diesen Tag
-          automatisch aus der Schülerwahl genommen.
+          Tippe bei einer Lehrkraft auf <b>✗ Abwesend</b>, wenn sie heute fehlt. Ihre Angebote werden
+          für diesen Tag automatisch aus der Schülerwahl genommen. Ein Klick auf <b>✓ Anwesend</b> nimmt
+          den Eintrag wieder zurück.
         </p>
 
         <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:1rem;">
@@ -3146,8 +3147,12 @@ function changePassword(currentId,newId,confirmId,errId){
       toast('Passwort geändert ✓');
       [currentId,newId,confirmId].forEach(id=>document.getElementById(id).value='');
     }catch(e){
-      if(e.code==='auth/wrong-password'||e.code==='auth/invalid-credential')showErr(err,'Aktuelles Passwort falsch.');
-      else showErr(err,'Fehler: '+e.message);toast('❌ Fach konnte nicht gespeichert werden: '+e.message, true);
+      if(e.code==='auth/wrong-password'||e.code==='auth/invalid-credential'){
+        showErr(err,'Aktuelles Passwort falsch.');
+      } else {
+        showErr(err,'Fehler: '+e.message);
+        toast('❌ Passwort konnte nicht geändert werden.',true);
+      }
     }
   });
 }
@@ -3970,8 +3975,15 @@ function loadLehrerStats(){
 let editFachId=null;
 
 function loadFaecherListe(){
-  withFirebase(async({db,getDocs,collection})=>{
-    const snaps=await getDocs(collection(db,'faecher'));
+  withFirebase(async({db,getDocs,getDocsFromServer,collection})=>{
+    // Direkt vom Server lesen – der lokale Zwischenspeicher kann sonst eine
+    // veraltete Fassung liefern, etwa direkt nach dem Anlegen eines Fachs
+    let snaps;
+    try{
+      snaps=await getDocsFromServer(collection(db,'faecher'));
+    }catch(e){
+      snaps=await getDocs(collection(db,'faecher')); // Rückfallebene
+    }
     const liste=[];
     const unvollstaendig=[];
     snaps.forEach(s=>{
@@ -4007,7 +4019,8 @@ function renderFaecherListe(liste, unvollstaendig=[]){
         ${isSystem?'<span style="font-size:10px;font-weight:600;color:#085041;background:#E1F5EE;padding:1px 6px;border-radius:99px;margin-left:4px;">System</span>':''}
       </td>
       <td style="font-size:12px;color:var(--text-soft);">${f.zeitschieneName||f.zeitschiene||'–'}${f.isDoppelstunde?' 🔁':''}${f.isEinzelnWaehlbar?' <span style="color:var(--orange);font-weight:600;">(einzeln)</span>':''}${f.wochentage&&f.wochentage.length?' · <span style="color:#085041;font-size:11px;">'+f.wochentage.map(t=>(['','Mo','Di','Mi','Do'][t])).join(', ')+'</span>':''}</td>
-      <td><span style="background:var(--orange-light);color:var(--orange-dark);font-size:12px;font-weight:600;padding:2px 8px;border-radius:99px;">${f.maxTeilnehmer||'∞'}</span></td>
+      <td><span title="${f.maxTeilnehmer?'Maximal '+f.maxTeilnehmer+' Schüler pro Tag':'Unbegrenzt – keine Teilnehmerzahl hinterlegt'}"
+        style="background:${f.maxTeilnehmer?'var(--orange-light)':'var(--gray-bg)'};color:${f.maxTeilnehmer?'var(--orange-dark)':'var(--text-lighter)'};font-size:12px;font-weight:600;padding:2px 8px;border-radius:99px;">${f.maxTeilnehmer||'∞'}</span></td>
       <td style="font-size:13px;">${gruppenAnzeige}</td>
       <td>${aktiv?'<span style="color:#1D9E75;font-size:12px;font-weight:600;">● aktiv</span>':'<span style="color:var(--text-lighter);font-size:12px;">○ inaktiv</span>'}
         ${f.alleLehrer?'<br><span style="font-size:10px;font-weight:600;color:#085041;background:#E1F5EE;padding:1px 6px;border-radius:99px;">👥 Alle Lehrkräfte</span>':''}
@@ -5142,15 +5155,17 @@ function _renderAusfallListe(alleLehrerFaecher){
       <div style="flex:1;min-width:140px;">
         <div style="font-size:13px;font-weight:600;color:${abwesend?'#7C2D12':'var(--text-main)'};">
           ${l.vorname} ${l.nachname}${l.role==='leitung'?' <span style="font-size:10px;opacity:.7;">(SL)</span>':''}
+          ${abwesend?'<span style="font-size:10px;font-weight:700;background:#A32D2D;color:#fff;padding:1px 7px;border-radius:99px;margin-left:6px;">abwesend</span>':''}
         </div>
         <div style="font-size:11px;color:${abwesend?'#A32D2D':'var(--text-soft)'};">${angeboteTxt}</div>
       </div>
       <button onclick="toggleLehrerAbwesend('${l.uid}')"
-        style="padding:6px 14px;border-radius:99px;border:1.5px solid;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;
+        title="${abwesend?'Doch anwesend – Eintrag zurücknehmen':'Diese Lehrkraft als abwesend eintragen'}"
+        style="padding:6px 16px;border-radius:99px;border:1.5px solid;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;
         ${abwesend
-          ? 'background:#A32D2D;border-color:#A32D2D;color:#fff;'
-          : 'background:#fff;border-color:var(--gray-border);color:var(--text-soft);'}">
-        ${abwesend?'✗ Fehlt heute':'✓ Anwesend'}
+          ? 'background:#fff;border-color:#1D9E75;color:#085041;'
+          : 'background:#fff;border-color:#A32D2D;color:#A32D2D;'}">
+        ${abwesend?'✓ Anwesend':'✗ Abwesend'}
       </button>
     </div>`;
   }).join('');
@@ -5573,9 +5588,12 @@ function renderAngeboteCheckboxen(){
   const cont=document.getElementById('ma-checkboxen');
   cont.innerHTML='<p class="text-sm text-soft">Lade Fächer…</p>';
 
-  withFirebase(async({db,getDocs,collection})=>{
+  withFirebase(async({db,getDocs,getDocsFromServer,collection})=>{
     try{
-      const snaps=await getDocs(collection(db,'faecher'));
+      // Vom Server lesen, damit ein soeben angelegtes Fach sofort korrekt erscheint
+      let snaps;
+      try{ snaps=await getDocsFromServer(collection(db,'faecher')); }
+      catch(e){ snaps=await getDocs(collection(db,'faecher')); }
       const faecher=[];
       snaps.forEach(s=>{
         const d=s.data();
@@ -5583,6 +5601,7 @@ function renderAngeboteCheckboxen(){
         faecher.push({
           name:d.name,
           icon:d.icon||'📌',
+          maxTeilnehmer:d.maxTeilnehmer||null,
           // Ein Fach ist erst für Schüler sichtbar wenn Zeitschiene UND Gruppen gesetzt sind
           vollstaendig: !!(d.zeitschiene && Array.isArray(d.gruppen) && d.gruppen.length>0),
           aktiv: d.aktiv!==false
@@ -5631,11 +5650,14 @@ function renderAngeboteCheckboxen(){
             : (!f.aktiv
               ? '<span style="font-size:10px;font-weight:600;background:var(--gray-bg);color:var(--text-soft);padding:1px 7px;border-radius:99px;margin-left:6px;">inaktiv</span>'
               : '');
+          const kapBadge=f.maxTeilnehmer
+            ? `<span style="font-size:10px;font-weight:600;background:#E6F1FB;color:#0C447C;padding:1px 7px;border-radius:99px;margin-left:6px;">max. ${f.maxTeilnehmer}</span>`
+            : '<span style="font-size:10px;color:var(--text-lighter);margin-left:6px;">∞</span>';
           return `<label style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--gray-bg);border-radius:8px;cursor:pointer;font-size:14px;margin-bottom:4px;">
             <input type="checkbox" value="${f.name}" ${gewaehlt?'checked':''}
               onchange="toggleAngebot('${f.name.replace(/'/g,"\\'")}',this.checked)"
               style="width:16px;height:16px;accent-color:var(--orange);cursor:pointer;flex-shrink:0;" />
-            <span style="flex:1;">${f.icon} ${f.name}${warnung}</span>
+            <span style="flex:1;">${f.icon} ${f.name}${kapBadge}${warnung}</span>
           </label>`;
         }).join('');
       }
@@ -5668,6 +5690,13 @@ async function addNeuesAngebot(){
   const isDoppel=!istEinzeln && zsNummern.length>1;
   const sel='sel-custom-'+name.toLowerCase().replace(/[^a-z0-9]/g,'-').slice(0,20);
 
+  // WICHTIG: Alle Feldwerte JETZT auslesen. Die Felder werden am Ende dieser
+  // Funktion geleert – der Speichervorgang läuft aber asynchron weiter und
+  // würde sonst bereits geleerte Felder lesen (Teilnehmerzahl ging verloren).
+  const maxRoh=document.getElementById('ma-neues-max')?.value;
+  const maxTeilnehmer=(maxRoh&&parseInt(maxRoh)>0)?parseInt(maxRoh):null;
+  const alleLehrer=document.getElementById('ma-neues-alle-lehrer')?.checked||false;
+
   // Sofort zur Auswahl hinzufügen
   if(!ALLE_ANGEBOTE.includes(name)) ALLE_ANGEBOTE.push(name);
   if(!editAngeboteAuswahl.includes(name)) editAngeboteAuswahl.push(name);
@@ -5685,11 +5714,8 @@ async function addNeuesAngebot(){
         return;
       }
 
-      const maxRoh=document.getElementById('ma-neues-max')?.value;
-      const maxTeilnehmer=(maxRoh&&parseInt(maxRoh)>0)?parseInt(maxRoh):null;
-
-      const {addDoc}=await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
-      await addDoc(collection(db,'faecher'),{
+      const {addDoc,getDoc:getDoc2}=await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+      const neuerRef=await addDoc(collection(db,'faecher'),{
         name, icon:'📌', sel,
         bg:'#FAECE7', color:'#4A1B0C',
         zeitschiene:zsWert,
@@ -5697,10 +5723,23 @@ async function addNeuesAngebot(){
         isDoppelstunde:isDoppel,
         isEinzelnWaehlbar:istEinzeln,
         maxTeilnehmer, beschreibung:'', gruppen, wochentage:wochentage.length>0?wochentage:null, aktiv:true,
-        alleLehrer:document.getElementById('ma-neues-alle-lehrer')?.checked||false,
+        alleLehrer,
         createdAt:new Date().toISOString()
       });
-      toast('✓ „'+name+'" angelegt'+(maxTeilnehmer?(' · max. '+maxTeilnehmer+' Teilnehmer'):'')+' – erscheint jetzt auch im Reiter „Fächer"!');
+
+      // Kontrolle: tatsächlich gespeicherten Wert zurücklesen und melden
+      let gespeicherteZahl=null;
+      try{
+        const kontrolle=await getDoc2(neuerRef);
+        gespeicherteZahl=kontrolle.exists()?(kontrolle.data().maxTeilnehmer??null):null;
+      }catch(e){}
+
+      const kapText = gespeicherteZahl
+        ? ' · max. '+gespeicherteZahl+' Teilnehmer ✓ gespeichert'
+        : (maxTeilnehmer
+            ? ' · ⚠️ Teilnehmerzahl konnte nicht gespeichert werden'
+            : ' · unbegrenzt');
+      toast('✓ „'+name+'" angelegt'+kapText+' – siehe Reiter „Fächer".');
 
       // Zuweisung sofort speichern, damit sie nicht verloren geht wenn
       // das Fenster ohne "Speichern" geschlossen wird
