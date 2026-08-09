@@ -303,6 +303,8 @@
         <div style="font-size:13px;font-weight:600;color:#92400E;">⏳ Wählen ist ab <b>12:55 Uhr</b> möglich</div>
         <div style="font-size:22px;font-weight:800;color:#EA580C;margin-top:2px;font-variant-numeric:tabular-nums;" id="s-countdown-zeit">–:––</div>
       </div>
+      <!-- Ausgefallene Angebote (Lehrkraft abwesend) -->
+      <div id="s-ausfall-banner" style="display:none;background:#FFF7ED;border:1.5px solid #EA580C;border-radius:10px;padding:10px 14px;margin-bottom:.5rem;"></div>
       <!-- Wahl bereits verbindlich gespeichert -->
       <div id="s-gesperrt-banner" style="display:none;background:#E6F1FB;border:1.5px solid #0C447C;border-radius:10px;padding:10px 14px;margin-bottom:.5rem;text-align:center;">
         <div style="font-size:13px;font-weight:700;color:#0C447C;">🔒 Deine Wahl für diesen Tag ist gespeichert</div>
@@ -556,6 +558,31 @@
       </div>
     </div>
 
+    <div id="sl-tab-ausfall" class="hidden">
+      <div class="card">
+        <div class="card-title"><i class="ti ti-user-off"></i> Abwesende Lehrkräfte &amp; Ausfälle</div>
+        <p class="text-sm text-soft" style="margin-bottom:.75rem;">
+          Markiere hier, welche Lehrkräfte heute fehlen. Ihre Angebote werden für diesen Tag
+          automatisch aus der Schülerwahl genommen.
+        </p>
+
+        <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:1rem;">
+          <div>
+            <label class="form-label" style="font-size:12px;">Tag</label>
+            <input type="date" id="sl-ausfall-datum" class="form-control"
+              style="max-width:180px;font-size:13px;padding:6px 10px;" onchange="loadAusfallTag()" />
+          </div>
+          <button class="btn btn-secondary btn-sm" onclick="ausfallHeute()">Heute</button>
+          <button class="btn btn-secondary btn-sm" onclick="alleAnwesendSetzen()" style="font-size:11px;">
+            ✓ Alle als anwesend zurücksetzen
+          </button>
+        </div>
+
+        <div id="sl-ausfall-zusammenfassung" style="margin-bottom:1rem;"></div>
+        <div id="sl-ausfall-liste"><p class="text-sm text-soft">Lade…</p></div>
+      </div>
+    </div>
+
     <div id="sl-tab-faecher" class="hidden">
       <div class="card">
         <div class="card-title flex-row">
@@ -732,6 +759,7 @@
     <button class="nav-btn active" id="sl-nav-uebersicht" onclick="slShowTab('uebersicht')"><i class="ti ti-layout-grid"></i>Pläne</button>
     <button class="nav-btn" id="sl-nav-schueler" onclick="slShowTab('schueler')"><i class="ti ti-users"></i>Schüler</button>
     <button class="nav-btn" id="sl-nav-lehrer" onclick="slShowTab('lehrer')"><i class="ti ti-chalkboard"></i>Lehrkräfte</button>
+    <button class="nav-btn" id="sl-nav-ausfall" onclick="slShowTab('ausfall')"><i class="ti ti-user-off"></i>Ausfall<span id="sl-ausfall-badge" style="display:none;background:#A32D2D;color:#fff;font-size:10px;font-weight:700;padding:1px 5px;border-radius:99px;margin-left:4px;"></span></button>
     <button class="nav-btn" id="sl-nav-faecher" onclick="slShowTab('faecher')"><i class="ti ti-books"></i>Fächer</button>
     <button class="nav-btn" id="sl-nav-angebot" onclick="slShowTab('angebot')"><i class="ti ti-clipboard-check"></i>Mein Angebot</button>
     <button class="nav-btn" id="sl-nav-fehlzeiten" onclick="slShowTab('fehlzeiten')"><i class="ti ti-clipboard-x"></i>Fehlzeiten</button>
@@ -1566,6 +1594,8 @@ function loadPlanFuerTag(tag){
     try{renderGewahlt();}catch(e){console.warn('renderGewahlt:',e);}
     // Dynamische Chips neu rendern (Wochentag-Filter anwenden)
     renderDynamischeChips();
+    // Ausfälle für diesen Tag laden (blendet betroffene Angebote aus)
+    ladeAusfallFuerTag(tag);
     // Ausleihe-Chips auf Verfügbarkeit prüfen (ausblenden wenn voll)
     setTimeout(()=>pruefeAusleiheChips(),500);
 
@@ -1627,6 +1657,11 @@ const DOPPELSTUNDEN_FRUEH = ['Freizeit mit Nico']; // Doppelstunde 7. Std.+2
 const AUSLEIHE_FAECHER = ['Spielausleihe','Sportgeräteausleihe'];
 
 function waehlen(zs,name,sel,icon,bg,color,fachId,maxTeilnehmer){
+  // Angebot fällt heute aus (Lehrkraft abwesend)
+  if(_ausgefalleneFaecher.includes(name)){
+    toast('⛔ '+name+' fällt heute aus – die Lehrkraft ist abwesend.',true);
+    return;
+  }
   // Wahl für diesen Tag bereits verbindlich gespeichert
   if(_planGesperrt){
     toast('🔒 Deine Wahl für diesen Tag wurde gespeichert und kann nicht mehr geändert werden.',true);
@@ -1805,17 +1840,47 @@ function _waehlenAusfuehren(zs,name,sel,icon,bg,color,fachId){
     // Doppelstunde: 10. Std. automatisch gleich setzen
     gewahlt[4]={name,sel,icon,bg,color,fachId};
     const w4=document.getElementById('zs-wrap-4');
-    w4.classList.add('zs-doppel');
-    setTimeout(()=>w4.classList.remove('zs-doppel'),2000);
+    if(w4){w4.classList.add('zs-doppel');setTimeout(()=>w4.classList.remove('zs-doppel'),2000);}
     const emoji = name==='Späte AG' ? '🎭' : '📖';
     toast(emoji+' '+name+' als Doppelstunde: 9. + 10. Std. automatisch gewählt!');
-  } else if(zs===3 && !DOPPELSTUNDEN.includes(name)){
-    // Kein Doppelstunden-Angebot gewählt → 10. Std. zurücksetzen (wenn frei)
-    if(GRUPPEN[g].freiZS.includes(4)){
-      gewahlt[4]=null;
+  } else {
+    // Allgemeine Doppelstunde: gilt für jedes Fach, das in den Fächer-Einstellungen
+    // als Doppelstunde angelegt wurde – nicht nur für fest hinterlegte Namen
+    const partner=_doppelstundenPartner(zs,fachId,name);
+    if(partner && (GRUPPEN[g]?.freiZS||[]).includes(partner)){
+      gewahlt[partner]={name,sel,icon,bg,color,fachId};
+      const wp=document.getElementById('zs-wrap-'+partner);
+      if(wp){wp.classList.add('zs-doppel');setTimeout(()=>wp.classList.remove('zs-doppel'),2000);}
+      const stdA={1:'7.',2:'8.',3:'9.',4:'10.'}[zs];
+      const stdB={1:'7.',2:'8.',3:'9.',4:'10.'}[partner];
+      toast('🔁 '+name+' ist eine Doppelstunde: '+stdA+' + '+stdB+' Std. gewählt.');
+    } else if(zs===3 && !DOPPELSTUNDEN.includes(name)){
+      // Kein Doppelstunden-Angebot gewählt → 10. Std. zurücksetzen (wenn frei)
+      if((GRUPPEN[g]?.freiZS||[]).includes(4) && gewahlt[4] && gewahlt[4].name!==name){
+        // nur löschen wenn dort eine Doppelstunden-Altwahl steht
+        const alt=gewahlt[4];
+        if(alt && (DOPPELSTUNDEN.includes(alt.name)||_istDoppelstundenFach(alt.fachId,alt.name))) gewahlt[4]=null;
+      }
     }
   }
   renderGewahlt();
+}
+
+// Ermittelt die Partnerstunde, wenn ein Fach als Doppelstunde angelegt ist
+function _doppelstundenPartner(zs,fachId,name){
+  const f=(dynamischeFaecher||[]).find(x=>(fachId&&x.id===fachId)||x.name===name);
+  if(!f||!f.isDoppelstunde) return null;
+  const nums=String(f.zeitschiene||'').split(',').map(Number).filter(n=>!isNaN(n));
+  if(nums.length<2) return null;
+  const pos=nums.indexOf(zs);
+  if(pos<0) return null;
+  // Partner ist die jeweils andere Stunde des Blocks
+  return nums.find(n=>n!==zs)||null;
+}
+
+function _istDoppelstundenFach(fachId,name){
+  const f=(dynamischeFaecher||[]).find(x=>(fachId&&x.id===fachId)||x.name===name);
+  return !!(f&&f.isDoppelstunde);
 }
 function renderGewahlt(){
   // Ungültige Einträge in gewahlt bereinigen
@@ -2041,7 +2106,7 @@ function lShowTab(tab){
   if(tab==='meldungen')     loadMeldungen();
 }
 function slShowTab(tab){
-  ['uebersicht','schueler','lehrer','faecher','angebot','fehlzeiten','einstellungen','pw'].forEach(t=>{
+  ['uebersicht','schueler','lehrer','ausfall','faecher','angebot','fehlzeiten','einstellungen','pw'].forEach(t=>{
     const tabEl=document.getElementById('sl-tab-'+t);
     const navEl=document.getElementById('sl-nav-'+t);
     if(tabEl)tabEl.classList.toggle('hidden',t!==tab);
@@ -2051,6 +2116,7 @@ function slShowTab(tab){
   if(tab==='faecher')       loadFaecherListe();
   if(tab==='fehlzeiten')    loadFehlzeitenUebersicht('sl');
   if(tab==='angebot')       initLeitungAngebotTab();
+  if(tab==='ausfall')       initAusfallTab();
 }
 function sShowTab(tab){
   ['plan','stats','fehlzeiten','pw'].forEach(t=>{
@@ -5000,6 +5066,262 @@ async function loadFehlzeitenUebersicht(rolle){
 // ═══ DYNAMISCHE FÄCHER AUS FIRESTORE ═══
 let dynamischeFaecher=[];
 
+// ═══ AUSFALL: ABWESENDE LEHRKRÄFTE ═══
+// Speicherung: Dokument je Tag in Collection 'ausfall', ID = Datum (JJJJ-MM-TT)
+let _ausfallAbwesend=[];   // UIDs der heute abwesenden Lehrkräfte
+let _ausfallLehrer=[];     // alle Lehrkräfte (Cache)
+
+function ausfallHeute(){
+  const el=document.getElementById('sl-ausfall-datum');
+  if(el){el.value=isoDate(new Date());loadAusfallTag();}
+}
+
+function initAusfallTab(){
+  const el=document.getElementById('sl-ausfall-datum');
+  if(el && !el.value) el.value=isoDate(new Date());
+  loadAusfallTag();
+}
+
+function loadAusfallTag(){
+  const tag=document.getElementById('sl-ausfall-datum')?.value;
+  const liste=document.getElementById('sl-ausfall-liste');
+  if(!tag||!liste)return;
+  liste.innerHTML='<p class="text-sm text-soft">Lade…</p>';
+
+  withFirebase(async({db,getDocs,collection,doc,getDoc})=>{
+    try{
+      const [userSnaps,fachSnaps,ausfallSnap]=await Promise.all([
+        getDocs(collection(db,'users')),
+        getDocs(collection(db,'faecher')),
+        getDoc(doc(db,'ausfall',tag))
+      ]);
+
+      _ausfallLehrer=[];
+      userSnaps.forEach(s=>{
+        const d=s.data();
+        if(d.role==='lehrer'||d.role==='leitung'){
+          _ausfallLehrer.push({uid:s.id,...d});
+        }
+      });
+      _ausfallLehrer.sort((a,b)=>(a.nachname||'').localeCompare(b.nachname||''));
+
+      _ausfallAbwesend=ausfallSnap.exists()?(ausfallSnap.data().lehrerUids||[]):[];
+
+      // Fächer mit "alle Lehrkräfte" fallen nie aus
+      const alleLehrerFaecher=new Set();
+      fachSnaps.forEach(s=>{
+        const d=s.data();
+        if(d.alleLehrer===true && d.name) alleLehrerFaecher.add(d.name);
+      });
+
+      _renderAusfallListe(alleLehrerFaecher);
+      _renderAusfallZusammenfassung(alleLehrerFaecher,tag);
+      _aktualisiereAusfallBadge();
+    }catch(e){
+      console.error('loadAusfallTag:',e);
+      liste.innerHTML='<p class="text-sm" style="color:#A32D2D;">Fehler: '+(e.message||e)+'</p>';
+    }
+  });
+}
+
+function _renderAusfallListe(alleLehrerFaecher){
+  const cont=document.getElementById('sl-ausfall-liste');
+  if(!cont)return;
+  if(!_ausfallLehrer.length){
+    cont.innerHTML='<p class="text-sm text-soft">Keine Lehrkräfte angelegt.</p>';
+    return;
+  }
+  cont.innerHTML=_ausfallLehrer.map(l=>{
+    const abwesend=_ausfallAbwesend.includes(l.uid);
+    const angebote=(l.angebote||[]).filter(a=>!alleLehrerFaecher.has(a));
+    const angeboteTxt=angebote.length
+      ? angebote.join(', ')
+      : '<span style="font-style:italic;">keine eigenen Angebote</span>';
+    return `<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;flex-wrap:wrap;margin-bottom:6px;
+        background:${abwesend?'#FCEBEB':'var(--gray-bg)'};border:1.5px solid ${abwesend?'#A32D2D':'var(--gray-border)'};">
+      <div style="flex:1;min-width:140px;">
+        <div style="font-size:13px;font-weight:600;color:${abwesend?'#7C2D12':'var(--text-main)'};">
+          ${l.vorname} ${l.nachname}${l.role==='leitung'?' <span style="font-size:10px;opacity:.7;">(SL)</span>':''}
+        </div>
+        <div style="font-size:11px;color:${abwesend?'#A32D2D':'var(--text-soft)'};">${angeboteTxt}</div>
+      </div>
+      <button onclick="toggleLehrerAbwesend('${l.uid}')"
+        style="padding:6px 14px;border-radius:99px;border:1.5px solid;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;
+        ${abwesend
+          ? 'background:#A32D2D;border-color:#A32D2D;color:#fff;'
+          : 'background:#fff;border-color:var(--gray-border);color:var(--text-soft);'}">
+        ${abwesend?'✗ Fehlt heute':'✓ Anwesend'}
+      </button>
+    </div>`;
+  }).join('');
+}
+
+function _renderAusfallZusammenfassung(alleLehrerFaecher,tag){
+  const cont=document.getElementById('sl-ausfall-zusammenfassung');
+  if(!cont)return;
+  const ausfallende=_berechneAusfallendeFaecher(alleLehrerFaecher);
+  if(!ausfallende.length){
+    cont.innerHTML='<div style="background:#E1F5EE;border:1.5px solid #1D9E75;border-radius:10px;padding:10px 14px;font-size:13px;color:#085041;">✓ Für diesen Tag fallen keine Angebote aus.</div>';
+    return;
+  }
+  cont.innerHTML=`<div style="background:#FCEBEB;border:1.5px solid #A32D2D;border-radius:10px;padding:10px 14px;">
+    <div style="font-size:13px;font-weight:700;color:#7C2D12;margin-bottom:4px;">
+      ⚠️ ${ausfallende.length} Angebot${ausfallende.length===1?'':'e'} fällt für diesen Tag aus
+    </div>
+    <div style="font-size:12px;color:#A32D2D;">${ausfallende.join(' · ')}</div>
+    <p class="text-sm" style="font-size:11px;color:#92400E;margin-top:6px;">
+      Diese Angebote sind für Schüler an diesem Tag nicht mehr wählbar.
+      Schüler, die bereits gewählt haben, werden oben im Plan darauf hingewiesen.
+    </p>
+  </div>`;
+}
+
+// Ein Fach fällt aus, wenn ALLE Lehrkräfte, die es anbieten, abwesend sind
+function _berechneAusfallendeFaecher(alleLehrerFaecher){
+  const anbieter={}; // Fachname → [uids]
+  _ausfallLehrer.forEach(l=>{
+    (l.angebote||[]).forEach(a=>{
+      if(alleLehrerFaecher&&alleLehrerFaecher.has(a))return; // für alle sichtbar → fällt nie aus
+      if(!anbieter[a]) anbieter[a]=[];
+      anbieter[a].push(l.uid);
+    });
+  });
+  return Object.entries(anbieter)
+    .filter(([,uids])=>uids.length>0 && uids.every(u=>_ausfallAbwesend.includes(u)))
+    .map(([name])=>name)
+    .sort();
+}
+
+function toggleLehrerAbwesend(uid){
+  _ausfallAbwesend=_ausfallAbwesend.includes(uid)
+    ? _ausfallAbwesend.filter(u=>u!==uid)
+    : [..._ausfallAbwesend,uid];
+  _speichereAusfall();
+}
+
+function alleAnwesendSetzen(){
+  if(!_ausfallAbwesend.length){toast('Es ist niemand als abwesend eingetragen.');return;}
+  if(!confirm('Alle Lehrkräfte für diesen Tag wieder als anwesend eintragen?'))return;
+  _ausfallAbwesend=[];
+  _speichereAusfall();
+}
+
+function _speichereAusfall(){
+  const tag=document.getElementById('sl-ausfall-datum')?.value;
+  if(!tag)return;
+
+  withFirebase(async({db,doc,setDoc,getDocs,collection})=>{
+    try{
+      // Ausfallende Fächer mitspeichern, damit die Schüleransicht sie
+      // ohne zusätzliche Abfragen ausblenden kann
+      const fachSnaps=await getDocs(collection(db,'faecher'));
+      const alleLehrerFaecher=new Set();
+      fachSnaps.forEach(s=>{
+        const d=s.data();
+        if(d.alleLehrer===true&&d.name) alleLehrerFaecher.add(d.name);
+      });
+      const ausfallendeFaecher=_berechneAusfallendeFaecher(alleLehrerFaecher);
+
+      await setDoc(doc(db,'ausfall',tag),{
+        tag,
+        lehrerUids:_ausfallAbwesend,
+        faecher:ausfallendeFaecher,
+        updatedAt:new Date().toISOString(),
+        updatedBy:currentUser?.uid||null
+      });
+
+      _renderAusfallListe(alleLehrerFaecher);
+      _renderAusfallZusammenfassung(alleLehrerFaecher,tag);
+      _aktualisiereAusfallBadge();
+      toast('✓ Gespeichert – '+(ausfallendeFaecher.length?ausfallendeFaecher.length+' Angebot(e) fallen aus':'keine Ausfälle'));
+    }catch(e){
+      toast('❌ Speichern fehlgeschlagen: '+(e.message||e),true);
+    }
+  });
+}
+
+function _aktualisiereAusfallBadge(){
+  const badge=document.getElementById('sl-ausfall-badge');
+  if(!badge)return;
+  const n=_ausfallAbwesend.length;
+  badge.textContent=n||'';
+  badge.style.display=n>0?'':'none';
+}
+
+// Für den angezeigten Tag ausgefallene Fächer (Lehrkraft abwesend)
+let _ausgefalleneFaecher=[];
+
+// Lädt die Ausfallliste für einen Tag und baut die Chips neu
+function ladeAusfallFuerTag(tag){
+  if(!tag){_ausgefalleneFaecher=[];return;}
+  withFirebase(async({db,doc,getDoc})=>{
+    try{
+      const snap=await getDoc(doc(db,'ausfall',tag));
+      _ausgefalleneFaecher=snap.exists()?(snap.data().faecher||[]):[];
+    }catch(e){
+      _ausgefalleneFaecher=[];
+    }
+    _zeigeAusfallHinweis();
+    renderDynamischeChips();
+    renderGewahlt();
+  });
+}
+
+function _zeigeAusfallHinweis(){
+  const el=document.getElementById('s-ausfall-banner');
+  if(!el)return;
+  if(!_ausgefalleneFaecher.length){el.style.display='none';return;}
+
+  // Welche eigenen Wahlen sind betroffen?
+  const betroffeneZS=[1,2,3,4].filter(zs=>{
+    const n=gewahlt[zs]?.name;
+    return n && _ausgefalleneFaecher.includes(n);
+  });
+  const betroffeneNamen=[...new Set(betroffeneZS.map(zs=>gewahlt[zs].name))];
+
+  el.style.display='';
+
+  if(!betroffeneZS.length){
+    el.innerHTML=`<div style="font-size:12px;color:#92400E;">ℹ️ Heute fällt aus: ${_ausgefalleneFaecher.join(', ')}</div>`;
+    return;
+  }
+
+  // Betroffene Stunden leeren und Tag wieder freigeben, damit neu gewählt werden kann
+  const warGesperrt=_planGesperrt;
+  betroffeneZS.forEach(zs=>{ gewahlt[zs]=null; });
+  _planGesperrt=false;
+  _entsperrePlanUI();
+
+  const stdTxt=betroffeneZS.map(zs=>({1:'7.',2:'8.',3:'9.',4:'10.'}[zs])).join(', ');
+  el.innerHTML=`<div style="font-size:13px;font-weight:700;color:#7C2D12;">⚠️ Dein Angebot fällt heute aus</div>
+    <div style="font-size:12px;color:#A32D2D;margin-top:2px;">
+      ${betroffeneNamen.join(', ')} entfällt (${stdTxt} Std.) – die Lehrkraft ist abwesend.
+    </div>
+    <div style="font-size:12px;color:#7C2D12;margin-top:4px;font-weight:600;">
+      ${warGesperrt
+        ? '🔓 Deine Wahl wurde für diesen Tag wieder freigegeben. Bitte wähle neu und speichere erneut.'
+        : 'Bitte wähle für diese Stunde etwas anderes.'}
+    </div>`;
+
+  if(warGesperrt) toast('🔓 Wahl wieder freigegeben – dein Angebot fällt heute aus.',true);
+}
+
+// Hebt die Sperre in der Oberfläche auf (Gegenstück zur Sperre in loadPlanFuerTag)
+function _entsperrePlanUI(){
+  const sb=document.getElementById('save-btn');
+  if(sb){
+    sb.disabled=false;
+    sb.style.opacity='';
+    sb.style.cursor='';
+    sb.innerHTML='<i class="ti ti-device-floppy"></i> Plan speichern';
+  }
+  const bereich=document.getElementById('s-plan-chips-area');
+  if(bereich){bereich.style.opacity='';bereich.style.pointerEvents='';}
+  document.querySelectorAll('.fach-chip').forEach(c=>{c.style.cursor='';});
+  const sperrBanner=document.getElementById('s-gesperrt-banner');
+  if(sperrBanner) sperrBanner.style.display='none';
+}
+
 function ladeDynamischeFaecher(){
   withFirebase(async({db,getDocs,collection})=>{
     try{
@@ -5032,6 +5354,8 @@ function renderDynamischeChips(){
   document.querySelectorAll('.fach-chip-dyn').forEach(c=>c.remove());
 
   dynamischeFaecher.forEach(f=>{
+    // Fach fällt heute aus (Lehrkraft abwesend) → nicht anbieten
+    if(_ausgefalleneFaecher.includes(f.name)) return;
     if(f.gruppen && !f.gruppen.includes(gruppe)) return;
 
     const schuelerKlasse=currentUserData?.klasse||'';
@@ -5068,7 +5392,11 @@ function renderDynamischeChips(){
       if(f.maxTeilnehmer) btn.setAttribute('data-max',f.maxTeilnehmer);
 
       // Chip-Inhalt mit Kapazitäts-Badge wenn maxTeilnehmer gesetzt
-      const labelText=(f.icon||'📌')+' '+f.name+(isDoppel?' 🔁':'');
+      const stdKurz={1:'7.',2:'8.',3:'9.',4:'10.'};
+      const doppelHinweis=isDoppel
+        ? ' 🔁 '+stdKurz[zsNummern[0]]+'+'+stdKurz[zsNummern[1]]
+        : '';
+      const labelText=(f.icon||'📌')+' '+f.name+doppelHinweis;
       if(f.maxTeilnehmer){
         btn.innerHTML=`<span class="chip-label">${labelText}</span><span class="chip-kap-badge" id="kap-${chipKey.replace(/[^a-z0-9]/gi,'_')}">… / ${f.maxTeilnehmer}</span>`;
       } else {
@@ -5080,12 +5408,9 @@ function renderDynamischeChips(){
         if(istAusleihe){
           openAusleiheModal(f.name, zs);
         } else {
+          // Doppelstunden werden in _waehlenAusfuehren gesetzt – nur dort ist sicher,
+          // dass die Wahl auch wirklich angenommen wurde (Kapazität, Sperren, Rückfragen)
           waehlen(zs, f.name, f.sel||'sel-custom', f.icon||'📌', f.bg||'#FAECE7', f.color||'#4A1B0C', f.id, f.maxTeilnehmer||null);
-          if(isDoppel){
-            const zsZwei=zsNummern[1];
-            gewahlt[zsZwei]={name:f.name,sel:f.sel||'sel-custom',icon:f.icon||'📌',bg:f.bg||'#FAECE7',color:f.color||'#4A1B0C',fachId:f.id};
-            renderGewahlt();
-          }
         }
       };
       container.appendChild(btn);
