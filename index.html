@@ -806,12 +806,6 @@
         </p>
       </div>
     </div>
-    <div class="form-group" style="background:#FFF7ED;border:1.5px solid #EA580C;border-radius:10px;padding:10px 14px;">
-      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
-        <input type="checkbox" id="ml-klassenlehrer" style="accent-color:#EA580C;width:16px;height:16px;" />
-        <span><b>Ist Klassenlehrer/in</b> – sieht Abwesenheitsmeldungen seiner Klassen im Meldungen-Tab</span>
-      </label>
-    </div>
     <div id="ml-error" class="text-sm" style="color:#A32D2D;display:none;margin-bottom:.5rem;"></div>
     <div style="display:flex;gap:8px;">
       <button class="btn btn-secondary" style="flex:1;" onclick="closeLehrerModal()">Abbrechen</button>
@@ -872,57 +866,6 @@
   </div>
 </div>
 
-<!-- ═══ MODAL: LEHRER KLASSEN ZUWEISEN ═══ -->
-<div id="modal-lehrer-klassen" class="modal-backdrop hidden">
-  <div class="modal" style="max-width:480px;">
-    <div class="modal-title" id="mlk-titel">Klassen zuweisen</div>
-    <p class="text-sm text-soft" style="margin-bottom:.75rem;" id="mlk-name"></p>
-
-    <!-- Alle Klassen Button -->
-    <div style="margin-bottom:.75rem;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-      <button class="btn btn-secondary btn-sm" onclick="setAlleKlassen()" style="background:#E1F5EE;border-color:#1D9E75;color:#085041;">
-        👥 Alle Klassen auswählen
-      </button>
-      <button class="btn btn-secondary btn-sm" onclick="editLehrerKlassen=[];renderKlassenTags()">
-        ✕ Alle entfernen
-      </button>
-    </div>
-
-    <!-- Schnellauswahl vorhandener Klassen -->
-    <div class="form-group">
-      <label class="form-label">Schnellauswahl</label>
-      <div id="mlk-schnellauswahl" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;"></div>
-    </div>
-
-    <div class="form-group">
-      <label class="form-label">Zugewiesene Klassen</label>
-      <div class="klassen-tags" id="mlk-tags"></div>
-      <div class="klassen-add-row" style="margin-top:8px;">
-        <input type="text" id="mlk-input" class="form-control" placeholder="Klasse eingeben (z. B. 7a)" style="flex:1;" />
-        <button class="btn btn-primary btn-sm" onclick="addKlassenTag()"><i class="ti ti-plus"></i> Hinzufügen</button>
-      </div>
-    </div>
-
-    <!-- Klassenlehrer-Option -->
-    <div class="form-group" style="background:#FFF7ED;border:1.5px solid #EA580C;border-radius:10px;padding:10px 14px;">
-      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
-        <input type="checkbox" id="mlk-klassenlehrer" style="accent-color:#EA580C;width:16px;height:16px;" />
-        <span><b>Ist Klassenlehrer/in</b> – sieht Abwesenheitsmeldungen seiner Klassen</span>
-      </label>
-      <div id="mlk-klassenlehrer-klassen" style="display:none;margin-top:8px;">
-        <label class="form-label" style="font-size:11px;">Klassenlehrer-Klasse(n)</label>
-        <div id="mlk-kl-tags" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:4px;"></div>
-        <p class="text-sm text-soft" style="margin-top:4px;">Wird automatisch aus den zugewiesenen Klassen übernommen – oder hier anpassen.</p>
-      </div>
-    </div>
-
-    <div id="mlk-error" class="text-sm" style="color:#A32D2D;display:none;margin-bottom:.5rem;"></div>
-    <div class="modal-actions">
-      <button class="btn btn-secondary" onclick="closeKlassenModal()">Abbrechen</button>
-      <button class="btn btn-primary" onclick="saveKlassen()">Speichern</button>
-    </div>
-  </div>
-</div>
 
 <script>
 // ═══ GRUPPEN ═══
@@ -2847,13 +2790,12 @@ function saveLehrer(){
         if(currentUser?.uid!==adminUser2?.uid){currentUser=adminUser2;currentRole=adminRole2;currentUserData=adminData2;}
 
         // Firestore-Dokument mit Admin-Session schreiben
-        const istKlassenlehrer=document.getElementById('ml-klassenlehrer')?.checked||false;
         await setDoc(doc(db,'users',newUid),{
           vorname,nachname,email,
           role:'lehrer',
           klassen:[],
           angebote:[],
-          istKlassenlehrer,
+          istKlassenlehrer:false, // wird über „Angebote & Klassenleitung" gesetzt
           mustSetPassword:true,
           passwort:pw,
           createdAt:new Date().toISOString()
@@ -2997,8 +2939,7 @@ function renderLehrerKlassenListe(lehrer, gueltigeFaecher=null){
       <td>
         <div class="flex-row" style="gap:4px;justify-content:flex-end;flex-wrap:wrap;">
           <button class="btn btn-secondary btn-sm" title="Name bearbeiten" onclick="openLehrerModal('${l.uid}')"><i class="ti ti-edit"></i></button>
-          <button class="btn btn-secondary btn-sm" title="Klassen" onclick="openKlassenModal('${l.uid}')"><i class="ti ti-school"></i></button>
-          <button class="btn btn-secondary btn-sm" title="Angebote" onclick="openAngeboteModal('${l.uid}')"><i class="ti ti-target"></i></button>
+          <button class="btn btn-secondary btn-sm" title="Angebote & Klassenleitung" onclick="openAngeboteModal('${l.uid}')"><i class="ti ti-target"></i></button>
           <button class="btn btn-secondary btn-sm" title="Passwort" onclick="openPwResetModal('${l.uid}','${l.vorname} ${l.nachname}','lehrer')"><i class="ti ti-key"></i></button>
           <button class="btn btn-danger btn-sm" title="Löschen" onclick="deleteLehrer('${l.uid}','${l.vorname} ${l.nachname}')"><i class="ti ti-trash"></i></button>
         </div>
@@ -3008,131 +2949,6 @@ function renderLehrerKlassenListe(lehrer, gueltigeFaecher=null){
   html+='</tbody></table>';
   cont.innerHTML=html;
 }
-// Alle verfügbaren Klassen aus Schülerliste (für Schnellauswahl)
-let _alleKlassenVerfuegbar=[];
-
-function openKlassenModal(uid,name,klassen){
-  editLehrerUid=uid;
-  editLehrerKlassen=Array.isArray(klassen)?[...klassen]:[];
-  document.getElementById('mlk-titel').textContent=name?('Klassen zuweisen: '+name):'Klassen zuweisen';
-  document.getElementById('mlk-name').textContent='';
-  document.getElementById('mlk-input').value='';
-  document.getElementById('mlk-error').style.display='none';
-  _ladeKlassenSchnellauswahl();
-  renderKlassenTags();
-  document.getElementById('modal-lehrer-klassen').classList.remove('hidden');
-
-  // Name, Klassen und Klassenlehrer-Status frisch aus Firestore laden
-  withFirebase(async({db,doc,getDoc})=>{
-    try{
-      const snap=await getDoc(doc(db,'users',uid));
-      if(!snap.exists())return;
-      const d=snap.data();
-      const vollerName=((d.vorname||'')+' '+(d.nachname||'')).trim();
-      if(vollerName) document.getElementById('mlk-titel').textContent='Klassen zuweisen: '+vollerName;
-      if(!klassen){
-        editLehrerKlassen=Array.isArray(d.klassen)?[...d.klassen]:[];
-        renderKlassenTags();
-      }
-      const cb=document.getElementById('mlk-klassenlehrer');
-      if(cb){
-        cb.checked=d.istKlassenlehrer===true;
-        const kDiv=document.getElementById('mlk-klassenlehrer-klassen');
-        if(kDiv) kDiv.style.display=cb.checked?'block':'none';
-        cb.onchange=()=>{if(kDiv)kDiv.style.display=cb.checked?'block':'none';};
-      }
-    }catch(e){
-      console.error('openKlassenModal:',e);
-      showErr(document.getElementById('mlk-error'),'Daten konnten nicht geladen werden: '+(e.message||e));
-    }
-  });
-}
-
-function _ladeKlassenSchnellauswahl(){
-  const cont=document.getElementById('mlk-schnellauswahl');
-  if(!cont)return;
-  // Zentrale Klassenliste + tatsächlich vorhandene Klassen der Schüler
-  const klassen=getAlleKlassen();
-  _alleKlassenVerfuegbar=klassen;
-  if(!klassen.length){
-    cont.innerHTML='<span class="text-sm text-soft">Keine Klassen vorhanden – lege sie unter Stammdaten an.</span>';
-    return;
-  }
-  cont.innerHTML=klassen.map(k=>{
-    const aktiv=editLehrerKlassen.includes(k);
-    return `<button onclick="toggleKlasseSchnell('${k}')" id="mlk-schnell-${k}"
-      style="padding:5px 10px;border-radius:8px;border:1.5px solid ${aktiv?'var(--orange-dark)':'var(--gray-border)'};
-      background:${aktiv?'var(--orange-light)':'#fff'};color:${aktiv?'var(--orange-dark)':'var(--text-soft)'};
-      font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">
-      ${k}
-    </button>`;
-  }).join('');
-}
-
-function toggleKlasseSchnell(k){
-  if(editLehrerKlassen.includes(k)){
-    editLehrerKlassen=editLehrerKlassen.filter(x=>x!==k);
-  } else {
-    editLehrerKlassen.push(k);
-    editLehrerKlassen.sort((a,b)=>{
-      const na=parseInt(a),nb=parseInt(b);
-      if(na!==nb)return na-nb;
-      return a.localeCompare(b);
-    });
-  }
-  // Schnellauswahl-Buttons aktualisieren
-  _alleKlassenVerfuegbar.forEach(kl=>{
-    const btn=document.getElementById('mlk-schnell-'+kl);
-    if(!btn)return;
-    const aktiv=editLehrerKlassen.includes(kl);
-    btn.style.borderColor=aktiv?'var(--orange-dark)':'var(--gray-border)';
-    btn.style.background=aktiv?'var(--orange-light)':'#fff';
-    btn.style.color=aktiv?'var(--orange-dark)':'var(--text-soft)';
-  });
-  renderKlassenTags();
-}
-
-function setAlleKlassen(){
-  editLehrerKlassen=[..._alleKlassenVerfuegbar];
-  _ladeKlassenSchnellauswahl();
-  renderKlassenTags();
-}
-function renderKlassenTags(){
-  const cont=document.getElementById('mlk-tags');
-  if(!editLehrerKlassen.length){cont.innerHTML='<span class="text-soft" style="font-size:12px;">Noch keine Klassen</span>';return;}
-  cont.innerHTML=editLehrerKlassen.map((k,i)=>`<span class="klassen-tag">${k}<span class="klassen-tag-remove" onclick="removeKlassenTag(${i})">×</span></span>`).join('');
-}
-function addKlassenTag(){
-  const val=document.getElementById('mlk-input').value.trim();
-  if(!val)return;
-  if(editLehrerKlassen.includes(val)){toast('Klasse bereits vorhanden.');return;}
-  editLehrerKlassen.push(val);
-  document.getElementById('mlk-input').value='';
-  renderKlassenTags();
-}
-function removeKlassenTag(i){editLehrerKlassen.splice(i,1);renderKlassenTags();}
-function closeKlassenModal(){document.getElementById('modal-lehrer-klassen').classList.add('hidden');editLehrerUid=null;editLehrerKlassen=[];}
-function saveKlassen(){
-  if(!editLehrerUid)return;
-  const istKlassenlehrer=document.getElementById('mlk-klassenlehrer')?.checked||false;
-  withFirebase(async({db,doc,updateDoc})=>{
-    try{
-      await updateDoc(doc(db,'users',editLehrerUid),{
-        klassen:editLehrerKlassen,
-        istKlassenlehrer // für Meldungen-Tab: sieht Abwesenheiten seiner Klassen
-      });
-      toast('Klassenzuordnung gespeichert ✓');
-      closeKlassenModal();
-      loadLehrerKlassenListe();
-    }catch(e){showErr(document.getElementById('mlk-error'),e.message);}
-  });
-}
-// Enter-Taste im Klassen-Input
-document.addEventListener('DOMContentLoaded',()=>{
-  const inp=document.getElementById('mlk-input');
-  if(inp)inp.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();addKlassenTag();}});
-});
-
 // ═══ PASSWORT ═══
 function changePassword(currentId,newId,confirmId,errId){
   const cur=document.getElementById(currentId).value;
@@ -4746,7 +4562,16 @@ function fmAlleAbwaehlen(){
   }));
 }
 
-function closeFachModal(){document.getElementById('modal-fach').classList.add('hidden');editFachId=null;}
+function closeFachModal(){
+  document.getElementById('modal-fach').classList.add('hidden');
+  editFachId=null;
+  // Kam der Aufruf aus der Angebote-Zuweisung? Dann dorthin zurückkehren.
+  if(_zurueckZuAngebote){
+    const uid=_zurueckZuAngebote;
+    _zurueckZuAngebote=null;
+    openAngeboteModal(uid);
+  }
+}
 
 function saveFach(){
   const name=document.getElementById('fm-name').value.trim();
@@ -5641,6 +5466,8 @@ function openAngeboteModal(uid,name,angebote){
   renderAngeboteCheckboxen();
   maStufenArr=[];
   _renderMaStufen();
+  maKlassenArr=[];
+  _renderMaKlassen();
   document.getElementById('modal-angebote').classList.remove('hidden');
 
   // Name und Angebote frisch aus Firestore laden
@@ -5655,12 +5482,38 @@ function openAngeboteModal(uid,name,angebote){
         editAngeboteAuswahl=Array.isArray(d.angebote)?[...d.angebote]:[];
         renderAngeboteCheckboxen();
       }
+      // Klassenleitung übernehmen
+      maKlassenArr=Array.isArray(d.klassen)?sortiereKlassen(d.klassen):[];
+      _renderMaKlassen();
     }catch(e){
       console.error('openAngeboteModal:',e);
       showErr(document.getElementById('ma-error'),'Daten konnten nicht geladen werden: '+(e.message||e));
     }
   });
 }
+
+// Wechsel vom Zuweisungs-Fenster in die vollständige Fach-Bearbeitung.
+// Die bisherige Zuweisung wird vorher gesichert, damit nichts verloren geht.
+function fachAusAngebotenBearbeiten(fachId){
+  const uid=editAngeboteUid;
+  const auswahl=[...editAngeboteAuswahl];
+
+  const weiter=()=>{
+    closeAngeboteModal();
+    openFachModal(fachId);
+    // Nach dem Schließen des Fach-Fensters zurück zur Zuweisung
+    _zurueckZuAngebote=uid;
+  };
+
+  if(!uid){weiter();return;}
+  withFirebase(async({db,doc,updateDoc})=>{
+    try{ await updateDoc(doc(db,'users',uid),{angebote:auswahl,klassen:[...maKlassenArr],istKlassenlehrer:maKlassenArr.length>0}); }
+    catch(e){ console.warn('Zuweisung vor Wechsel nicht gespeichert:',e); }
+    weiter();
+  });
+}
+
+let _zurueckZuAngebote=null;
 
 function renderAngeboteCheckboxen(){
   const cont=document.getElementById('ma-checkboxen');
@@ -5677,6 +5530,7 @@ function renderAngeboteCheckboxen(){
         const d=s.data();
         if(!d.name) return;
         faecher.push({
+          id:s.id,
           name:d.name,
           icon:d.icon||'📌',
           maxTeilnehmer:d.maxTeilnehmer||null,
@@ -5731,12 +5585,18 @@ function renderAngeboteCheckboxen(){
           const kapBadge=f.maxTeilnehmer
             ? `<span style="font-size:10px;font-weight:600;background:#E6F1FB;color:#0C447C;padding:1px 7px;border-radius:99px;margin-left:6px;">max. ${f.maxTeilnehmer}</span>`
             : '<span style="font-size:10px;color:var(--text-lighter);margin-left:6px;">∞</span>';
-          return `<label style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--gray-bg);border-radius:8px;cursor:pointer;font-size:14px;margin-bottom:4px;">
-            <input type="checkbox" value="${f.name}" ${gewaehlt?'checked':''}
-              onchange="toggleAngebot('${f.name.replace(/'/g,"\\'")}',this.checked)"
-              style="width:16px;height:16px;accent-color:var(--orange);cursor:pointer;flex-shrink:0;" />
-            <span style="flex:1;">${f.icon} ${f.name}${kapBadge}${warnung}</span>
-          </label>`;
+          return `<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--gray-bg);border-radius:8px;margin-bottom:4px;">
+            <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:14px;flex:1;min-width:0;">
+              <input type="checkbox" value="${f.name}" ${gewaehlt?'checked':''}
+                onchange="toggleAngebot('${f.name.replace(/'/g,"\\'")}',this.checked)"
+                style="width:16px;height:16px;accent-color:var(--orange);cursor:pointer;flex-shrink:0;" />
+              <span style="flex:1;">${f.icon} ${f.name}${kapBadge}${warnung}</span>
+            </label>
+            <button type="button" onclick="fachAusAngebotenBearbeiten('${f.id}')"
+              title="Alle Einstellungen dieses Fachs bearbeiten"
+              style="background:none;border:1px solid var(--gray-border);border-radius:6px;padding:3px 8px;
+              cursor:pointer;font-size:12px;color:var(--text-soft);flex-shrink:0;">✏️</button>
+          </div>`;
         }).join('');
       }
 
@@ -5748,7 +5608,44 @@ function renderAngeboteCheckboxen(){
   });
 }
 
-// Klassenstufen im Schnell-Anlegen (Lehrkräfte-Fenster)
+// Klassenleitung im Angebote-Fenster
+let maKlassenArr=[];
+
+function _renderMaKlassen(){
+  const cont=document.getElementById('ma-klassen-auswahl');
+  if(!cont)return;
+  const klassen=getAlleKlassen();
+  if(!klassen.length){
+    cont.innerHTML='<span class="text-sm" style="font-size:11px;color:#92400E;">Keine Klassen angelegt – bitte zuerst unter Rahmen → Klassen der Schule eintragen.</span>';
+    return;
+  }
+  cont.innerHTML=klassen.map(k=>{
+    const aktiv=maKlassenArr.includes(k);
+    return `<button type="button" onclick="maKlasseToggle('${k.replace(/'/g,"\\'")}')"
+      style="padding:5px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;
+      border:1.5px solid ${aktiv?'#EA580C':'var(--gray-border)'};
+      background:${aktiv?'#FFF7ED':'#fff'};
+      color:${aktiv?'#7C2D12':'var(--text-soft)'};">${k}${aktiv?' ✓':''}</button>`;
+  }).join('')+
+  (maKlassenArr.length
+    ? `<button type="button" onclick="maKlassenLeeren()"
+        style="padding:5px 10px;border-radius:8px;font-size:11px;cursor:pointer;font-family:inherit;
+        border:1.5px solid var(--gray-border);background:#fff;color:var(--text-soft);">✕ Keine</button>`
+    : '');
+}
+
+function maKlasseToggle(k){
+  maKlassenArr=maKlassenArr.includes(k)?maKlassenArr.filter(x=>x!==k):[...maKlassenArr,k];
+  maKlassenArr=sortiereKlassen(maKlassenArr);
+  _renderMaKlassen();
+}
+
+function maKlassenLeeren(){
+  maKlassenArr=[];
+  _renderMaKlassen();
+}
+
+// Klassenleitung im Angebote-Fenster
 let maStufenArr=[];
 
 function _renderMaStufen(){
@@ -5891,8 +5788,14 @@ function saveAngebote(){
   if(!editAngeboteUid)return;
   withFirebase(async({db,doc,updateDoc})=>{
     try{
-      await updateDoc(doc(db,'users',editAngeboteUid),{angebote:editAngeboteAuswahl});
-      toast('✓ Angebote gespeichert.');
+      await updateDoc(doc(db,'users',editAngeboteUid),{
+        angebote:editAngeboteAuswahl,
+        klassen:[...maKlassenArr],
+        // Klassenleitung ergibt sich daraus, ob Klassen zugeordnet sind
+        istKlassenlehrer: maKlassenArr.length>0
+      });
+      toast('✓ Gespeichert · '+editAngeboteAuswahl.length+' Angebot(e)'+
+            (maKlassenArr.length?' · Klassenleitung '+maKlassenArr.join(', '):' · keine Klassenleitung'));
       closeAngeboteModal();
       loadLehrerKlassenListe();
     }catch(e){showErr(document.getElementById('ma-error'),e.message);}
@@ -6720,18 +6623,27 @@ function savePwReset(){
     <div class="modal-title">🎯 Angebote zuweisen</div>
     <p class="text-sm text-soft" style="margin-bottom:.875rem;" id="ma-name"></p>
 
+    <div class="form-group" style="background:#FFF7ED;border:1.5px solid #EA580C;border-radius:10px;padding:10px 14px;">
+      <label class="form-label" style="margin-bottom:4px;">🏫 Klassenleitung</label>
+      <p class="text-sm" style="font-size:11px;color:#92400E;margin-bottom:8px;">
+        In welchen Klassen ist diese Lehrkraft Klassenlehrer/in? Nur dann sieht sie Abwesenheits­meldungen
+        ihrer Schüler und darf deren Daten bearbeiten. Nichts gewählt = keine Klassenleitung.
+      </p>
+      <div id="ma-klassen-auswahl" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+    </div>
+
     <div class="form-group">
-      <label class="form-label">Bestehende Angebote auswählen</label>
+      <label class="form-label">Welche Angebote betreut diese Lehrkraft?</label>
       <p class="text-sm text-soft" style="font-size:11px;margin-bottom:6px;">
-        Zeigt alle Fächer aus dem Reiter „Fächer". Ein hier neu angelegtes Angebot wird
-        automatisch auch dort eingetragen – es gibt nur eine gemeinsame Fächerliste.
+        Hier wird nur zugeordnet – Häkchen setzen oder entfernen. Um die Einstellungen eines Fachs
+        selbst zu ändern (Zeitschiene, Teilnehmerzahl, Klassenstufen …), tippe auf das ✏️ daneben.
       </p>
       <div id="ma-checkboxen" style="display:flex;flex-direction:column;gap:6px;max-height:220px;overflow-y:auto;"></div>
     </div>
 
     <!-- Neues Angebot direkt hier anlegen -->
     <div style="border-top:0.5px solid var(--gray-border);margin-top:.75rem;padding-top:.75rem;">
-      <div class="form-label" style="margin-bottom:6px;">➕ Neues Angebot direkt anlegen</div>
+      <div class="form-label" style="margin-bottom:6px;">➕ Neues Angebot anlegen (leeres Formular)</div>
       <input type="text" id="ma-neues-angebot" class="form-control"
         placeholder="Name des neuen Angebots (z. B. Sportgeräteausleihe)"
         style="margin-bottom:8px;" />
