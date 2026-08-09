@@ -171,6 +171,10 @@
     .modal { background: #fff; border-radius: var(--radius-lg); padding: 1.5rem; width: 100%; max-width: 440px; max-height: 90vh; overflow-y: auto; }
     .modal-title { font-size: 16px; font-weight: 700; margin-bottom: 1rem; }
     .modal-actions { display: flex; gap: 8px; margin-top: 1rem; justify-content: flex-end; }
+    /* Farbauswahl im Fach-Fenster: gewählte Farbe deutlich markieren */
+    #fm-farbe-auswahl label span { position: relative; box-shadow: none; transition: transform .12s, box-shadow .12s; }
+    #fm-farbe-auswahl input:checked + span { transform: scale(1.15); box-shadow: 0 0 0 3px var(--orange); }
+    #fm-farbe-auswahl input:checked + span::after { content: '✓'; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 700; }
     .pw-form { display: flex; flex-direction: column; gap: .875rem; }
     .pw-strength { height: 4px; border-radius: 2px; background: var(--gray-border); margin-top: 4px; overflow: hidden; }
     .pw-strength-bar { height: 100%; border-radius: 2px; transition: width .3s, background .3s; }
@@ -4229,8 +4233,9 @@ function initIconPalette(){
   // Anzeigefläche für die Symbole der gewählten Kategorie
   const raster=document.createElement('div');
   raster.id='fm-icon-raster';
-  raster.style.cssText='display:flex;flex-wrap:wrap;gap:5px;max-height:132px;overflow-y:auto;'+
-    'padding:6px;border:0.5px solid var(--gray-border);border-radius:8px;background:var(--gray-bg);';
+  raster.style.cssText='display:grid;grid-template-columns:repeat(auto-fill,minmax(42px,1fr));gap:6px;'+
+    'max-height:180px;overflow-y:auto;padding:8px;border:0.5px solid var(--gray-border);'+
+    'border-radius:8px;background:var(--gray-bg);';
   palette.appendChild(raster);
 
   const sel=document.getElementById('fm-icon-kategorie');
@@ -4253,8 +4258,8 @@ function _zeigeIconKategorie(index){
     btn.setAttribute('title',ic);
     const rot=(ic==='✚'||ic==='➕');
     const aktiv=(ic===aktuell);
-    btn.style.cssText='width:34px;height:34px;border-radius:8px;font-size:17px;cursor:pointer;'+
-      'display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;'+
+    btn.style.cssText='width:100%;aspect-ratio:1;border-radius:8px;font-size:20px;cursor:pointer;'+
+      'display:flex;align-items:center;justify-content:center;padding:0;transition:all .12s;'+
       'border:1.5px solid '+(aktiv?'var(--orange-dark)':'var(--gray-border)')+';'+
       'background:'+(aktiv?'var(--orange-light)':'#fff')+';'+
       (rot?'color:#D32F2F;font-weight:700;':'');
@@ -6701,43 +6706,47 @@ function savePwReset(){
 
 <!-- ═══ MODAL: FACH ANLEGEN / BEARBEITEN ═══ -->
 <div id="modal-fach" class="modal-backdrop hidden">
-  <div class="modal" style="max-width:480px;">
+  <div class="modal" style="max-width:560px;">
     <div class="modal-title" id="modal-fach-title">Neues Fach anlegen</div>
 
-    <div style="display:grid;grid-template-columns:1fr 80px;gap:8px;">
-      <div class="form-group">
-        <label class="form-label">Name des Fachs / Angebots *</label>
-        <input type="text" id="fm-name" class="form-control" placeholder="z. B. Sportgeräteausleihe, Kunst-AG …" />
-      </div>
-      <div class="form-group">
-        <label class="form-label">Symbol</label>
-        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;" id="fm-icon-palette"></div>
-        <div style="display:flex;align-items:center;gap:8px;margin-top:8px;">
-          <span style="font-size:13px;color:var(--text-soft);">Gewählt:</span>
-          <span id="fm-icon-preview" style="font-size:24px;width:36px;height:36px;display:flex;align-items:center;justify-content:center;background:var(--gray-bg);border-radius:8px;border:1.5px solid var(--gray-border);">📌</span>
-          <input type="hidden" id="fm-icon" value="📌" />
-          <span class="text-sm text-soft">oder eigenes Symbol eintippen:</span>
-          <input type="text" id="fm-icon-custom" class="form-control" placeholder="z.B. 🏆" style="width:60px;text-align:center;font-size:18px;" oninput="selectIcon(this.value.trim()||'📌')" />
-        </div>
-      </div>
+    <div class="form-group">
+      <label class="form-label">Name des Fachs / Angebots *</label>
+      <input type="text" id="fm-name" class="form-control" placeholder="z. B. Sportgeräteausleihe, Kunst-AG …" />
     </div>
 
     <div class="form-group">
-      <label class="form-label">Hintergrundfarbe des Chips</label>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;" id="fm-farbe-auswahl">
-        <label style="cursor:pointer;"><input type="radio" name="fm-farbe" value="#FAECE7|#4A1B0C" checked style="display:none;" /><span style="display:inline-block;width:28px;height:28px;border-radius:6px;background:#FAECE7;border:2px solid #4A1B0C;" title="Orange"></span></label>
-        <label style="cursor:pointer;"><input type="radio" name="fm-farbe" value="#E1F5EE|#085041" style="display:none;" /><span style="display:inline-block;width:28px;height:28px;border-radius:6px;background:#E1F5EE;border:2px solid #085041;" title="Grün"></span></label>
-        <label style="cursor:pointer;"><input type="radio" name="fm-farbe" value="#E6F1FB|#0C447C" style="display:none;" /><span style="display:inline-block;width:28px;height:28px;border-radius:6px;background:#E6F1FB;border:2px solid #0C447C;" title="Blau"></span></label>
-        <label style="cursor:pointer;"><input type="radio" name="fm-farbe" value="#EEEDFE|#26215C" style="display:none;" /><span style="display:inline-block;width:28px;height:28px;border-radius:6px;background:#EEEDFE;border:2px solid #26215C;" title="Lila"></span></label>
-        <label style="cursor:pointer;"><input type="radio" name="fm-farbe" value="#EAF3DE|#27500A" style="display:none;" /><span style="display:inline-block;width:28px;height:28px;border-radius:6px;background:#EAF3DE;border:2px solid #27500A;" title="Hellgrün"></span></label>
-        <label style="cursor:pointer;"><input type="radio" name="fm-farbe" value="#F3E8FF|#4C1D95" style="display:none;" /><span style="display:inline-block;width:28px;height:28px;border-radius:6px;background:#F3E8FF;border:2px solid #4C1D95;" title="Violett"></span></label>
-        <label style="cursor:pointer;"><input type="radio" name="fm-farbe" value="#FFF7ED|#7C2D12" style="display:none;" /><span style="display:inline-block;width:28px;height:28px;border-radius:6px;background:#FFF7ED;border:2px solid #7C2D12;" title="Dunkelorange"></span></label>
-        <label style="cursor:pointer;"><input type="radio" name="fm-farbe" value="#FAEEDA|#633806" style="display:none;" /><span style="display:inline-block;width:28px;height:28px;border-radius:6px;background:#FAEEDA;border:2px solid #633806;" title="Braun"></span></label>
+      <label class="form-label">Symbol</label>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap;">
+        <span id="fm-icon-preview"
+          style="font-size:26px;width:44px;height:44px;display:flex;align-items:center;justify-content:center;
+                 background:var(--orange-light);border-radius:10px;border:1.5px solid var(--orange-dark);flex-shrink:0;">📌</span>
+        <input type="hidden" id="fm-icon" value="📌" />
+        <span class="text-sm text-soft" style="flex:1;min-width:120px;">Unten auswählen oder eigenes Symbol eintippen:</span>
+        <input type="text" id="fm-icon-custom" class="form-control" placeholder="🏆"
+          style="width:64px;text-align:center;font-size:20px;flex-shrink:0;"
+          oninput="selectIcon(this.value.trim()||'📌')" />
+      </div>
+      <div id="fm-icon-palette"></div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Farbe des Chips</label>
+      <p class="text-sm text-soft" style="margin-bottom:6px;">So sieht das Fach später bei den Schülern aus.</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;" id="fm-farbe-auswahl">
+        <label style="cursor:pointer;"><input type="radio" name="fm-farbe" value="#FAECE7|#4A1B0C" checked style="display:none;" /><span style="display:inline-block;width:32px;height:32px;border-radius:8px;background:#FAECE7;border:2px solid #4A1B0C;" title="Orange"></span></label>
+        <label style="cursor:pointer;"><input type="radio" name="fm-farbe" value="#E1F5EE|#085041" style="display:none;" /><span style="display:inline-block;width:32px;height:32px;border-radius:8px;background:#E1F5EE;border:2px solid #085041;" title="Grün"></span></label>
+        <label style="cursor:pointer;"><input type="radio" name="fm-farbe" value="#E6F1FB|#0C447C" style="display:none;" /><span style="display:inline-block;width:32px;height:32px;border-radius:8px;background:#E6F1FB;border:2px solid #0C447C;" title="Blau"></span></label>
+        <label style="cursor:pointer;"><input type="radio" name="fm-farbe" value="#EEEDFE|#26215C" style="display:none;" /><span style="display:inline-block;width:32px;height:32px;border-radius:8px;background:#EEEDFE;border:2px solid #26215C;" title="Lila"></span></label>
+        <label style="cursor:pointer;"><input type="radio" name="fm-farbe" value="#EAF3DE|#27500A" style="display:none;" /><span style="display:inline-block;width:32px;height:32px;border-radius:8px;background:#EAF3DE;border:2px solid #27500A;" title="Hellgrün"></span></label>
+        <label style="cursor:pointer;"><input type="radio" name="fm-farbe" value="#F3E8FF|#4C1D95" style="display:none;" /><span style="display:inline-block;width:32px;height:32px;border-radius:8px;background:#F3E8FF;border:2px solid #4C1D95;" title="Violett"></span></label>
+        <label style="cursor:pointer;"><input type="radio" name="fm-farbe" value="#FFF7ED|#7C2D12" style="display:none;" /><span style="display:inline-block;width:32px;height:32px;border-radius:8px;background:#FFF7ED;border:2px solid #7C2D12;" title="Dunkelorange"></span></label>
+        <label style="cursor:pointer;"><input type="radio" name="fm-farbe" value="#FAEEDA|#633806" style="display:none;" /><span style="display:inline-block;width:32px;height:32px;border-radius:8px;background:#FAEEDA;border:2px solid #633806;" title="Braun"></span></label>
       </div>
     </div>
 
-    <div class="section-label" style="margin-top:.5rem;">Zeitschiene *</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:1rem;">
+    <div class="section-label" style="margin-top:1.25rem;">Wann findet es statt?</div>
+    <label class="form-label" style="margin-bottom:6px;display:block;">Zeitschiene *</label>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:.5rem;">
       <label style="display:flex;align-items:center;gap:8px;padding:8px 12px;border:1.5px solid var(--gray-border);border-radius:8px;cursor:pointer;font-size:13px;" id="fm-zs-lbl-1">
         <input type="radio" name="fm-zs" value="1" style="accent-color:var(--orange);" /> 7. Std. (12:55–13:30)
       </label>
@@ -6763,9 +6772,12 @@ function savePwReset(){
         <input type="radio" name="fm-zs" value="einzeln:3,4" style="accent-color:var(--orange);" /> 9. + 10. Std. – einzeln wählbar
       </label>
     </div>
-    <p class="text-sm text-soft" style="margin-top:-.5rem;margin-bottom:1rem;">
-      <b>„Einzeln wählbar"</b> bedeutet: Schüler können nur die 1. Stunde, nur die 2. Stunde, oder beide unabhängig voneinander auswählen (wie bei der Spielausleihe) – im Unterschied zur Doppelstunde, die immer beide Stunden gemeinsam belegt.
+    <p class="text-sm text-soft" style="background:var(--gray-bg);border-radius:8px;padding:8px 12px;margin-bottom:1rem;font-size:11px;line-height:1.5;">
+      <b>„Einzeln wählbar"</b> heißt: Schüler dürfen nur die erste, nur die zweite oder beide Stunden
+      unabhängig belegen. Eine <b>Doppelstunde</b> belegt dagegen immer beide Stunden gemeinsam.
     </p>
+
+    <div class="section-label" style="margin-top:1.25rem;">Für wen und wie viele?</div>
 
     <div class="form-group">
       <label class="form-label">Max. Teilnehmer pro Tag (leer = unbegrenzt)</label>
