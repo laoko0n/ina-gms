@@ -2901,10 +2901,13 @@ function loadLehrerKlassenListe(){
 function renderLehrerKlassenListe(lehrer, gueltigeFaecher=null){
   const cont=document.getElementById('sl-lehrer-liste');
   if(!lehrer.length){cont.innerHTML='<p class="text-sm text-soft">Keine Lehrkräfte gefunden.</p>';return;}
-  let html=`<table class="schueler-table"><thead><tr><th>Name</th><th>Klassen</th><th>Angebote</th><th></th></tr></thead><tbody>`;
+  let html=`<table class="schueler-table"><thead><tr><th>Name</th><th>Klassenleitung</th><th>Angebote</th><th></th></tr></thead><tbody>`;
   lehrer.forEach(l=>{
-    const klassen=l.klassen||[];
-    const chipsHtml=klassen.length?klassen.map(k=>`<span class="lehrer-klasse-chip">${k}</span>`).join(''):'<span class="text-soft" style="font-size:12px;">–</span>';
+    // Nur Klassen anzeigen, für die diese Lehrkraft tatsächlich die Klassenleitung hat
+    const klassen=(l.istKlassenlehrer===true && Array.isArray(l.klassen))?l.klassen:[];
+    const chipsHtml=klassen.length
+      ? sortiereKlassen(klassen).map(k=>`<span class="lehrer-klasse-chip">${k}</span>`).join('')
+      : '<span class="text-soft" style="font-size:12px;">keine</span>';
     const angebote=l.angebote||[];
     const emailId='email-'+l.uid.slice(0,8);
 
@@ -2925,9 +2928,7 @@ function renderLehrerKlassenListe(lehrer, gueltigeFaecher=null){
 
     html+=`<tr>
       <td>
-        <div style="font-weight:500;font-size:13px;">${l.vorname} ${l.nachname}
-          ${l.istKlassenlehrer?'<span style="font-size:10px;font-weight:600;color:#7C2D12;background:#FFF7ED;padding:1px 6px;border-radius:99px;margin-left:4px;border:1px solid #EA580C;">KL</span>':''}
-        </div>
+        <div style="font-weight:500;font-size:13px;">${l.vorname} ${l.nachname}</div>
         <div id="${emailId}" style="display:none;font-size:11px;color:var(--text-soft);margin-top:2px;">${l.email||''}</div>
         <button onclick="document.getElementById('${emailId}').style.display=document.getElementById('${emailId}').style.display==='none'?'block':'none'"
           style="font-size:10px;color:var(--text-lighter);background:none;border:none;cursor:pointer;padding:0;margin-top:2px;">
@@ -3824,12 +3825,36 @@ function renderFaecherListe(liste, unvollstaendig=[]){
   const cont=document.getElementById('sl-faecher-liste');
   if(!liste.length){cont.innerHTML='<p class="text-sm text-soft">Noch keine Fächer angelegt. Klicke auf „Neues Fach" um loszulegen.</p>';return;}
   let html=`<table class="schueler-table"><thead><tr>
-    <th>Fach / Angebot</th><th>Zeitschiene</th><th>Max./Tag</th><th>Gruppen</th><th>Status</th><th></th>
+    <th>Fach / Angebot</th><th>Zeitschiene</th><th>Max./Tag</th><th>Wer darf teilnehmen?</th><th>Status</th><th></th>
   </tr></thead><tbody>`;
   liste.forEach(f=>{
     const aktiv=f.aktiv!==false;
     const isSystem=f.isSystemFach===true;
     const gruppenLabels={fruehstarter:'⭐',starter:'🔵',durchstarter:'🟢'};
+    // Welche Klassen dürfen dieses Angebot besuchen?
+    const alleKlassen=getAlleKlassen();
+    const hatStufen=Array.isArray(f.klassenstufen)&&f.klassenstufen.length>0;
+    const hatKlassen=Array.isArray(f.klassen)&&f.klassen.length>0;
+    let erlaubteKlassen;
+    if(!hatStufen&&!hatKlassen){
+      erlaubteKlassen=null; // keine Einschränkung
+    } else {
+      erlaubteKlassen=sortiereKlassen(alleKlassen.filter(k=>{
+        const st=parseInt(k);
+        return (hatStufen&&!isNaN(st)&&f.klassenstufen.includes(st)) ||
+               (hatKlassen&&f.klassen.includes(k));
+      }));
+      // Ausdrücklich genannte Klassen, die (noch) nicht in der Klassenliste stehen
+      if(hatKlassen){
+        f.klassen.forEach(k=>{ if(!erlaubteKlassen.includes(k)) erlaubteKlassen.push(k); });
+        erlaubteKlassen=sortiereKlassen(erlaubteKlassen);
+      }
+    }
+    const klassenAnzeige = erlaubteKlassen===null
+      ? '<span style="font-size:12px;color:var(--text-soft);">alle Klassen</span>'
+      : (erlaubteKlassen.length
+          ? erlaubteKlassen.map(k=>`<span style="background:#E6F1FB;color:#0C447C;font-size:11px;font-weight:600;padding:2px 7px;border-radius:99px;display:inline-block;margin:1px;">${k}</span>`).join('')
+          : '<span style="font-size:11px;color:#A32D2D;">⚠️ keine passende Klasse</span>');
     const gruppenAnzeige=(f.gruppen||[]).map(g=>gruppenLabels[g]||g).join(' ')||'–';
     html+=`<tr style="${aktiv?'':'opacity:.5;'}">
       <td style="font-weight:500;">
@@ -3840,13 +3865,9 @@ function renderFaecherListe(liste, unvollstaendig=[]){
       <td style="font-size:12px;color:var(--text-soft);">${f.zeitschieneName||f.zeitschiene||'–'}${f.isDoppelstunde?' 🔁':''}${f.isEinzelnWaehlbar?' <span style="color:var(--orange);font-weight:600;">(einzeln)</span>':''}${f.wochentage&&f.wochentage.length?' · <span style="color:#085041;font-size:11px;">'+f.wochentage.map(t=>(['','Mo','Di','Mi','Do'][t])).join(', ')+'</span>':''}</td>
       <td><span title="${f.maxTeilnehmer?'Maximal '+f.maxTeilnehmer+' Schüler pro Tag':'Unbegrenzt – keine Teilnehmerzahl hinterlegt'}"
         style="background:${f.maxTeilnehmer?'var(--orange-light)':'var(--gray-bg)'};color:${f.maxTeilnehmer?'var(--orange-dark)':'var(--text-lighter)'};font-size:12px;font-weight:600;padding:2px 8px;border-radius:99px;">${f.maxTeilnehmer||'∞'}</span></td>
-      <td style="font-size:13px;">${gruppenAnzeige}
-        ${(Array.isArray(f.klassenstufen)&&f.klassenstufen.length)
-          ? '<br><span style="font-size:10px;font-weight:600;color:#0C447C;background:#E6F1FB;padding:1px 6px;border-radius:99px;">Stufe '+f.klassenstufen.join(', ')+'</span>'
-          : ''}
-        ${(Array.isArray(f.klassen)&&f.klassen.length)
-          ? '<br><span style="font-size:10px;font-weight:600;color:#4C1D95;background:#F3E8FF;padding:1px 6px;border-radius:99px;">'+f.klassen.join(', ')+'</span>'
-          : ''}
+      <td style="font-size:13px;">
+        ${klassenAnzeige}
+        <div style="font-size:11px;color:var(--text-lighter);margin-top:3px;">${gruppenAnzeige}</div>
       </td>
       <td>${aktiv?'<span style="color:#1D9E75;font-size:12px;font-weight:600;">● aktiv</span>':'<span style="color:var(--text-lighter);font-size:12px;">○ inaktiv</span>'}
         ${f.alleLehrer?'<br><span style="font-size:10px;font-weight:600;color:#085041;background:#E1F5EE;padding:1px 6px;border-radius:99px;">👥 Alle Lehrkräfte</span>':''}
