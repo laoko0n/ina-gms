@@ -4102,7 +4102,8 @@ const FM_ICON_GRUPPEN=[
   ]},
   {titel:'Lernen & Wissen', icons:[
     '📚','📖','📝','📓','📔','📒','🗂️','📊','📈','🔬','🔭','🧪','🧫','🧬',
-    '🔍','🗺️','🌍','🌎','🧭','⚗️','🩺','⚖️','🏛️','💡','🧠','❓','💬','🗣️'
+    '🔍','🗺️','🌍','🌎','🧭','⚗️','🩺','⚖️','🏛️','💡','🧠','❓','💬','🗣️',
+    '👩‍🏫','👨‍🏫','🧑‍🏫','🇬🇧','🇺🇸','🇫🇷','🇪🇸','🇩🇪','🇮🇹'
   ]},
   {titel:'Mathe & Zeichen', icons:[
     'π','∑','√','∞','∆','±','×','÷','½','¼','²','³','≈','≠','≤','≥','%','°',
@@ -4121,8 +4122,11 @@ const FM_ICON_GRUPPEN=[
     '🎯','🎲','🃏','♟️','🧩','🪁','🎈','🎁','🎊','🎉','🪀','🛝','🏕️','⛺',
     '🚲','🛴','🧸','🎡','🎢','🤹','🪄','🎰'
   ]},
+  {titel:'Erste Hilfe & Gesundheit', icons:[
+    '⛑️','🏥','🚑','🩹','🩺','💊','🧑‍⚕️','👩‍⚕️','👨‍⚕️','🆘','✚','➕','🫀','🧴','😷'
+  ]},
   {titel:'Sonstiges & Symbole', icons:[
-    '📌','⏰','🕐','📅','🗓️','🔔','📢','✅','⚠️','🚦','🚌','🏫','🏠','🛋️',
+    '📌','⏰','🕐','📅','🗓️','🔔','📢','✅','❌','⛔','🚫','⚠️','🚦','🚌','🏫','🏠','🛋️',
     '🧹','♻️','🌟','❤️','💚','💙','💜','🧡','💛','🤍','👥','👋','🙌','🫶'
   ]}
 ];
@@ -4165,8 +4169,11 @@ function initIconPalette(){
       btn.textContent=ic;
       btn.setAttribute('data-icon',ic);
       btn.setAttribute('title',ic);
+      // Reine Zeichen (kein Farb-Emoji) rot einfärben, damit sie als Hilfe-Kreuz erkennbar sind
+      const rot=(ic==='✚'||ic==='➕');
       btn.style.cssText='width:34px;height:34px;border-radius:8px;border:1.5px solid var(--gray-border);'+
-        'background:#fff;font-size:17px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;';
+        'background:#fff;font-size:17px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;'+
+        (rot?'color:#D32F2F;font-weight:700;':'');
       btn.onclick=()=>selectIcon(ic);
       reihe.appendChild(btn);
     });
@@ -5291,6 +5298,7 @@ function renderAngeboteCheckboxen(){
           Es sind noch keine Fächer angelegt. Lege unten ein neues Angebot an – es wird automatisch
           auch im Reiter „Fächer" eingetragen.</p>`;
       } else {
+        html+=`<p class="text-sm text-soft" style="font-size:11px;margin:0 0 6px;">${liste.length} Fächer gefunden</p>`;
         html+=liste.map(f=>{
           const gewaehlt=editAngeboteAuswahl.includes(f.name);
           const warnung=!f.vollstaendig
@@ -5367,6 +5375,17 @@ async function addNeuesAngebot(){
         createdAt:new Date().toISOString()
       });
       toast('✓ „'+name+'" angelegt'+(maxTeilnehmer?(' · max. '+maxTeilnehmer+' Teilnehmer'):'')+' – erscheint jetzt auch im Reiter „Fächer"!');
+
+      // Zuweisung sofort speichern, damit sie nicht verloren geht wenn
+      // das Fenster ohne "Speichern" geschlossen wird
+      if(editAngeboteUid){
+        try{
+          const {doc,updateDoc}=await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+          await updateDoc(doc(db,'users',editAngeboteUid),{angebote:editAngeboteAuswahl});
+          loadLehrerKlassenListe();
+        }catch(e){console.warn('Zuweisung konnte nicht sofort gespeichert werden:',e);}
+      }
+
       ladeDynamischeFaecher();
       renderAngeboteCheckboxen(); // Liste neu aufbauen, damit das Fach regulär erscheint
       if(typeof loadFaecherListe==='function') loadFaecherListe();
