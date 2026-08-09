@@ -2958,7 +2958,9 @@ function loadLehrerKlassenListe(){
 
     const lehrer=[];
     lehrerSnaps.forEach(s=>{
-      if(s.data().role==='lehrer') lehrer.push({uid:s.id,...s.data()});
+      const d=s.data();
+      // Auch Schulleitungsmitglieder aufführen – sie können ebenfalls Angebote betreuen
+      if(d.role==='lehrer'||d.role==='leitung') lehrer.push({uid:s.id,...d});
     });
     lehrer.sort((a,b)=>(a.nachname+a.vorname).localeCompare(b.nachname+b.vorname));
     renderLehrerKlassenListe(lehrer, gueltigeFaecher);
@@ -5578,6 +5580,15 @@ function openAngeboteModal(uid,name,angebote){
       // Klassenleitung übernehmen
       maKlassenArr=Array.isArray(d.klassen)?sortiereKlassen(d.klassen):[];
       _renderMaKlassen();
+
+      // Bei Schulleitungsmitgliedern ist die Klassenleitung ohne Wirkung
+      const klBox=document.getElementById('ma-klassen-auswahl')?.parentElement;
+      const istLeitung=(d.role==='leitung');
+      if(klBox){
+        klBox.style.display=istLeitung?'none':'';
+      }
+      const hinweisLeitung=document.getElementById('ma-leitung-hinweis');
+      if(hinweisLeitung) hinweisLeitung.style.display=istLeitung?'':'none';
     }catch(e){
       console.error('openAngeboteModal:',e);
       showErr(document.getElementById('ma-error'),'Daten konnten nicht geladen werden: '+(e.message||e));
@@ -5881,14 +5892,17 @@ function saveAngebote(){
   if(!editAngeboteUid)return;
   withFirebase(async({db,doc,updateDoc})=>{
     try{
-      await updateDoc(doc(db,'users',editAngeboteUid),{
-        angebote:editAngeboteAuswahl,
-        klassen:[...maKlassenArr],
-        // Klassenleitung ergibt sich daraus, ob Klassen zugeordnet sind
-        istKlassenlehrer: maKlassenArr.length>0
-      });
+      // Bei Schulleitung bleibt die Klassenleitung unangetastet (ohne Wirkung)
+      const hinweisEl=document.getElementById('ma-leitung-hinweis');
+      const istLeitung=hinweisEl && hinweisEl.style.display!=='none';
+      const daten={angebote:editAngeboteAuswahl};
+      if(!istLeitung){
+        daten.klassen=[...maKlassenArr];
+        daten.istKlassenlehrer=maKlassenArr.length>0;
+      }
+      await updateDoc(doc(db,'users',editAngeboteUid),daten);
       toast('✓ Gespeichert · '+editAngeboteAuswahl.length+' Angebot(e)'+
-            (maKlassenArr.length?' · Klassenleitung '+maKlassenArr.join(', '):' · keine Klassenleitung'));
+            (istLeitung?'' : (maKlassenArr.length?' · Klassenleitung '+maKlassenArr.join(', '):' · keine Klassenleitung')));
       closeAngeboteModal();
       loadLehrerKlassenListe();
     }catch(e){showErr(document.getElementById('ma-error'),e.message);}
@@ -6715,6 +6729,14 @@ function savePwReset(){
   <div class="modal" style="max-width:480px;">
     <div class="modal-title">🎯 Angebote zuweisen</div>
     <p class="text-sm text-soft" style="margin-bottom:.875rem;" id="ma-name"></p>
+
+    <div id="ma-leitung-hinweis" style="display:none;background:#E6F1FB;border:1.5px solid #0C447C;border-radius:10px;padding:10px 14px;margin-bottom:.875rem;">
+      <div style="font-size:12px;font-weight:600;color:#0C447C;">ℹ️ Schulleitungsmitglied</div>
+      <div style="font-size:11px;color:#0C447C;margin-top:2px;">
+        Sieht ohnehin alle Klassen – eine Klassenleitung ist deshalb nicht nötig.
+        Angebote lassen sich trotzdem zuordnen.
+      </div>
+    </div>
 
     <div class="form-group" style="background:#FFF7ED;border:1.5px solid #EA580C;border-radius:10px;padding:10px 14px;">
       <label class="form-label" style="margin-bottom:4px;">🏫 Klassenleitung</label>
