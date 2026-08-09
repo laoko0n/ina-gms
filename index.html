@@ -146,7 +146,7 @@
     .chip-label { vertical-align: middle; }
     .schueler-table { width: 100%; border-collapse: collapse; font-size: 13px; }
     .schueler-table th { text-align: left; padding: 8px 10px; font-size: 11px; font-weight: 600; color: var(--text-soft); border-bottom: 0.5px solid var(--gray-border); text-transform: uppercase; letter-spacing: .05em; }
-    .schueler-table td { padding: 9px 10px; border-bottom: 0.5px solid var(--gray-border); vertical-align: middle; }
+    .schueler-table td { padding: 9px 10px; border-bottom: 0.5px solid var(--gray-border); vertical-align: top; }
     .schueler-table tr:last-child td { border-bottom: none; }
     .schueler-table tr:hover td { background: var(--gray-bg); }
     .klasse-badge { background: var(--orange-light); color: var(--orange-dark); font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 99px; display: inline-block; }
@@ -805,6 +805,17 @@
           Berühmtheit + Zahl · die Lehrkraft muss es beim ersten Login ändern.
         </p>
       </div>
+    </div>
+    <div class="form-group" id="ml-rolle-group" style="display:none;background:#E6F1FB;border:1.5px solid #0C447C;border-radius:10px;padding:10px 14px;">
+      <label class="form-label" style="margin-bottom:4px;">Rolle</label>
+      <select id="ml-rolle" class="form-control" style="font-size:13px;">
+        <option value="lehrer">Lehrkraft</option>
+        <option value="leitung">Schulleitung</option>
+      </select>
+      <p class="text-sm" style="font-size:11px;color:#0C447C;margin-top:5px;">
+        Schulleitung sieht alle Klassen, verwaltet Fächer, Lehrkräfte und Rahmenbedingungen.
+        Die Änderung greift beim nächsten Anmelden.
+      </p>
     </div>
     <div id="ml-error" class="text-sm" style="color:#A32D2D;display:none;margin-bottom:.5rem;"></div>
     <div style="display:flex;gap:8px;">
@@ -2329,6 +2340,8 @@ function renderPlanTabelle(cont,schueler,planMap,tag){
 // ═══ SCHÜLER VERWALTUNG ═══
 function lehrerDarfBearbeiten(schuelerKlasse){
   if(currentRole==='leitung')return true;
+  // Nur Klassenlehrkräfte dürfen Schülerdaten ändern – und nur in ihren eigenen Klassen
+  if(currentUserData?.istKlassenlehrer!==true)return false;
   const meineKlassen=currentUserData.klassen||[];
   return meineKlassen.includes(schuelerKlasse);
 }
@@ -2515,8 +2528,13 @@ function openSchuelerModal(uid){
             const el=document.getElementById(id);
             if(el)el.disabled=true;
           });
+          // Speichern-Knopf und Klassen-Schnellauswahl ebenfalls sperren
+          const sBtn=document.getElementById('ms-save-btn');
+          if(sBtn){sBtn.disabled=true;sBtn.style.opacity='0.4';sBtn.style.cursor='not-allowed';}
+          const schnell=document.getElementById('ms-klassen-schnell');
+          if(schnell){schnell.style.pointerEvents='none';schnell.style.opacity='0.4';}
           // Hinweis anzeigen
-          showErr(document.getElementById('ms-error'),'⚠️ Klasse '+d.klasse+' ist dir nicht zugewiesen – nur Ansicht, keine Änderungen möglich.');
+          showErr(document.getElementById('ms-error'),'🔒 Nur Ansicht: Du bist nicht Klassenlehrkraft der Klasse '+d.klasse+'.');
         } else {
           document.getElementById('ms-vorname').value=d.vorname||'';
           document.getElementById('ms-nachname').value=d.nachname||'';
@@ -2542,6 +2560,15 @@ function openSchuelerModal(uid){
     document.getElementById('ms-gruppe').value='durchstarter';
   }
   _renderMsKlassenSchnellauswahl();
+  // Sperren aus einem vorherigen Aufruf zurücksetzen
+  ['ms-vorname','ms-nachname','ms-klasse','ms-gruppe'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el)el.disabled=false;
+  });
+  const sBtnReset=document.getElementById('ms-save-btn');
+  if(sBtnReset){sBtnReset.disabled=false;sBtnReset.style.opacity='';sBtnReset.style.cursor='';}
+  const schnellReset=document.getElementById('ms-klassen-schnell');
+  if(schnellReset){schnellReset.style.pointerEvents='';schnellReset.style.opacity='';}
   document.getElementById('modal-schueler').classList.remove('hidden');
   // Zum Anfang scrollen
   setTimeout(()=>{
@@ -2721,11 +2748,24 @@ function openLehrerModal(uid){
         document.getElementById('ml-nachname').value=d.nachname||'';
         document.getElementById('ml-email').value=d.email||'';
         document.getElementById('ml-email').disabled=true;
+        const rg=document.getElementById('ml-rolle-group');
+        const rs=document.getElementById('ml-rolle');
+        if(rg&&rs){
+          rg.style.display='';
+          rs.value=(d.role==='leitung')?'leitung':'lehrer';
+          // Eigenes Konto nicht herabstufen können – sonst sperrt man sich aus
+          const selbst=(uid===currentUser?.uid);
+          rs.disabled=selbst;
+          if(selbst) rg.style.opacity='0.6';
+          else rg.style.opacity='';
+        }
       }
       document.getElementById('modal-lehrer').classList.remove('hidden');
     });
   } else {
     title.textContent='Lehrkraft hinzufügen';
+    const rgNeu=document.getElementById('ml-rolle-group');
+    if(rgNeu) rgNeu.style.display='none';
     document.getElementById('ml-pw-group').style.display='';
     document.getElementById('ml-email').disabled=false;
     document.getElementById('ml-vorname').value='';
@@ -2756,12 +2796,38 @@ function saveLehrer(){
   const saveBtn=document.getElementById('ml-save-btn');
   saveBtn.disabled=true;saveBtn.textContent='Wird gespeichert…';
 
-  withFirebase(async({db,doc,setDoc,updateDoc,auth})=>{
+  withFirebase(async({db,doc,setDoc,updateDoc,getDoc,auth})=>{
     try{
       if(editLehrerModalUid){
-        // Bearbeiten: nur Firestore aktualisieren
-        await updateDoc(doc(db,'users',editLehrerModalUid),{vorname,nachname});
-        toast('✓ Lehrkraft aktualisiert.');
+        // Bearbeiten: Name und ggf. Rolle aktualisieren
+        const rolleSel=document.getElementById('ml-rolle');
+        const daten={vorname,nachname};
+
+        if(rolleSel && !rolleSel.disabled){
+          const neueRolle=rolleSel.value==='leitung'?'leitung':'lehrer';
+          const snapAlt=await getDoc(doc(db,'users',editLehrerModalUid));
+          const alteRolle=snapAlt.exists()?(snapAlt.data().role||'lehrer'):'lehrer';
+          if(neueRolle!==alteRolle){
+            const frage=neueRolle==='leitung'
+              ? vorname+' '+nachname+' erhält volle Schulleitungsrechte:\n\n'+
+                '• Zugriff auf alle Klassen und Schülerdaten\n'+
+                '• Verwaltung von Fächern, Lehrkräften und Rahmenbedingungen\n'+
+                '• Kann Passwörter aller Nutzer einsehen\n\nWirklich hochstufen?'
+              : vorname+' '+nachname+' verliert die Schulleitungsrechte und wird wieder normale Lehrkraft.\n\nFortfahren?';
+            if(!confirm(frage)){
+              saveBtn.disabled=false;saveBtn.innerHTML='<i class="ti ti-check"></i> Speichern';
+              return;
+            }
+            daten.role=neueRolle;
+            // Beim Hochstufen entfällt die Klassenleitung, da ohnehin alles sichtbar ist
+            if(neueRolle==='leitung') daten.istKlassenlehrer=false;
+          }
+        }
+
+        await updateDoc(doc(db,'users',editLehrerModalUid),daten);
+        toast(daten.role
+          ? '✓ Rolle geändert – wirkt nach dem nächsten Anmelden.'
+          : '✓ Lehrkraft aktualisiert.');
         closeLehrerModal();
         loadLehrerKlassenListe();
       } else {
@@ -2906,29 +2972,35 @@ function renderLehrerKlassenListe(lehrer, gueltigeFaecher=null){
     // Nur Klassen anzeigen, für die diese Lehrkraft tatsächlich die Klassenleitung hat
     const klassen=(l.istKlassenlehrer===true && Array.isArray(l.klassen))?l.klassen:[];
     const chipsHtml=klassen.length
-      ? sortiereKlassen(klassen).map(k=>`<span class="lehrer-klasse-chip">${k}</span>`).join('')
+      ? '<div style="display:flex;flex-direction:column;gap:3px;align-items:flex-start;">'+
+        sortiereKlassen(klassen).map(k=>`<span class="lehrer-klasse-chip" style="display:inline-block;margin:0;">${k}</span>`).join('')+
+        '</div>'
       : '<span class="text-soft" style="font-size:12px;">keine</span>';
     const angebote=l.angebote||[];
     const emailId='email-'+l.uid.slice(0,8);
 
-    // Angebote mit Gültigkeitsprüfung
+    // Angebote mit Gültigkeitsprüfung – jedes Fach in einer eigenen Zeile
     const angeboteHtml=angebote.length
-      ? angebote.map(a=>{
+      ? '<div style="display:flex;flex-direction:column;gap:3px;align-items:flex-start;">'+
+        [...angebote].sort((a,b)=>a.localeCompare(b)).map(a=>{
           const ungueltig=gueltigeFaecher && !gueltigeFaecher.has(a);
           if(ungueltig){
-            return `<span style="background:#FCEBEB;color:#A32D2D;font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;display:inline-block;margin:1px;" title="Fach existiert nicht mehr in der Fächer-Liste">
+            return `<span style="background:#FCEBEB;color:#A32D2D;font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;display:inline-flex;align-items:center;gap:3px;" title="Fach existiert nicht mehr in der Fächer-Liste">
               ⚠️ ${a}
-              <button onclick="entferneAngebotVonLehrer('${l.uid}','${a}','${l.vorname} ${l.nachname}')" 
-                style="background:none;border:none;cursor:pointer;color:#A32D2D;font-size:12px;margin-left:2px;padding:0;" title="Entfernen">✕</button>
+              <button onclick="entferneAngebotVonLehrer('${l.uid}','${a}','${l.vorname} ${l.nachname}')"
+                style="background:none;border:none;cursor:pointer;color:#A32D2D;font-size:12px;padding:0;" title="Entfernen">✕</button>
             </span>`;
           }
-          return `<span style="background:var(--teal-light);color:#085041;font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;display:inline-block;margin:1px;">${a}</span>`;
-        }).join('')
+          return `<span style="background:var(--teal-light);color:#085041;font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;display:inline-block;">${a}</span>`;
+        }).join('')+
+        '</div>'
       : '<span style="font-size:12px;color:var(--text-lighter);">–</span>';
 
     html+=`<tr>
       <td>
-        <div style="font-weight:500;font-size:13px;">${l.vorname} ${l.nachname}</div>
+        <div style="font-weight:500;font-size:13px;">${l.vorname} ${l.nachname}
+          ${l.role==='leitung'?'<span style="font-size:10px;font-weight:700;color:#0C447C;background:#E6F1FB;padding:1px 7px;border-radius:99px;margin-left:5px;border:1px solid #0C447C;">Schulleitung</span>':''}
+        </div>
         <div id="${emailId}" style="display:none;font-size:11px;color:var(--text-soft);margin-top:2px;">${l.email||''}</div>
         <button onclick="document.getElementById('${emailId}').style.display=document.getElementById('${emailId}').style.display==='none'?'block':'none'"
           style="font-size:10px;color:var(--text-lighter);background:none;border:none;cursor:pointer;padding:0;margin-top:2px;">
