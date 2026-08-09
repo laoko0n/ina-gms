@@ -4024,7 +4024,14 @@ function renderFaecherListe(liste, unvollstaendig=[]){
       <td style="font-size:12px;color:var(--text-soft);">${f.zeitschieneName||f.zeitschiene||'–'}${f.isDoppelstunde?' 🔁':''}${f.isEinzelnWaehlbar?' <span style="color:var(--orange);font-weight:600;">(einzeln)</span>':''}${f.wochentage&&f.wochentage.length?' · <span style="color:#085041;font-size:11px;">'+f.wochentage.map(t=>(['','Mo','Di','Mi','Do'][t])).join(', ')+'</span>':''}</td>
       <td><span title="${f.maxTeilnehmer?'Maximal '+f.maxTeilnehmer+' Schüler pro Tag':'Unbegrenzt – keine Teilnehmerzahl hinterlegt'}"
         style="background:${f.maxTeilnehmer?'var(--orange-light)':'var(--gray-bg)'};color:${f.maxTeilnehmer?'var(--orange-dark)':'var(--text-lighter)'};font-size:12px;font-weight:600;padding:2px 8px;border-radius:99px;">${f.maxTeilnehmer||'∞'}</span></td>
-      <td style="font-size:13px;">${gruppenAnzeige}</td>
+      <td style="font-size:13px;">${gruppenAnzeige}
+        ${(Array.isArray(f.klassenstufen)&&f.klassenstufen.length)
+          ? '<br><span style="font-size:10px;font-weight:600;color:#0C447C;background:#E6F1FB;padding:1px 6px;border-radius:99px;">Stufe '+f.klassenstufen.join(', ')+'</span>'
+          : ''}
+        ${(Array.isArray(f.klassen)&&f.klassen.length)
+          ? '<br><span style="font-size:10px;font-weight:600;color:#4C1D95;background:#F3E8FF;padding:1px 6px;border-radius:99px;">'+f.klassen.join(', ')+'</span>'
+          : ''}
+      </td>
       <td>${aktiv?'<span style="color:#1D9E75;font-size:12px;font-weight:600;">● aktiv</span>':'<span style="color:var(--text-lighter);font-size:12px;">○ inaktiv</span>'}
         ${f.alleLehrer?'<br><span style="font-size:10px;font-weight:600;color:#085041;background:#E1F5EE;padding:1px 6px;border-radius:99px;">👥 Alle Lehrkräfte</span>':''}
       </td>
@@ -4110,6 +4117,7 @@ function openFachModal(id){
         document.getElementById('fm-alle-lehrer').checked=d.alleLehrer===true;
       // Klassen vorbelegen
       fmKlassenArr=Array.isArray(d.klassen)?[...d.klassen]:[];
+      fmStufenArr=Array.isArray(d.klassenstufen)?[...d.klassenstufen]:[];
       _renderFmKlassen();
       // Zeitschiene – alle erst abwählen, dann richtige setzen
       document.querySelectorAll('input[name="fm-zs"]').forEach(r=>r.checked=false);
@@ -4152,6 +4160,7 @@ function openFachModal(id){
     if(document.getElementById('fm-aktiv')) document.getElementById('fm-aktiv').checked=true;
     if(document.getElementById('fm-alle-lehrer')) document.getElementById('fm-alle-lehrer').checked=false;
     fmKlassenArr=[];
+    fmStufenArr=[];
     _renderFmKlassen();
     ['fruehstarter','starter','durchstarter'].forEach(g=>{
       const cb=document.getElementById('fm-gruppe-'+g);if(cb)cb.checked=true;
@@ -4599,6 +4608,53 @@ function selectIcon(icon){
 // ═══ TAG×STUNDEN-MATRIX HELFER ═══
 // ═══ KLASSEN-AUSWAHL IM FACH-MODAL ═══
 let fmKlassenArr=[];
+let fmStufenArr=[];   // gewählte Klassenstufen, z. B. [5,6]
+
+// Ermittelt alle vorkommenden Klassenstufen aus der Klassenliste (5a → 5)
+function getAlleKlassenstufen(){
+  const stufen=new Set();
+  getAlleKlassen().forEach(k=>{
+    const n=parseInt(k);
+    if(!isNaN(n)) stufen.add(n);
+  });
+  return [...stufen].sort((a,b)=>a-b);
+}
+
+function _renderFmStufen(){
+  const cont=document.getElementById('fm-stufen-auswahl');
+  if(!cont)return;
+  const stufen=getAlleKlassenstufen();
+  if(!stufen.length){
+    cont.innerHTML='<span class="text-sm text-soft">Keine Klassen angelegt – siehe Rahmen → Klassen der Schule.</span>';
+    return;
+  }
+  cont.innerHTML=stufen.map(st=>{
+    const aktiv=fmStufenArr.includes(st);
+    const anzahl=getAlleKlassen().filter(k=>parseInt(k)===st).length;
+    return `<button type="button" onclick="fmStufeToggle(${st})"
+      title="${anzahl} Klasse(n) in Stufe ${st}"
+      style="padding:6px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;
+      border:1.5px solid ${aktiv?'var(--orange-dark)':'var(--gray-border)'};
+      background:${aktiv?'var(--orange-light)':'#fff'};
+      color:${aktiv?'var(--orange-dark)':'var(--text-soft)'};">
+      Stufe ${st}${aktiv?' ✓':''}
+    </button>`;
+  }).join('')+
+  `<button type="button" onclick="fmStufenAlleAbwaehlen()"
+     style="padding:6px 12px;border-radius:8px;font-size:12px;cursor:pointer;font-family:inherit;
+     border:1.5px solid var(--gray-border);background:#fff;color:var(--text-soft);">✕ Keine</button>`;
+}
+
+function fmStufeToggle(st){
+  fmStufenArr=fmStufenArr.includes(st)?fmStufenArr.filter(x=>x!==st):[...fmStufenArr,st];
+  fmStufenArr.sort((a,b)=>a-b);
+  _renderFmStufen();
+}
+
+function fmStufenAlleAbwaehlen(){
+  fmStufenArr=[];
+  _renderFmStufen();
+}
 
 function fmKlasseHinzufuegen(){
   const val=document.getElementById('fm-klasse-input')?.value.trim();
@@ -4650,6 +4706,7 @@ function fmKlasseSchnellToggle(k){
 }
 
 function _renderFmKlassen(){
+  _renderFmStufen();
   _renderFmKlassenSchnellauswahl();
   const cont=document.getElementById('fm-klassen-liste');
   if(!cont)return;
@@ -4700,6 +4757,7 @@ function saveFach(){
   const aktiv=document.getElementById('fm-aktiv')?.checked||false;
   const alleLehrer=document.getElementById('fm-alle-lehrer')?.checked||false;
   const klassen=fmKlassenArr.length>0?[...fmKlassenArr]:null; // null = alle Klassen
+  const klassenstufen=fmStufenArr.length>0?[...fmStufenArr]:null; // null = alle Stufen
   const err=document.getElementById('fm-error');
   err.style.display='none';
 
@@ -4749,6 +4807,7 @@ function saveFach(){
         tagStunden: tagStunden.length>0 ? tagStunden : null, // detaillierte Tag×Stunde-Einschränkung
         alleLehrer: alleLehrer, // alle Lehrkräfte können Belegung sehen
         klassen: klassen, // null = alle Klassen, sonst Array
+        klassenstufen: klassenstufen, // null = alle Stufen, sonst z.B. [5,6]
         aktiv,
         updatedAt:new Date().toISOString()
       };
@@ -5381,7 +5440,17 @@ function renderDynamischeChips(){
     if(f.gruppen && !f.gruppen.includes(gruppe)) return;
 
     const schuelerKlasse=currentUserData?.klasse||'';
-    if(f.klassen && f.klassen.length>0 && schuelerKlasse && !f.klassen.includes(schuelerKlasse)) return;
+    const schuelerStufe=parseInt(schuelerKlasse);
+
+    // Einschränkung auf Klassenstufen und/oder einzelne Klassen prüfen.
+    // Ist beides gesetzt, genügt eine Übereinstimmung.
+    const hatStufen=Array.isArray(f.klassenstufen)&&f.klassenstufen.length>0;
+    const hatKlassen=Array.isArray(f.klassen)&&f.klassen.length>0;
+    if((hatStufen||hatKlassen)&&schuelerKlasse){
+      const passtStufe =hatStufen  && !isNaN(schuelerStufe) && f.klassenstufen.includes(schuelerStufe);
+      const passtKlasse=hatKlassen && f.klassen.includes(schuelerKlasse);
+      if(!passtStufe && !passtKlasse) return;
+    }
 
     if(f.tagStunden && f.tagStunden.length>0 && aktiverWochentag!==null){
       // wird per ZS-Schleife geprüft
@@ -5570,6 +5639,8 @@ function openAngeboteModal(uid,name,angebote){
   document.getElementById('ma-error').style.display='none';
   document.getElementById('ma-neues-angebot').value='';
   renderAngeboteCheckboxen();
+  maStufenArr=[];
+  _renderMaStufen();
   document.getElementById('modal-angebote').classList.remove('hidden');
 
   // Name und Angebote frisch aus Firestore laden
@@ -5677,6 +5748,33 @@ function renderAngeboteCheckboxen(){
   });
 }
 
+// Klassenstufen im Schnell-Anlegen (Lehrkräfte-Fenster)
+let maStufenArr=[];
+
+function _renderMaStufen(){
+  const cont=document.getElementById('ma-neues-stufen');
+  if(!cont)return;
+  const stufen=getAlleKlassenstufen();
+  if(!stufen.length){
+    cont.innerHTML='<span class="text-sm text-soft" style="font-size:11px;">Keine Klassen angelegt – siehe Rahmen.</span>';
+    return;
+  }
+  cont.innerHTML=stufen.map(st=>{
+    const aktiv=maStufenArr.includes(st);
+    return `<button type="button" onclick="maStufeToggle(${st})"
+      style="padding:5px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;
+      border:1.5px solid ${aktiv?'var(--orange-dark)':'var(--gray-border)'};
+      background:${aktiv?'var(--orange-light)':'#fff'};
+      color:${aktiv?'var(--orange-dark)':'var(--text-soft)'};">${st}${aktiv?' ✓':''}</button>`;
+  }).join('');
+}
+
+function maStufeToggle(st){
+  maStufenArr=maStufenArr.includes(st)?maStufenArr.filter(x=>x!==st):[...maStufenArr,st];
+  maStufenArr.sort((a,b)=>a-b);
+  _renderMaStufen();
+}
+
 async function addNeuesAngebot(){
   const input=document.getElementById('ma-neues-angebot');
   const name=input.value.trim();
@@ -5730,6 +5828,8 @@ async function addNeuesAngebot(){
         isDoppelstunde:isDoppel,
         isEinzelnWaehlbar:istEinzeln,
         maxTeilnehmer, beschreibung:'', gruppen, wochentage:wochentage.length>0?wochentage:null, aktiv:true,
+        klassen:null,
+        klassenstufen: maStufenArr.length>0?[...maStufenArr]:null,
         alleLehrer,
         createdAt:new Date().toISOString()
       });
@@ -5775,6 +5875,8 @@ async function addNeuesAngebot(){
   if(maxEl) maxEl.value='';
   const alEl=document.getElementById('ma-neues-alle-lehrer');
   if(alEl) alEl.checked=false;
+  maStufenArr=[];
+  _renderMaStufen();
 }
 
 function toggleAngebot(name,checked){
@@ -6661,6 +6763,9 @@ function savePwReset(){
         <span>👥 <b>Für alle Lehrkräfte sichtbar</b> – jede Lehrkraft sieht die Teilnehmer</span>
       </label>
 
+      <label class="form-label" style="font-size:12px;">Klassenstufen (leer = alle)</label>
+      <div id="ma-neues-stufen" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;"></div>
+
       <label class="form-label" style="font-size:12px;">Für welche Gruppen? *</label>
       <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
         <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;padding:5px 9px;border:1px solid var(--gray-border);border-radius:7px;">
@@ -6869,8 +6974,17 @@ function savePwReset(){
     </div>
 
     <div class="form-group">
-      <label class="form-label">Klassen-Einschränkung <span class="text-soft" style="font-weight:400;">(optional)</span></label>
-      <p class="text-sm text-soft" style="margin-bottom:6px;">Leer = Fach gilt für alle Klassen der gewählten Gruppen. Klassen eingeben um es nur für bestimmte Klassen anzuzeigen.</p>
+      <label class="form-label">Klassenstufen <span class="text-soft" style="font-weight:400;">(optional)</span></label>
+      <p class="text-sm text-soft" style="margin-bottom:6px;">
+        Nichts gewählt = alle Stufen. Eine Stufe gilt automatisch für alle ihre Klassen –
+        auch für Klassen, die später dazukommen.
+      </p>
+      <div id="fm-stufen-auswahl" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;"></div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Einzelne Klassen <span class="text-soft" style="font-weight:400;">(optional)</span></label>
+      <p class="text-sm text-soft" style="margin-bottom:6px;">Nur nötig, wenn das Fach auf bestimmte Klassen begrenzt sein soll – z.&nbsp;B. nur 7a statt der ganzen Stufe 7.</p>
       <div style="display:flex;gap:8px;margin-bottom:6px;">
         <button type="button" class="btn btn-secondary btn-sm" onclick="fmAlleKlassenWaehlen()" style="background:#E1F5EE;border-color:#1D9E75;color:#085041;">
           👥 Alle Klassen
