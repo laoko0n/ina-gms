@@ -646,6 +646,22 @@
           </label>
         </div>
 
+        <div class="section-label" style="margin-top:.5rem;">Klassen der Schule</div>
+        <p class="text-sm text-soft" style="margin-bottom:.75rem;">
+          Hier legst du zentral fest, welche Klassen es gibt. Sie stehen dann überall zur Auswahl –
+          bei Lehrkräften, Fächern, Schülern und Filtern, auch bevor Schüler angelegt sind.
+        </p>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">
+          <input type="text" id="einst-klasse-input" class="form-control" placeholder="z. B. 7a"
+            style="flex:1;min-width:120px;max-width:180px;font-size:13px;padding:6px 10px;"
+            onkeydown="if(event.key==='Enter'){event.preventDefault();klasseHinzufuegen();}" />
+          <button class="btn btn-primary btn-sm" onclick="klasseHinzufuegen()"><i class="ti ti-plus"></i> Hinzufügen</button>
+          <button class="btn btn-secondary btn-sm" onclick="jahrgangAnlegen()" style="font-size:11px;">
+            ⚡ Ganzer Jahrgang
+          </button>
+        </div>
+        <div id="einst-klassen-liste" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:1rem;"></div>
+
         <div class="section-label" style="margin-top:.5rem;">Ferien & unterrichtsfreie Tage</div>
         <p class="text-sm text-soft" style="margin-bottom:.75rem;">
           Ferien, Feiertage und schulfreie Tage werden bei der Wochenberechnung übersprungen.
@@ -793,7 +809,12 @@
     <div class="modal-title" id="modal-schueler-title">Schüler hinzufügen</div>
     <div class="form-group"><label class="form-label">Vorname</label><input type="text" id="ms-vorname" class="form-control" placeholder="z. B. Anna" /></div>
     <div class="form-group"><label class="form-label">Nachname</label><input type="text" id="ms-nachname" class="form-control" placeholder="z. B. Müller" /></div>
-    <div class="form-group"><label class="form-label">Klasse</label><input type="text" id="ms-klasse" class="form-control" placeholder="z. B. 7a" /></div>
+    <div class="form-group">
+      <label class="form-label">Klasse</label>
+      <input type="text" id="ms-klasse" class="form-control" placeholder="z. B. 7a" list="ms-klasse-liste" />
+      <datalist id="ms-klasse-liste"></datalist>
+      <div id="ms-klassen-schnell" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;"></div>
+    </div>
     <div class="form-group">
       <label class="form-label">Gruppe</label>
       <select id="ms-gruppe" class="form-control">
@@ -1044,6 +1065,8 @@ function leereKontoAnsichten(){
   window._anwCache={};
   window._ausleiheAnwCache={};
   _planGesperrt=false;
+  _alleSchuelerCache=[];
+  _alleKlassenVerfuegbar=[];
   if(typeof dynamischeFaecher!=='undefined') dynamischeFaecher=[];
   if(typeof _angebotFilter!=='undefined') _angebotFilter='angebot';
 
@@ -2199,11 +2222,7 @@ function befuelleKlassenFilter(selectId, schueler){
     sel.dataset.initialisiert='1';
   }
 
-  const klassen=[...new Set(schueler.map(s=>s.klasse).filter(Boolean))].sort((a,b)=>{
-    const numA=parseInt(a), numB=parseInt(b);
-    if(numA!==numB) return numA-numB;
-    return a.localeCompare(b);
-  });
+  const klassen=getAlleKlassen(schueler);
   sel.innerHTML='<option value="">Alle Klassen</option>';
   klassen.forEach(k=>{
     const opt=document.createElement('option');
@@ -2379,8 +2398,8 @@ function loadSchuelerListe(containerId){
     snaps.forEach(s=>{if(s.data().role==='schueler')liste.push({uid:s.id,...s.data()});});
     liste.sort((a,b)=>(a.klasse+a.nachname).localeCompare(b.klasse+b.nachname));
 
-    // Cache für Filter
-    if(containerId==='l-schueler-liste') _alleSchuelerCache=liste;
+    // Cache für Filter und Klassenermittlung – in ALLEN Ansichten füllen
+    _alleSchuelerCache=liste;
 
     // Dropdown befüllen (nur für Lehrer-Tab)
     const sel=document.getElementById('l-schueler-klassen-filter');
@@ -2436,6 +2455,28 @@ function renderSchuelerListe(containerId,liste){
   html+='</tbody></table>';
   cont.innerHTML=html;
 }
+// Klassen-Schnellauswahl im Schüler-Fenster befüllen
+function _renderMsKlassenSchnellauswahl(){
+  const klassen=getAlleKlassen();
+  const dl=document.getElementById('ms-klasse-liste');
+  if(dl) dl.innerHTML=klassen.map(k=>`<option value="${k}"></option>`).join('');
+  const cont=document.getElementById('ms-klassen-schnell');
+  if(!cont)return;
+  if(!klassen.length){
+    cont.innerHTML='<span class="text-sm text-soft">Keine Klassen angelegt – siehe Stammdaten.</span>';
+    return;
+  }
+  const aktuell=document.getElementById('ms-klasse')?.value.trim();
+  cont.innerHTML=klassen.map(k=>{
+    const aktiv=k===aktuell;
+    return `<button type="button" onclick="document.getElementById('ms-klasse').value='${k.replace(/'/g,"\\'")}';_renderMsKlassenSchnellauswahl();"
+      style="padding:4px 10px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;
+      border:1.5px solid ${aktiv?'var(--orange-dark)':'var(--gray-border)'};
+      background:${aktiv?'var(--orange-light)':'#fff'};
+      color:${aktiv?'var(--orange-dark)':'var(--text-soft)'};">${k}</button>`;
+  }).join('');
+}
+
 function openSchuelerModal(uid){
  try{
   editSchuelerUid=uid||null;
@@ -2487,6 +2528,7 @@ function openSchuelerModal(uid){
     document.getElementById('ms-pw').value=genTierPasswort(); // automatisch generieren
     document.getElementById('ms-gruppe').value='durchstarter';
   }
+  _renderMsKlassenSchnellauswahl();
   document.getElementById('modal-schueler').classList.remove('hidden');
   // Zum Anfang scrollen
   setTimeout(()=>{
@@ -2939,17 +2981,11 @@ function openKlassenModal(uid,name,klassen){
 function _ladeKlassenSchnellauswahl(){
   const cont=document.getElementById('mlk-schnellauswahl');
   if(!cont)return;
-  // Klassen aus Cache falls vorhanden
-  const klassen=_alleSchuelerCache.length>0
-    ? [...new Set(_alleSchuelerCache.map(s=>s.klasse).filter(Boolean))].sort((a,b)=>{
-        const na=parseInt(a),nb=parseInt(b);
-        if(na!==nb)return na-nb;
-        return a.localeCompare(b);
-      })
-    : [];
+  // Zentrale Klassenliste + tatsächlich vorhandene Klassen der Schüler
+  const klassen=getAlleKlassen();
   _alleKlassenVerfuegbar=klassen;
   if(!klassen.length){
-    cont.innerHTML='<span class="text-sm text-soft">Keine Klassen vorhanden</span>';
+    cont.innerHTML='<span class="text-sm text-soft">Keine Klassen vorhanden – lege sie unter Stammdaten an.</span>';
     return;
   }
   cont.innerHTML=klassen.map(k=>{
@@ -3065,6 +3101,7 @@ let schuljahrConfig={
   sjEnde:'2027-07-09',
   wahlUhrzeit:'12:55',   // ab wann Schüler täglich wählen dürfen
   wahlWochen:0,          // wie viele Wochen im Voraus gewählt werden darf (0=nur heute)
+  klassen:[],            // zentrale Klassenliste der Schule
   ferien:[
     // Schulferien Saarland 2026/2027
     {name:'Herbstferien',      von:'2026-10-05', bis:'2026-10-16'},
@@ -3099,6 +3136,165 @@ function ladeSchuljahrConfig(){
   });
 }
 
+// ═══ KLASSENVERWALTUNG (Stammdaten) ═══
+// Zentrale Liste aller Klassen – unabhängig davon ob schon Schüler angelegt sind
+function sortiereKlassen(arr){
+  return [...arr].sort((a,b)=>{
+    const na=parseInt(a), nb=parseInt(b);
+    if(!isNaN(na)&&!isNaN(nb)&&na!==nb) return na-nb;
+    return String(a).localeCompare(String(b),'de');
+  });
+}
+
+// Alle bekannten Klassen: zentrale Liste + tatsächlich bei Schülern vorhandene
+function getAlleKlassen(schuelerListe){
+  const zentral=schuljahrConfig.klassen||[];
+  const ausDaten=(schuelerListe||_alleSchuelerCache||[]).map(s=>s.klasse).filter(Boolean);
+  return sortiereKlassen([...new Set([...zentral,...ausDaten])]);
+}
+
+function renderKlassenVerwaltung(){
+  const cont=document.getElementById('einst-klassen-liste');
+  if(!cont)return;
+
+  const zentral=sortiereKlassen(schuljahrConfig.klassen||[]);
+
+  // Klassen die bei Schülern eingetragen sind, aber noch nicht in der zentralen Liste
+  const ausDaten=sortiereKlassen([...new Set(
+    (_alleSchuelerCache||[]).map(s=>s.klasse).filter(Boolean)
+  )]);
+  const fehlend=ausDaten.filter(k=>!zentral.some(z=>z.toLowerCase()===k.toLowerCase()));
+
+  let html='';
+
+  // Bereits vorhandene Klassen aus Schülerdaten anbieten
+  if(fehlend.length){
+    html+=`<div style="width:100%;background:#FFF7ED;border:1.5px solid #EA580C;border-radius:10px;padding:10px 12px;margin-bottom:10px;">
+      <div style="font-size:12px;font-weight:700;color:#7C2D12;margin-bottom:4px;">
+        ℹ️ ${fehlend.length} Klasse${fehlend.length===1?'':'n'} aus den Schülerdaten noch nicht in der Liste
+      </div>
+      <p class="text-sm" style="color:#92400E;font-size:11px;margin-bottom:8px;">
+        Diese Klassen sind bereits bei Schülern eingetragen. Übernimm sie, damit sie überall
+        zur Auswahl stehen – an den Schülerdaten ändert sich dabei nichts.
+      </p>
+      <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;">
+        ${fehlend.map(k=>{
+          const anzahl=(_alleSchuelerCache||[]).filter(s=>s.klasse===k).length;
+          return `<button onclick="klasseUebernehmen('${k.replace(/'/g,"\\'")}')"
+            style="padding:4px 10px;border-radius:8px;border:1.5px solid #EA580C;background:#fff;color:#7C2D12;
+            font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">
+            + ${k} <span style="font-weight:400;opacity:.7;">(${anzahl})</span>
+          </button>`;
+        }).join('')}
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="alleKlassenUebernehmen()" style="font-size:11px;">
+        ⬇ Alle ${fehlend.length} übernehmen
+      </button>
+    </div>`;
+  }
+
+  // Zentrale Liste
+  if(!zentral.length){
+    html+='<span class="text-sm text-soft">Noch keine Klassen angelegt.</span>';
+  } else {
+    html+=zentral.map(k=>{
+      const anzahl=(_alleSchuelerCache||[]).filter(s=>s.klasse===k).length;
+      return `<span style="display:inline-flex;align-items:center;gap:6px;background:var(--orange-light);color:var(--orange-dark);
+        border:1.5px solid var(--orange-dark);border-radius:99px;padding:4px 10px;font-size:13px;font-weight:600;">
+        ${k}${anzahl?`<span style="font-weight:400;opacity:.7;font-size:11px;">${anzahl} Schüler</span>`:''}
+        <button onclick="klasseEntfernen('${k.replace(/'/g,"\\'")}')" title="Klasse entfernen"
+          style="background:none;border:none;color:var(--orange-dark);cursor:pointer;font-size:14px;line-height:1;padding:0;">×</button>
+      </span>`;
+    }).join('');
+  }
+
+  cont.innerHTML=html;
+}
+
+// Einzelne vorhandene Klasse in die zentrale Liste übernehmen
+function klasseUebernehmen(k){
+  const vorhanden=schuljahrConfig.klassen||[];
+  if(vorhanden.some(v=>v.toLowerCase()===k.toLowerCase()))return;
+  schuljahrConfig.klassen=sortiereKlassen([...vorhanden,k]);
+  renderKlassenVerwaltung();
+  speichereKlassen();
+}
+
+// Alle in den Schülerdaten gefundenen Klassen übernehmen
+function alleKlassenUebernehmen(){
+  const vorhanden=schuljahrConfig.klassen||[];
+  const ausDaten=[...new Set((_alleSchuelerCache||[]).map(s=>s.klasse).filter(Boolean))];
+  const neue=ausDaten.filter(k=>!vorhanden.some(v=>v.toLowerCase()===k.toLowerCase()));
+  if(!neue.length){toast('Alle Klassen sind bereits übernommen.');return;}
+  schuljahrConfig.klassen=sortiereKlassen([...vorhanden,...neue]);
+  renderKlassenVerwaltung();
+  speichereKlassen();
+  toast('✓ '+neue.length+' Klassen übernommen: '+neue.join(', '));
+}
+
+function klasseHinzufuegen(){
+  const inp=document.getElementById('einst-klasse-input');
+  if(!inp)return;
+  const wert=inp.value.trim();
+  if(!wert){toast('Bitte eine Klasse eingeben.');return;}
+  const vorhanden=schuljahrConfig.klassen||[];
+  if(vorhanden.some(k=>k.toLowerCase()===wert.toLowerCase())){
+    toast('Klasse „'+wert+'" existiert bereits.');
+    inp.value='';
+    return;
+  }
+  schuljahrConfig.klassen=sortiereKlassen([...vorhanden,wert]);
+  inp.value='';
+  renderKlassenVerwaltung();
+  speichereKlassen();
+}
+
+function klasseEntfernen(k){
+  // Prüfen ob noch Schüler in dieser Klasse sind
+  const betroffene=(_alleSchuelerCache||[]).filter(s=>s.klasse===k);
+  if(betroffene.length){
+    if(!confirm('In Klasse '+k+' sind noch '+betroffene.length+' Schüler eingetragen.\n\n'+
+      'Die Klasse wird nur aus der Auswahlliste entfernt – die Schüler behalten ihre Klasse.\n\nFortfahren?')) return;
+  }
+  schuljahrConfig.klassen=(schuljahrConfig.klassen||[]).filter(x=>x!==k);
+  renderKlassenVerwaltung();
+  speichereKlassen();
+}
+
+function jahrgangAnlegen(){
+  const jg=prompt('Welcher Jahrgang? (nur die Zahl, z. B. 5)');
+  if(!jg)return;
+  const nr=parseInt(jg);
+  if(isNaN(nr)){toast('Bitte eine Zahl eingeben.');return;}
+  const anzahl=prompt('Wie viele Parallelklassen? (z. B. 4 für a–d)','4');
+  const n=parseInt(anzahl);
+  if(isNaN(n)||n<1||n>12){toast('Bitte eine Zahl zwischen 1 und 12 eingeben.');return;}
+  const buchstaben='abcdefghijkl';
+  const neue=[];
+  for(let i=0;i<n;i++) neue.push(nr+buchstaben[i]);
+  const vorhanden=schuljahrConfig.klassen||[];
+  const hinzugefuegt=neue.filter(k=>!vorhanden.some(v=>v.toLowerCase()===k.toLowerCase()));
+  if(!hinzugefuegt.length){toast('Diese Klassen existieren bereits.');return;}
+  schuljahrConfig.klassen=sortiereKlassen([...vorhanden,...hinzugefuegt]);
+  renderKlassenVerwaltung();
+  speichereKlassen();
+  toast('✓ '+hinzugefuegt.length+' Klassen angelegt: '+hinzugefuegt.join(', '));
+}
+
+function speichereKlassen(){
+  withFirebase(async({db,doc,setDoc})=>{
+    try{
+      await setDoc(doc(db,'config','schuljahr'),{
+        ...schuljahrConfig,
+        klassen:schuljahrConfig.klassen||[],
+        updatedAt:new Date().toISOString()
+      });
+    }catch(e){
+      toast('❌ Klassen konnten nicht gespeichert werden: '+(e.message||e),true);
+    }
+  });
+}
+
 function loadEinstellungen(){
   ladeSchuljahrConfig();
   setTimeout(()=>{
@@ -3115,6 +3311,20 @@ function loadEinstellungen(){
     if(wochenEl)wochenEl.value=schuljahrConfig.wahlWochen??0;
     const testEl=document.getElementById('einst-testmodus');
     if(testEl)testEl.checked=schuljahrConfig.testmodus===true;
+    renderKlassenVerwaltung();
+    // Schülerdaten nachladen falls noch nicht vorhanden, damit vorhandene
+    // Klassen zuverlässig erkannt werden
+    if(!_alleSchuelerCache||!_alleSchuelerCache.length){
+      withFirebase(async({db,getDocs,collection})=>{
+        try{
+          const snaps=await getDocs(collection(db,'users'));
+          const liste=[];
+          snaps.forEach(s=>{if(s.data().role==='schueler')liste.push({uid:s.id,...s.data()});});
+          _alleSchuelerCache=liste;
+          renderKlassenVerwaltung();
+        }catch(e){console.warn('Klassen aus Schülerdaten laden:',e);}
+      });
+    }
     renderFerienListe();
   },600);
 }
@@ -3152,7 +3362,7 @@ function saveEinstellungen(){
   schuljahrConfig={...schuljahrConfig,schulname,sjBeginn,sjEnde,hj2Beginn,bundesland,wahlUhrzeit,wahlWochen,testmodus};
   withFirebase(async({db,doc,setDoc})=>{
     try{
-      await setDoc(doc(db,'config','schuljahr'),{schulname,sjBeginn,sjEnde,hj2Beginn,bundesland,wahlUhrzeit,wahlWochen,testmodus,ferien:schuljahrConfig.ferien||[],updatedAt:new Date().toISOString()});
+      await setDoc(doc(db,'config','schuljahr'),{schulname,sjBeginn,sjEnde,hj2Beginn,bundesland,wahlUhrzeit,wahlWochen,testmodus,klassen:schuljahrConfig.klassen||[],ferien:schuljahrConfig.ferien||[],updatedAt:new Date().toISOString()});
       ok.textContent=testmodus?'✓ Gespeichert – 🧪 Testmodus ist AKTIV!':'✓ Einstellungen gespeichert!';ok.style.display='block';
       setTimeout(()=>ok.style.display='none',3000);
     }catch(e){showErr(err,'Fehler: '+e.message);toast('❌ Fach konnte nicht gespeichert werden: '+e.message, true);}
@@ -4312,19 +4522,42 @@ function fmKlasseEntfernen(k){
 }
 
 function fmAlleKlassenWaehlen(){
-  // Alle Klassen aus Schüler-Cache laden
-  const klassen=_alleSchuelerCache.length>0
-    ? [...new Set(_alleSchuelerCache.map(s=>s.klasse).filter(Boolean))].sort((a,b)=>{
-        const na=parseInt(a),nb=parseInt(b);
-        if(na!==nb)return na-nb;
-        return a.localeCompare(b);
-      })
-    : [];
-  fmKlassenArr=klassen;
+  const klassen=getAlleKlassen();
+  if(!klassen.length){
+    toast('Noch keine Klassen angelegt – bitte zuerst unter Stammdaten eintragen.');
+    return;
+  }
+  fmKlassenArr=[...klassen];
+  _renderFmKlassen();
+}
+
+// Anklickbare Klassenliste im Fach-Fenster
+function _renderFmKlassenSchnellauswahl(){
+  const cont=document.getElementById('fm-klassen-schnell');
+  if(!cont)return;
+  const klassen=getAlleKlassen();
+  if(!klassen.length){
+    cont.innerHTML='<span class="text-sm text-soft">Keine Klassen angelegt – siehe Stammdaten.</span>';
+    return;
+  }
+  cont.innerHTML=klassen.map(k=>{
+    const aktiv=fmKlassenArr.includes(k);
+    return `<button type="button" onclick="fmKlasseSchnellToggle('${k.replace(/'/g,"\\'")}')"
+      style="padding:4px 10px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;
+      border:1.5px solid ${aktiv?'var(--orange-dark)':'var(--gray-border)'};
+      background:${aktiv?'var(--orange-light)':'#fff'};
+      color:${aktiv?'var(--orange-dark)':'var(--text-soft)'};">${k}</button>`;
+  }).join('');
+}
+
+function fmKlasseSchnellToggle(k){
+  if(fmKlassenArr.includes(k)) fmKlassenArr=fmKlassenArr.filter(x=>x!==k);
+  else fmKlassenArr.push(k);
   _renderFmKlassen();
 }
 
 function _renderFmKlassen(){
+  _renderFmKlassenSchnellauswahl();
   const cont=document.getElementById('fm-klassen-liste');
   if(!cont)return;
   if(!fmKlassenArr.length){
@@ -4645,11 +4878,9 @@ async function loadFehlzeitenUebersicht(rolle){
       const klassenSel=document.getElementById(rolle+'-fehlzeiten-filter');
       if(klassenSel){
         const gewaehlt=klassenSel.value||'all';
-        const klassen=[...new Set(schueler.map(s=>s.klasse).filter(Boolean))].sort((a,b)=>{
-          const nA=parseInt(a),nB=parseInt(b);
-          if(nA!==nB)return nA-nB;
-          return a.localeCompare(b);
-        });
+        const klassen=(rolle==='l')
+          ? getAlleKlassen(schueler).filter(k=>(currentUserData.klassen||[]).includes(k))
+          : getAlleKlassen(schueler);
         klassenSel.innerHTML='<option value="all">Alle Klassen</option>'+
           klassen.map(k=>`<option value="${k}"${k===gewaehlt?' selected':''}>Klasse ${k}</option>`).join('');
         // Falls die vorher gewählte Klasse nicht mehr existiert: zurück auf "alle"
@@ -6238,10 +6469,11 @@ function savePwReset(){
         <button type="button" class="btn btn-secondary btn-sm" onclick="fmAlleKlassenWaehlen()" style="background:#E1F5EE;border-color:#1D9E75;color:#085041;">
           👥 Alle Klassen
         </button>
-        <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('fm-klassen-liste').innerHTML='';fmKlassenArr=[];">
+        <button type="button" class="btn btn-secondary btn-sm" onclick="fmKlassenArr=[];_renderFmKlassen();">
           ✕ Keine
         </button>
       </div>
+      <div id="fm-klassen-schnell" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px;"></div>
       <div id="fm-klassen-liste" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;min-height:28px;padding:4px;border:0.5px solid var(--gray-border);border-radius:8px;"></div>
       <div style="display:flex;gap:6px;">
         <input type="text" id="fm-klasse-input" class="form-control" placeholder="z.B. 5a" style="max-width:100px;"
