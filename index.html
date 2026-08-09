@@ -935,6 +935,7 @@ function doLogin() {
         return;
       }
       currentUser=cred.user;currentRole=data.role;currentUserData=data;
+      leereKontoAnsichten(); // Reste eines vorherigen Kontos entfernen
       if(data.mustSetPassword && data.role!=='schueler'){
         const hint=document.getElementById('setpw-hint');
         if(data.tempPw&&hint) hint.style.display='block';
@@ -1006,6 +1007,7 @@ function doLogout(){
       currentRole='schueler';
       selectedLoginRole='schueler';
       gewahlt={1:null,2:null,3:null,4:null};
+      leereKontoAnsichten();
       // Login-Felder leeren
       const emailEl=document.getElementById('login-email');
       const pwEl=document.getElementById('login-pw');
@@ -1014,6 +1016,38 @@ function doLogout(){
       document.getElementById('login-error').style.display='none';
       showScreen('login');
     });
+  });
+}
+
+// Alle kontobezogenen Inhalte löschen – verhindert dass Daten eines Kontos
+// beim nächsten Login eines anderen Nutzers noch sichtbar sind
+function leereKontoAnsichten(){
+  [
+    'l-meldungen-inhalt','l-angebot-inhalt','l-angebot-header','l-angebot-tage',
+    'l-schueler-liste','l-fehlzeiten-inhalt','l-plan-inhalt','l-stats-inhalt',
+    'sl-angebot-inhalt','sl-angebot-header','sl-angebot-auswahl','sl-angebot-tage',
+    'sl-schueler-liste','sl-lehrer-liste','sl-fehlzeiten-inhalt','sl-plan-inhalt',
+    'sl-faecher-liste'
+  ].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el)el.innerHTML='';
+  });
+
+  // Meldungs-Zähler zurücksetzen
+  const badge=document.getElementById('l-meldungen-badge');
+  if(badge){badge.textContent='';badge.style.display='none';}
+
+  // Zwischenspeicher leeren
+  window._anwCache={};
+  window._ausleiheAnwCache={};
+  _planGesperrt=false;
+  if(typeof dynamischeFaecher!=='undefined') dynamischeFaecher=[];
+  if(typeof _angebotFilter!=='undefined') _angebotFilter='angebot';
+
+  // Klassenfilter zurücksetzen damit die Vorauswahl neu greift
+  ['l-klassen-filter','sl-klassen-filter','l-schueler-klassen-filter'].forEach(id=>{
+    const sel=document.getElementById(id);
+    if(sel){sel.innerHTML='<option value="">Alle Klassen</option>';delete sel.dataset.initialisiert;}
   });
 }
 function showScreen(name){
@@ -3360,7 +3394,10 @@ function loadSchuelerStats(){
 // ═══ MELDUNGEN – Abwesenheiten eigener Schüler bei fremden Veranstaltungen ═══
 async function loadMeldungen(){
   const cont=document.getElementById('l-meldungen-inhalt');
+  // Alten Inhalt sofort verwerfen – darf nie aus einem anderen Konto stehenbleiben
   cont.innerHTML='<p class="text-sm text-soft">Lade…</p>';
+  const badgeReset=document.getElementById('l-meldungen-badge');
+  if(badgeReset){badgeReset.textContent='';badgeReset.style.display='none';}
 
   const meineKlassen=currentUserData?.klassen||[];
   const istKlassenlehrer=currentUserData?.istKlassenlehrer===true;
@@ -3373,6 +3410,9 @@ async function loadMeldungen(){
     </div>`;
     return;
   }
+
+  // Konto merken – falls währenddessen gewechselt wird
+  const uidBeimStart=currentUser?.uid;
 
   withFirebase(async({db,getDocs,getDocsFromServer,collection})=>{
     try{
@@ -3411,12 +3451,23 @@ async function loadMeldungen(){
       anwSnaps.forEach(a=>{
         const d=a.data();
         if(!d.tag||!d.schueler)return;
+
+        // Schüler-IDs ermitteln, für die es bereits fachgenaue Einträge gibt.
+        // Für diese wird ein evtl. vorhandener Alt-Eintrag (nur ID) ignoriert,
+        // da er von einer späteren Korrektur überholt sein kann.
+        const mitFachEintrag=new Set();
+        Object.keys(d.schueler).forEach(k=>{
+          const tr=k.indexOf('::');
+          if(tr>=0) mitFachEintrag.add(k.slice(0,tr));
+        });
+
         Object.entries(d.schueler).forEach(([key,status])=>{
           if(status!=='abwesend')return;
-          // Schlüssel kann "uid" (alt) oder "uid::Fachname" (neu) sein
           const trenner=key.indexOf('::');
           const uid=trenner>=0?key.slice(0,trenner):key;
           const fachAusKey=trenner>=0?key.slice(trenner+2):null;
+          // Alt-Eintrag überspringen wenn es für diesen Schüler fachgenaue Daten gibt
+          if(trenner<0 && mitFachEintrag.has(uid))return;
           if(!meineSchueler[uid])return; // Nicht mein Schüler
 
           let fach=fachAusKey;
@@ -3486,6 +3537,8 @@ async function loadMeldungen(){
         </div>`;
       });
       html+='</div>';
+      // Nur anzeigen wenn immer noch dasselbe Konto aktiv ist
+      if(currentUser?.uid!==uidBeimStart) return;
       cont.innerHTML=html;
     }catch(e){
       console.error('loadMeldungen Fehler:',e);
@@ -3496,8 +3549,17 @@ async function loadMeldungen(){
 
 // Meldungen-Badge beim Login aktualisieren
 async function aktualisiereMeldungenBadge(){
+  // Anzeige IMMER zuerst zurücksetzen – sonst bleiben Werte des vorherigen Kontos stehen
+  const badge=document.getElementById('l-meldungen-badge');
+  if(badge){badge.textContent='';badge.style.display='none';}
+
   const meineKlassen=currentUserData?.klassen||[];
   const istKlassenlehrer=currentUserData?.istKlassenlehrer===true;
+
+  // Meldungen-Reiter nur für Klassenlehrkräfte überhaupt anzeigen
+  const navBtn=document.getElementById('l-nav-meldungen');
+  if(navBtn) navBtn.style.display=(istKlassenlehrer&&meineKlassen.length&&currentRole==='lehrer')?'':'none';
+
   if(!meineKlassen.length||!istKlassenlehrer||currentRole!=='lehrer')return;
   withFirebase(async({db,getDocs,collection})=>{
     try{
@@ -3514,10 +3576,16 @@ async function aktualisiereMeldungenBadge(){
       anwSnaps.forEach(a=>{
         const d=a.data();
         const schueler=d.schueler||{};
+        const mitFach=new Set();
+        Object.keys(schueler).forEach(k=>{
+          const tr=k.indexOf('::');
+          if(tr>=0) mitFach.add(k.slice(0,tr));
+        });
         Object.entries(schueler).forEach(([key,status])=>{
           const tr=key.indexOf('::');
           const uid=tr>=0?key.slice(0,tr):key;
           const fach=tr>=0?key.slice(tr+2):'';
+          if(tr<0 && mitFach.has(uid))return; // überholter Alt-Eintrag
           if(status!=='abwesend'||!meineUids.has(uid))return;
           const k=uid+'|'+(d.tag||'')+'|'+fach;
           if(gesehenB.has(k))return;
@@ -3525,10 +3593,12 @@ async function aktualisiereMeldungenBadge(){
           anzahl++;
         });
       });
-      const badge=document.getElementById('l-meldungen-badge');
-      if(badge){
-        badge.textContent=anzahl||'';
-        badge.style.display=anzahl>0?'':'none';
+      // Konto könnte während des Ladens gewechselt haben – dann nichts anzeigen
+      if(currentUserData?.istKlassenlehrer!==true||currentRole!=='lehrer')return;
+      const badgeEl=document.getElementById('l-meldungen-badge');
+      if(badgeEl){
+        badgeEl.textContent=anzahl||'';
+        badgeEl.style.display=anzahl>0?'':'none';
       }
     }catch(e){console.warn('Badge-Update fehlgeschlagen:',e);}
   });
@@ -4484,6 +4554,11 @@ function setAnwesenheit(uid,tag,status,angebot){
   if(!window._anwCache)window._anwCache={};
   const key=angebot?anwKey(uid,angebot):uid;
   window._anwCache[key]=status;
+  // Altes Format (nur Schüler-ID, ohne Fach) entfernen – sonst bleibt ein
+  // überholter Status daneben stehen und taucht weiter in den Meldungen auf
+  if(angebot && Object.prototype.hasOwnProperty.call(window._anwCache,uid)){
+    delete window._anwCache[uid];
+  }
   // Nur die Zeile dieses Angebots aktualisieren
   const rowId=angebot?('anw-row-'+uid+'-'+anwSlug(angebot)):('anw-row-'+uid);
   const row=document.getElementById(rowId);
@@ -4505,13 +4580,31 @@ function setAnwesenheit(uid,tag,status,angebot){
 
 function saveAnwesenheit(tag){
   if(!window._anwCache){toast('Nichts zu speichern.');return;}
+
+  // Altlasten bereinigen: gibt es für einen Schüler fachgenaue Einträge,
+  // wird der überholte Eintrag im alten Format entfernt
+  const daten={...window._anwCache};
+  const mitFach=new Set();
+  Object.keys(daten).forEach(k=>{
+    const tr=k.indexOf('::');
+    if(tr>=0) mitFach.add(k.slice(0,tr));
+  });
+  Object.keys(daten).forEach(k=>{
+    if(k.indexOf('::')<0 && mitFach.has(k)) delete daten[k];
+  });
+
   withFirebase(async({db,doc,setDoc})=>{
-    await setDoc(doc(db,'anwesenheit',tag+'_'+currentUser.uid),{
-      tag, lehrerUid:currentUser.uid,
-      schueler:window._anwCache,
-      updatedAt:new Date().toISOString()
-    });
-    toast('✓ Anwesenheit gespeichert!');
+    try{
+      await setDoc(doc(db,'anwesenheit',tag+'_'+currentUser.uid),{
+        tag, lehrerUid:currentUser.uid,
+        schueler:daten,
+        updatedAt:new Date().toISOString()
+      });
+      window._anwCache=daten;
+      toast('✓ Anwesenheit gespeichert!');
+    }catch(e){
+      toast('❌ Speichern fehlgeschlagen: '+(e.message||e),true);
+    }
   });
 }
 
@@ -4570,8 +4663,11 @@ async function loadFehlzeitenUebersicht(rolle){
       alleAnw.forEach(a=>{
         if(!filterZeitraum(a.tag))return;
         const map=a.schueler||{};
-        // Alle Einträge dieses Schülers finden – Schlüssel kann "uid" oder "uid::Fach" sein
-        const treffer=Object.entries(map).filter(([k])=>k===s.uid||k.startsWith(s.uid+'::'));
+        // Fachgenaue Einträge haben Vorrang vor Alt-Einträgen desselben Schülers
+        const hatFachEintrag=Object.keys(map).some(k=>k.startsWith(s.uid+'::'));
+        const treffer=Object.entries(map).filter(([k])=>
+          k.startsWith(s.uid+'::') || (k===s.uid && !hatFachEintrag)
+        );
         treffer.forEach(([k,status])=>{
         if(status==='abwesend'||status==='unentschuldigt'||
            status==='entschuldigt_stunde'||status==='entschuldigt_tag'){
@@ -5221,6 +5317,7 @@ function loadLeitungAngebot(tag,meineAngebote){
 function setAnwesenheitSL(uid,angebot,status){
   if(!window._anwCache)window._anwCache={};
   window._anwCache[anwKey(uid,angebot)]=status;
+  if(Object.prototype.hasOwnProperty.call(window._anwCache,uid)) delete window._anwCache[uid];
   const row=document.getElementById('sl-anw-row-'+uid+'-'+anwSlug(angebot));
   if(!row)return;
   row.querySelectorAll('.anw-btn').forEach(b=>{
