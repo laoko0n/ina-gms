@@ -5413,8 +5413,12 @@ function initAngebotTab(){
     header.innerHTML=`
       <div style="background:var(--gray-bg);border-radius:10px;padding:8px 14px;margin-bottom:10px;">
         ${opt('angebot','Nur die Schüler meines INA-Angebots','(alle Klassen)')}
-        ${opt('klasse','Nur die Schüler meiner Klasse',eigeneKlassen.length?`(${klassenText})`:'(keine Klasse zugewiesen)')}
-        ${opt('alle','Alles anzeigen','')}
+        ${opt('klasse','Alle Anwahlen meiner Klasse',eigeneKlassen.length?`(${klassenText})`:'(keine Klasse zugewiesen)')}
+        ${opt('alle','Alle Anwahlen aller Klassen','')}
+        <p class="text-sm text-soft" style="font-size:11px;margin:6px 0 0;border-top:0.5px solid var(--gray-border);padding-top:6px;">
+          Anwesenheit erfassen kannst du nur bei deinen eigenen Angeboten und der Ausleihe.
+          Fächer anderer Lehrkräfte siehst du zur Information.
+        </p>
       </div>
       <p class="text-sm text-soft">Wähle einen Tag um die Teilnehmer zu sehen und die Anwesenheit zu erfassen.</p>`;
 
@@ -5445,12 +5449,42 @@ function loadAngebotMitAnwesenheit(tag,meineAngebote){
     const eigeneKlassen=currentUserData?.klassen||[];
     const meineEigenen=currentUserData?.angebote||[];
 
-    meineAngebote.forEach(angebot=>{
+    // Welche Fächer sollen angezeigt werden?
+    // 'angebot' = nur eigene Angebote
+    // 'klasse'  = ALLE Fächer, die Schüler meiner Klassen gewählt haben
+    // 'alle'    = ALLE Fächer aller Schüler
+    let anzuzeigen;
+    if(_angebotFilter==='angebot'){
+      anzuzeigen=meineAngebote.filter(a=>meineEigenen.includes(a)||AUSLEIHE_FAECHER.includes(a));
+    } else {
+      const relevant=(_angebotFilter==='klasse'&&eigeneKlassen.length)
+        ? alleSchueler.filter(s=>eigeneKlassen.includes(s.klasse))
+        : alleSchueler;
+      const gefunden=new Set();
+      relevant.forEach(s=>{
+        const plan=planMap[s.uid];
+        if(!plan)return;
+        [1,2,3,4].forEach(zs=>{
+          const e=plan['zs'+zs];
+          if(e&&e.name) gefunden.add(e.name);
+        });
+      });
+      // Eigene Angebote immer mit aufführen, auch wenn niemand gewählt hat
+      meineEigenen.forEach(a=>gefunden.add(a));
+      anzuzeigen=[...gefunden].sort((a,b)=>{
+        // Eigene Angebote zuerst
+        const aE=meineEigenen.includes(a)?0:1;
+        const bE=meineEigenen.includes(b)?0:1;
+        if(aE!==bE)return aE-bE;
+        return a.localeCompare(b);
+      });
+    }
+
+    anzuzeigen.forEach(angebot=>{
       const istAusleihe=AUSLEIHE_FAECHER.includes(angebot);
       const istEigenesAngebot=meineEigenen.includes(angebot);
-
-      // Modus 1: nur eigene Angebote – fremde Fächer komplett überspringen
-      if(_angebotFilter==='angebot' && !istEigenesAngebot) return;
+      // Anwesenheit darf nur bei eigenen Angeboten und der Ausleihe erfasst werden
+      const darfErfassen=istEigenesAngebot||istAusleihe;
 
       let teilnehmer=alleSchueler.filter(s=>{
         const plan=planMap[s.uid];
@@ -5458,12 +5492,14 @@ function loadAngebotMitAnwesenheit(tag,meineAngebote){
         return [1,2,3,4].some(zs=>plan['zs'+zs]&&plan['zs'+zs].name===angebot);
       });
 
-      // Modus 2: nur eigene Klasse – Ausleihe bleibt klassenübergreifend
-      const filtereDieses=(_angebotFilter==='klasse' && eigeneKlassen.length>0 && !istAusleihe);
-      if(filtereDieses){
+      // Modus "meine Klasse": Teilnehmerliste auf eigene Klassen einschränken.
+      // Ausleihe bleibt klassenübergreifend, da dort die Aufsicht alle betreut.
+      if(_angebotFilter==='klasse' && eigeneKlassen.length>0 && !istAusleihe){
         teilnehmer=teilnehmer.filter(s=>eigeneKlassen.includes(s.klasse));
-        if(!teilnehmer.length && !istEigenesAngebot) return;
       }
+
+      // Leere fremde Fächer ausblenden, eigene bleiben sichtbar
+      if(!teilnehmer.length && !istEigenesAngebot) return;
 
       const zsLabels={1:'7. Std.',2:'8. Std.',3:'9. Std.',4:'10. Std.'};
       let badge='';
@@ -5471,6 +5507,8 @@ function loadAngebotMitAnwesenheit(tag,meineAngebote){
         badge='<span style="font-size:10px;font-weight:600;background:#E1F5EE;color:#085041;padding:1px 7px;border-radius:99px;margin-left:6px;text-transform:none;letter-spacing:0;">dein Angebot</span>';
       } else if(istAusleihe){
         badge='<span style="font-size:10px;font-weight:600;background:#F3E8FF;color:#4C1D95;padding:1px 7px;border-radius:99px;margin-left:6px;text-transform:none;letter-spacing:0;">alle Klassen</span>';
+      } else {
+        badge='<span style="font-size:10px;font-weight:600;background:var(--gray-bg);color:var(--text-soft);padding:1px 7px;border-radius:99px;margin-left:6px;text-transform:none;letter-spacing:0;">nur Ansicht</span>';
       }
 
       html+=`<div style="margin-bottom:1.25rem;">
@@ -5496,8 +5534,10 @@ function loadAngebotMitAnwesenheit(tag,meineAngebote){
             <div style="flex:1;min-width:100px;">
               <div style="font-size:13px;font-weight:600;">${s.vorname} ${s.nachname}</div>
               <div style="font-size:11px;color:var(--text-soft);">${s.klasse}${zsNr?' · '+zsLabels[zsNr]:''}</div>
-            </div>
-            <div style="display:flex;gap:6px;">
+            </div>`;
+
+          if(darfErfassen){
+            html+=`<div style="display:flex;gap:6px;">
               <button onclick="setAnwesenheit('${s.uid}','${tag}','anwesend','${angebot.replace(/'/g,"\\'")}')" class="anw-btn" data-uid="${s.uid}" data-status="anwesend"
                 style="${btnBase}${status==='anwesend'?'background:#E1F5EE;border-color:#1D9E75;color:#085041;':'background:#fff;border-color:var(--gray-border);color:var(--text-soft);'}">
                 ✓ Anwesend
@@ -5506,8 +5546,12 @@ function loadAngebotMitAnwesenheit(tag,meineAngebote){
                 style="${btnBase}${status==='abwesend'?'background:#FCEBEB;border-color:#A32D2D;color:#A32D2D;':'background:#fff;border-color:var(--gray-border);color:var(--text-soft);'}">
                 ✗ Nicht anwesend
               </button>
-            </div>
-          </div>`;
+            </div>`;
+          } else {
+            // Fremdes Angebot: nur anzeigen, Erfassung bleibt der zuständigen Lehrkraft
+            html+=`<span style="font-size:11px;color:var(--text-soft);font-style:italic;">wird von der zuständigen Lehrkraft erfasst</span>`;
+          }
+          html+='</div>';
         });
         html+='</div>';
       }
@@ -5531,9 +5575,12 @@ function loadAngebotMitAnwesenheit(tag,meineAngebote){
       return;
     }
 
-    html+=`<button class="btn btn-primary btn-full" style="margin-top:.5rem;" onclick="saveAnwesenheit('${tag}')">
-      <i class="ti ti-device-floppy"></i> Anwesenheit speichern
-    </button>`;
+    const kannErfassen=anzuzeigen.some(a=>meineEigenen.includes(a)||AUSLEIHE_FAECHER.includes(a));
+    if(kannErfassen){
+      html+=`<button class="btn btn-primary btn-full" style="margin-top:.5rem;" onclick="saveAnwesenheit('${tag}')">
+        <i class="ti ti-device-floppy"></i> Anwesenheit speichern
+      </button>`;
+    }
 
     cont.innerHTML=html;
   });
