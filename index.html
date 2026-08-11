@@ -168,6 +168,8 @@
     .plan-slot { font-size: 11px; padding: 3px 10px; border-radius: 99px; font-weight: 600; }
     .plan-slot-empty { font-size: 11px; color: var(--text-lighter); font-style: italic; }
     .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 500; display: flex; align-items: center; justify-content: center; padding: 1rem; }
+    /* Fach-Fenster kann aus dem Zuweisungs-Fenster heraus geöffnet werden */
+    #modal-fach { z-index: 520; }
     .modal { background: #fff; border-radius: var(--radius-lg); padding: 1.5rem; width: 100%; max-width: 440px; max-height: 90vh; overflow-y: auto; }
     .modal-title { font-size: 16px; font-weight: 700; margin-bottom: 1rem; }
     .modal-actions { display: flex; gap: 8px; margin-top: 1rem; justify-content: flex-end; }
@@ -5760,6 +5762,13 @@ function renderAngeboteCheckboxen(){
           name:d.name,
           icon:d.icon||'📌',
           maxTeilnehmer:d.maxTeilnehmer||null,
+          zeitschieneName:d.zeitschieneName||'',
+          zeitschiene:d.zeitschiene||'',
+          tagStunden:Array.isArray(d.tagStunden)?d.tagStunden:null,
+          wochentage:Array.isArray(d.wochentage)?d.wochentage:null,
+          gruppen:Array.isArray(d.gruppen)?d.gruppen:[],
+          klassenstufen:Array.isArray(d.klassenstufen)?d.klassenstufen:null,
+          klassen:Array.isArray(d.klassen)?d.klassen:null,
           // Ein Fach ist erst für Schüler sichtbar wenn Zeitschiene UND Gruppen gesetzt sind
           vollstaendig: !!(d.zeitschiene && Array.isArray(d.gruppen) && d.gruppen.length>0),
           aktiv: d.aktiv!==false
@@ -5810,18 +5819,47 @@ function renderAngeboteCheckboxen(){
               : '');
           const kapBadge=f.maxTeilnehmer
             ? `<span style="font-size:10px;font-weight:600;background:#E6F1FB;color:#0C447C;padding:1px 7px;border-radius:99px;margin-left:6px;">max. ${f.maxTeilnehmer}</span>`
-            : '<span style="font-size:10px;color:var(--text-lighter);margin-left:6px;">∞</span>';
-          return `<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--gray-bg);border-radius:8px;margin-bottom:4px;">
-            <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:14px;flex:1;min-width:0;">
+            : '';
+
+          // Kurzfassung der wichtigsten Einstellungen
+          const TAGK={1:'Mo',2:'Di',3:'Mi',4:'Do'};
+          const STDK={1:'7.',2:'8.',3:'9.',4:'10.'};
+          let wann;
+          if(f.tagStunden&&f.tagStunden.length){
+            const proTag={};
+            f.tagStunden.forEach(ts=>{(proTag[ts.tag]=proTag[ts.tag]||[]).push(STDK[ts.zs]);});
+            wann=Object.keys(proTag).sort().map(t=>TAGK[t]+' '+proTag[t].join('+')).join(' · ');
+          } else {
+            const tage=(f.wochentage&&f.wochentage.length)
+              ? f.wochentage.map(t=>TAGK[t]).join(', ')
+              : 'Mo–Do';
+            wann=(f.zeitschieneName||'ohne Zeitschiene')+' · '+tage;
+          }
+          const gruppenKurz={fruehstarter:'Früh',starter:'Start',durchstarter:'Durch'};
+          const wer=[
+            (f.klassenstufen&&f.klassenstufen.length)?'Stufe '+f.klassenstufen.join('/'):null,
+            (f.klassen&&f.klassen.length)?f.klassen.join(', '):null,
+            f.gruppen.length?f.gruppen.map(g=>gruppenKurz[g]||g).join('/'):null
+          ].filter(Boolean).join(' · ')||'alle';
+
+          return `<div style="display:flex;align-items:flex-start;gap:8px;padding:9px 12px;background:var(--gray-bg);border-radius:8px;margin-bottom:5px;">
+            <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:14px;flex:1;min-width:0;">
               <input type="checkbox" value="${f.name}" ${gewaehlt?'checked':''}
                 onchange="toggleAngebot('${f.name.replace(/'/g,"\\'")}',this.checked)"
-                style="width:16px;height:16px;accent-color:var(--orange);cursor:pointer;flex-shrink:0;" />
-              <span style="flex:1;">${f.icon} ${f.name}${kapBadge}${warnung}</span>
+                style="width:16px;height:16px;accent-color:var(--orange);cursor:pointer;flex-shrink:0;margin-top:2px;" />
+              <span style="flex:1;min-width:0;">
+                <span>${f.icon} ${f.name}${kapBadge}${warnung}</span>
+                <span style="display:block;font-size:11px;color:var(--text-soft);margin-top:2px;">
+                  🕑 ${wann} &nbsp;·&nbsp; 👥 ${wer}
+                </span>
+              </span>
             </label>
             <button type="button" onclick="fachAusAngebotenBearbeiten('${f.id}')"
-              title="Alle Einstellungen dieses Fachs bearbeiten"
-              style="background:none;border:1px solid var(--gray-border);border-radius:6px;padding:3px 8px;
-              cursor:pointer;font-size:12px;color:var(--text-soft);flex-shrink:0;">✏️</button>
+              title="Zeitschiene, Wochentage, Klassenstufen, Teilnehmerzahl ändern"
+              style="background:#fff;border:1.5px solid var(--orange-dark);border-radius:8px;padding:5px 10px;
+              cursor:pointer;font-size:11px;font-weight:600;color:var(--orange-dark);flex-shrink:0;white-space:nowrap;">
+              ⚙️ Einstellungen
+            </button>
           </div>`;
         }).join('');
       }
