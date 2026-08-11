@@ -445,6 +445,12 @@
           <button class="btn btn-primary btn-sm" onclick="openSchuelerModal()"><i class="ti ti-plus"></i> Hinzufügen</button>
         </div>
         <p class="text-sm text-soft" style="margin-bottom:.75rem;">Du siehst alle Schüler – bearbeiten kannst du nur deine eigenen Klassen (<span id="l-meine-klassen-hint" style="font-weight:600;"></span>).</p>
+        <div style="display:flex;gap:8px;margin-bottom:.75rem;flex-wrap:wrap;align-items:center;">
+          <input type="text" id="l-schueler-suche" class="form-control" placeholder="Name suchen …"
+            style="max-width:200px;font-size:13px;padding:7px 10px;"
+            oninput="filterSchuelerListe('l')" />
+          <span id="l-schueler-anzahl" class="text-sm text-soft"></span>
+        </div>
         <div id="l-schueler-liste"><p class="text-sm text-soft">Lade…</p></div>
       </div>
     </div>
@@ -546,6 +552,17 @@
           <button class="btn btn-primary btn-sm" onclick="openSchuelerModal()"><i class="ti ti-plus"></i> Hinzufügen</button>
         </div>
         <div id="sl-passwort-liste" style="display:none;margin-bottom:.75rem;"></div>
+        <div style="display:flex;gap:8px;margin-bottom:.75rem;flex-wrap:wrap;align-items:center;">
+          <select id="sl-schueler-klassen-filter" class="form-control"
+            style="max-width:190px;font-size:13px;padding:7px 10px;"
+            onchange="filterSchuelerListe('sl')">
+            <option value="">Alle Klassen</option>
+          </select>
+          <input type="text" id="sl-schueler-suche" class="form-control" placeholder="Name suchen …"
+            style="max-width:200px;font-size:13px;padding:7px 10px;"
+            oninput="filterSchuelerListe('sl')" />
+          <span id="sl-schueler-anzahl" class="text-sm text-soft"></span>
+        </div>
         <div id="sl-schueler-liste"><p class="text-sm text-soft">Lade…</p></div>
       </div>
     </div>
@@ -1057,10 +1074,14 @@ function leereKontoAnsichten(){
   if(typeof _angebotFilter!=='undefined') _angebotFilter='angebot';
 
   // Klassenfilter zurücksetzen damit die Vorauswahl neu greift
-  ['l-klassen-filter','sl-klassen-filter','l-schueler-klassen-filter',
+  ['l-klassen-filter','sl-klassen-filter','l-schueler-klassen-filter','sl-schueler-klassen-filter',
    'l-fehlzeiten-filter','sl-fehlzeiten-filter'].forEach(id=>{
     const sel=document.getElementById(id);
     if(sel){sel.innerHTML='<option value="">Alle Klassen</option>';delete sel.dataset.initialisiert;}
+  });
+  ['l-schueler-suche','sl-schueler-suche'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el)el.value='';
   });
 }
 function showScreen(name){
@@ -2420,49 +2441,91 @@ function exportPasswoerter(){
 let _alleSchuelerCache=[];
 
 function loadSchuelerListe(containerId){
+  const cont=document.getElementById(containerId);
+  if(cont && !cont.innerHTML.trim()) cont.innerHTML='<p class="text-sm text-soft">Lade…</p>';
+
   withFirebase(async({db,getDocs,collection})=>{
-    const snaps=await getDocs(collection(db,'users'));
-    const liste=[];
-    snaps.forEach(s=>{if(s.data().role==='schueler')liste.push({uid:s.id,...s.data()});});
-    liste.sort((a,b)=>(a.klasse+a.nachname).localeCompare(b.klasse+b.nachname));
+    try{
+      const snaps=await getDocs(collection(db,'users'));
+      const liste=[];
+      snaps.forEach(s=>{if(s.data().role==='schueler')liste.push({uid:s.id,...s.data()});});
+      liste.sort((a,b)=>((a.klasse||'')+(a.nachname||'')).localeCompare((b.klasse||'')+(b.nachname||'')));
 
-    // Cache für Filter und Klassenermittlung – in ALLEN Ansichten füllen
-    _alleSchuelerCache=liste;
+      // Cache für Filter und Klassenermittlung – in ALLEN Ansichten füllen
+      _alleSchuelerCache=liste;
 
-    // Dropdown befüllen (nur für Lehrer-Tab)
-    const sel=document.getElementById('l-schueler-klassen-filter');
-    if(sel && containerId==='l-schueler-liste'){
-      const aktuellerWert=sel.value;
-      const klassen=[...new Set(liste.map(s=>s.klasse).filter(Boolean))].sort((a,b)=>{
-        const na=parseInt(a),nb=parseInt(b);
-        if(na!==nb)return na-nb;
-        return a.localeCompare(b);
-      });
-      sel.innerHTML='<option value="">Alle Klassen</option>';
-      klassen.forEach(k=>{
-        const opt=document.createElement('option');
-        opt.value=k; opt.textContent='Klasse '+k;
-        if(k===aktuellerWert) opt.selected=true;
-        sel.appendChild(opt);
-      });
-      // Gefilterte Liste anzeigen
-      const filter=aktuellerWert;
-      const gefiltert=filter?liste.filter(s=>s.klasse===filter):liste;
-      renderSchuelerListe(containerId, gefiltert);
-    } else {
-      renderSchuelerListe(containerId, liste);
+      const praefix = containerId==='sl-schueler-liste' ? 'sl' : 'l';
+      _befuelleSchuelerKlassenFilter(praefix, liste);
+      filterSchuelerListe(praefix);
+    }catch(e){
+      console.error('loadSchuelerListe:',e);
+      if(cont) cont.innerHTML='<p class="text-sm" style="color:#A32D2D;">Schüler konnten nicht geladen werden: '+(e.message||e)+'</p>';
     }
   });
 }
 
-function lFilterSchuelerListe(){
-  const filter=document.getElementById('l-schueler-klassen-filter')?.value||'';
-  const gefiltert=filter?_alleSchuelerCache.filter(s=>s.klasse===filter):_alleSchuelerCache;
-  renderSchuelerListe('l-schueler-liste', gefiltert);
+// Klassen-Dropdown befüllen, bestehende Auswahl beibehalten
+function _befuelleSchuelerKlassenFilter(praefix, liste){
+  const sel=document.getElementById(praefix+'-schueler-klassen-filter');
+  if(!sel)return;
+  const aktuell=sel.value;
+  const klassen=getAlleKlassen(liste);
+  sel.innerHTML='<option value="">Alle Klassen</option>'+
+    klassen.map(k=>{
+      const anzahl=liste.filter(s=>s.klasse===k).length;
+      return `<option value="${k}"${k===aktuell?' selected':''}>Klasse ${k} (${anzahl})</option>`;
+    }).join('');
+  if(aktuell&&klassen.includes(aktuell)) sel.value=aktuell;
 }
+
+// Filtert nach Klasse und Namenssuche
+function filterSchuelerListe(praefix){
+  const containerId = praefix==='sl' ? 'sl-schueler-liste' : 'l-schueler-liste';
+  const klasse=document.getElementById(praefix+'-schueler-klassen-filter')?.value||'';
+  const suche=(document.getElementById(praefix+'-schueler-suche')?.value||'').trim().toLowerCase();
+
+  let liste=_alleSchuelerCache||[];
+
+  // Lehrkräfte sehen ohnehin nur ihre eigenen Klassen
+  if(praefix==='l' && currentRole==='lehrer'){
+    const meine=currentUserData?.klassen||[];
+    if(meine.length) liste=liste.filter(s=>meine.includes(s.klasse));
+  }
+
+  if(klasse) liste=liste.filter(s=>s.klasse===klasse);
+  if(suche){
+    liste=liste.filter(s=>
+      ((s.vorname||'')+' '+(s.nachname||'')).toLowerCase().includes(suche) ||
+      (s.email||'').toLowerCase().includes(suche)
+    );
+  }
+
+  const anzahlEl=document.getElementById(praefix+'-schueler-anzahl');
+  if(anzahlEl){
+    const gesamt=(_alleSchuelerCache||[]).length;
+    anzahlEl.textContent=(klasse||suche)
+      ? liste.length+' von '+gesamt+' Schülern'
+      : gesamt+' Schüler';
+  }
+
+  renderSchuelerListe(containerId, liste);
+}
+
+// Rückwärtskompatibilität für die Lehreransicht
+function lFilterSchuelerListe(){ filterSchuelerListe('l'); }
 function renderSchuelerListe(containerId,liste){
   const cont=document.getElementById(containerId);
-  if(!liste.length){cont.innerHTML='<p class="text-sm text-soft">Noch keine Schüler angelegt.</p>';return;}
+  if(!cont)return;
+  if(!liste.length){
+    const praefix=containerId==='sl-schueler-liste'?'sl':'l';
+    const kl=document.getElementById(praefix+'-schueler-klassen-filter')?.value||'';
+    const su=(document.getElementById(praefix+'-schueler-suche')?.value||'').trim();
+    cont.innerHTML=(kl||su)
+      ? '<p class="text-sm text-soft" style="padding:12px;background:var(--gray-bg);border-radius:8px;">Keine Treffer'+
+        (kl?' in Klasse '+kl:'')+(su?' für „'+su+'"':'')+'.</p>'
+      : '<p class="text-sm text-soft">Noch keine Schüler angelegt.</p>';
+    return;
+  }
   let html=`<table class="schueler-table"><thead><tr><th>Klasse</th><th>Name</th><th>Gruppe</th><th>E-Mail</th><th></th></tr></thead><tbody>`;
   liste.forEach(s=>{
     const volleRechte=lehrerDarfBearbeiten(s.klasse);
@@ -2752,11 +2815,14 @@ function openLehrerModal(uid){
         document.getElementById('ml-email').disabled=true;
         const rg=document.getElementById('ml-rolle-group');
         const rs=document.getElementById('ml-rolle');
+        const selbst=(uid===currentUser?.uid);
+        title.textContent=selbst
+          ? 'Eigenes Konto bearbeiten'
+          : (d.role==='leitung'?'Schulleitung bearbeiten':'Lehrkraft bearbeiten');
         if(rg&&rs){
           rg.style.display='';
           rs.value=(d.role==='leitung')?'leitung':'lehrer';
           // Eigenes Konto nicht herabstufen können – sonst sperrt man sich aus
-          const selbst=(uid===currentUser?.uid);
           rs.disabled=selbst;
           if(selbst) rg.style.opacity='0.6';
           else rg.style.opacity='';
@@ -2901,6 +2967,10 @@ function entferneAngebotVonLehrer(uid, angebot, name){
 }
 
 function deleteLehrer(uid, name){
+  if(uid===currentUser?.uid){
+    toast('⛔ Das eigene Konto kann nicht gelöscht werden – sonst sperrst du dich aus.',true);
+    return;
+  }
   if(!confirm('Lehrkraft „'+name+'" wirklich vollständig löschen?\n\nEs werden gelöscht:\n• Firestore-Profil\n• Firebase Auth-Konto (Login)\n\nDieser Vorgang kann nicht rückgängig gemacht werden.'))return;
 
   withFirebase(async({db,doc,deleteDoc,getDoc,auth})=>{
@@ -3003,6 +3073,11 @@ function renderLehrerKlassenListe(lehrer, gueltigeFaecher=null){
       : '<span class="text-soft" style="font-size:12px;">keine</span>';
     const angebote=l.angebote||[];
     const emailId='email-'+l.uid.slice(0,8);
+    const istSelbst=(l.uid===currentUser?.uid);
+    const hatNamen=!!((l.vorname||'').trim()||(l.nachname||'').trim());
+    const anzeigeName=hatNamen
+      ? ((l.vorname||'')+' '+(l.nachname||'')).trim()
+      : '<span style="color:#A32D2D;">⚠️ Ohne Namen</span>';
 
     // Angebote mit Gültigkeitsprüfung – jedes Fach in einer eigenen Zeile
     const angeboteHtml=angebote.length
@@ -3023,9 +3098,11 @@ function renderLehrerKlassenListe(lehrer, gueltigeFaecher=null){
 
     html+=`<tr>
       <td>
-        <div style="font-weight:500;font-size:13px;">${l.vorname} ${l.nachname}
+        <div style="font-weight:500;font-size:13px;">${anzeigeName}
+          ${istSelbst?'<span style="font-size:10px;font-weight:700;color:#085041;background:var(--teal-light);padding:1px 7px;border-radius:99px;margin-left:5px;">du</span>':''}
           ${l.role==='leitung'?'<span style="font-size:10px;font-weight:700;color:#0C447C;background:#E6F1FB;padding:1px 7px;border-radius:99px;margin-left:5px;border:1px solid #0C447C;">Schulleitung</span>':''}
         </div>
+        ${!hatNamen?'<div style="font-size:11px;color:#A32D2D;margin-top:2px;">Bitte über ✏️ einen Namen eintragen.</div>':''}
         <div id="${emailId}" style="display:none;font-size:11px;color:var(--text-soft);margin-top:2px;">${l.email||''}</div>
         <button onclick="document.getElementById('${emailId}').style.display=document.getElementById('${emailId}').style.display==='none'?'block':'none'"
           style="font-size:10px;color:var(--text-lighter);background:none;border:none;cursor:pointer;padding:0;margin-top:2px;">
@@ -3038,8 +3115,10 @@ function renderLehrerKlassenListe(lehrer, gueltigeFaecher=null){
         <div class="flex-row" style="gap:4px;justify-content:flex-end;flex-wrap:wrap;">
           <button class="btn btn-secondary btn-sm" title="Name bearbeiten" onclick="openLehrerModal('${l.uid}')"><i class="ti ti-edit"></i></button>
           <button class="btn btn-secondary btn-sm" title="Angebote & Klassenleitung" onclick="openAngeboteModal('${l.uid}')"><i class="ti ti-target"></i></button>
-          <button class="btn btn-secondary btn-sm" title="Passwort" onclick="openPwResetModal('${l.uid}','${l.vorname} ${l.nachname}','lehrer')"><i class="ti ti-key"></i></button>
-          <button class="btn btn-danger btn-sm" title="Löschen" onclick="deleteLehrer('${l.uid}','${l.vorname} ${l.nachname}')"><i class="ti ti-trash"></i></button>
+          <button class="btn btn-secondary btn-sm" title="Passwort" onclick="openPwResetModal('${l.uid}','${(l.vorname||'')+' '+(l.nachname||'')}','lehrer')"><i class="ti ti-key"></i></button>
+          ${istSelbst
+            ? '<button class="btn btn-secondary btn-sm" disabled title="Das eigene Konto kann hier nicht gelöscht werden" style="opacity:.4;cursor:not-allowed;"><i class="ti ti-trash"></i></button>'
+            : `<button class="btn btn-danger btn-sm" title="Löschen" onclick="deleteLehrer('${l.uid}','${(l.vorname||'')+' '+(l.nachname||'')}')"><i class="ti ti-trash"></i></button>`}
         </div>
       </td>
     </tr>`;
@@ -4688,6 +4767,7 @@ function fmAlleAbwaehlen(){
 function closeFachModal(){
   document.getElementById('modal-fach').classList.add('hidden');
   editFachId=null;
+  _fachZuweisenAn=null; // Zuweisungs-Merker aufheben
   // Kam der Aufruf aus der Angebote-Zuweisung? Dann dorthin zurückkehren.
   if(_zurueckZuAngebote){
     const uid=_zurueckZuAngebote;
@@ -4741,7 +4821,7 @@ function saveFach(){
   // CSS-Selektor generieren
   const sel='sel-custom-'+name.toLowerCase().replace(/[^a-z0-9]/g,'-').slice(0,20);
 
-  withFirebase(async({db,doc,updateDoc,collection})=>{
+  withFirebase(async({db,doc,updateDoc,getDoc,collection})=>{
     try{
       const data={
         name, icon, sel,
@@ -4764,8 +4844,21 @@ function saveFach(){
       } else {
         const {addDoc}=await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
         await addDoc(collection(db,'faecher'),{...data,createdAt:new Date().toISOString()});
+
+        // Wurde das Fach für eine bestimmte Lehrkraft angelegt? Dann direkt zuweisen.
+        if(_fachZuweisenAn){
+          try{
+            const uSnap=await getDoc(doc(db,'users',_fachZuweisenAn));
+            const bisher=uSnap.exists()?(uSnap.data().angebote||[]):[];
+            if(!bisher.includes(name)){
+              await updateDoc(doc(db,'users',_fachZuweisenAn),{angebote:[...bisher,name]});
+            }
+          }catch(e){ console.warn('Automatische Zuweisung fehlgeschlagen:',e); }
+        }
       }
-      toast('✓ Fach gespeichert – erscheint jetzt bei Schülern!');
+      toast(_fachZuweisenAn && !editFachId
+        ? '✓ „'+name+'" angelegt und der Lehrkraft zugewiesen.'
+        : '✓ Fach gespeichert – erscheint jetzt bei Schülern!');
       closeFachModal();
       loadFaecherListe();
       // Dynamische Fächer neu laden
@@ -5587,8 +5680,6 @@ function openAngeboteModal(uid,name,angebote){
   document.getElementById('ma-error').style.display='none';
   document.getElementById('ma-neues-angebot').value='';
   renderAngeboteCheckboxen();
-  maStufenArr=[];
-  _renderMaStufen();
   maKlassenArr=[];
   _renderMaKlassen();
   document.getElementById('modal-angebote').classList.remove('hidden');
@@ -5614,6 +5705,9 @@ function openAngeboteModal(uid,name,angebote){
       const istLeitung=(d.role==='leitung');
       if(klBox){
         klBox.style.display=istLeitung?'none':'';
+        // zugehörige Überschrift „1 · Klassenleitung" mit ausblenden
+        const label=klBox.previousElementSibling;
+        if(label&&label.classList.contains('section-label')) label.style.display=istLeitung?'none':'';
       }
       const hinweisLeitung=document.getElementById('ma-leitung-hinweis');
       if(hinweisLeitung) hinweisLeitung.style.display=istLeitung?'':'none';
@@ -5777,136 +5871,43 @@ function maKlassenLeeren(){
   _renderMaKlassen();
 }
 
-// Klassenleitung im Angebote-Fenster
-let maStufenArr=[];
+// Merkt sich, welcher Lehrkraft ein neu angelegtes Fach zugewiesen werden soll
+let _fachZuweisenAn=null;
 
-function _renderMaStufen(){
-  const cont=document.getElementById('ma-neues-stufen');
-  if(!cont)return;
-  const stufen=getAlleKlassenstufen();
-  if(!stufen.length){
-    cont.innerHTML='<span class="text-sm text-soft" style="font-size:11px;">Keine Klassen angelegt – siehe Rahmen.</span>';
-    return;
-  }
-  cont.innerHTML=stufen.map(st=>{
-    const aktiv=maStufenArr.includes(st);
-    return `<button type="button" onclick="maStufeToggle(${st})"
-      style="padding:5px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;
-      border:1.5px solid ${aktiv?'var(--orange-dark)':'var(--gray-border)'};
-      background:${aktiv?'var(--orange-light)':'#fff'};
-      color:${aktiv?'var(--orange-dark)':'var(--text-soft)'};">${st}${aktiv?' ✓':''}</button>`;
-  }).join('');
-}
-
-function maStufeToggle(st){
-  maStufenArr=maStufenArr.includes(st)?maStufenArr.filter(x=>x!==st):[...maStufenArr,st];
-  maStufenArr.sort((a,b)=>a-b);
-  _renderMaStufen();
-}
-
-async function addNeuesAngebot(){
-  const input=document.getElementById('ma-neues-angebot');
-  const name=input.value.trim();
-  const zeitschiene=document.getElementById('ma-neues-zeitschiene')?.value||'';
-  const gruppen=['fruehstarter','starter','durchstarter'].filter(g=>document.getElementById('ma-neues-'+g)?.checked);
-  const wochentage=[1,2,3,4].filter(t=>document.getElementById('ma-neues-tag-'+t)?.checked);
+// Aus dem Zuweisungs-Fenster heraus ein neues Fach anlegen –
+// führt ins vollständige Fach-Formular, damit alle Einstellungen verfügbar sind
+function neuesFachFuerLehrkraft(){
+  const inp=document.getElementById('ma-neues-angebot');
+  const name=(inp?.value||'').trim();
   const err=document.getElementById('ma-error');
-  err.style.display='none';
+  if(err) err.style.display='none';
+  if(!name){ showErr(err,'Bitte zuerst einen Namen für das Angebot eingeben.'); return; }
 
-  if(!name){showErr(err,'Bitte einen Namen für das neue Angebot eingeben.');return;}
-  if(editAngeboteAuswahl.includes(name)){showErr(err,'Dieses Angebot ist bereits zugewiesen.');return;}
-  if(!zeitschiene){showErr(err,'Bitte eine Zeitschiene auswählen – sonst erscheint das Angebot nicht bei den Schülern.');return;}
-  if(gruppen.length===0){showErr(err,'Bitte mindestens eine Schülergruppe auswählen.');return;}
+  const uid=editAngeboteUid;
+  const auswahl=[...editAngeboteAuswahl];
 
-  const istEinzeln=zeitschiene.startsWith('einzeln:');
-  const zsWert=istEinzeln?zeitschiene.slice(8):zeitschiene;
-  const zsNummern=zsWert.split(',').map(Number).filter(n=>!isNaN(n));
-  const isDoppel=!istEinzeln && zsNummern.length>1;
-  const sel='sel-custom-'+name.toLowerCase().replace(/[^a-z0-9]/g,'-').slice(0,20);
+  const weiter=()=>{
+    if(inp) inp.value='';
+    closeAngeboteModal();
+    openFachModal();                 // leeres Formular mit allen Einstellungen
+    const nameFeld=document.getElementById('fm-name');
+    if(nameFeld) nameFeld.value=name; // Name übernehmen
+    _fachZuweisenAn=uid;              // nach dem Speichern automatisch zuweisen
+    _zurueckZuAngebote=uid;           // danach zurück zur Zuweisung
+  };
 
-  // WICHTIG: Alle Feldwerte JETZT auslesen. Die Felder werden am Ende dieser
-  // Funktion geleert – der Speichervorgang läuft aber asynchron weiter und
-  // würde sonst bereits geleerte Felder lesen (Teilnehmerzahl ging verloren).
-  const maxRoh=document.getElementById('ma-neues-max')?.value;
-  const maxTeilnehmer=(maxRoh&&parseInt(maxRoh)>0)?parseInt(maxRoh):null;
-  const alleLehrer=document.getElementById('ma-neues-alle-lehrer')?.checked||false;
-
-  // Sofort zur Auswahl hinzufügen
-  if(!ALLE_ANGEBOTE.includes(name)) ALLE_ANGEBOTE.push(name);
-  if(!editAngeboteAuswahl.includes(name)) editAngeboteAuswahl.push(name);
-
-  withFirebase(async({db,collection,getDocs})=>{
+  if(!uid){ weiter(); return; }
+  // Bisherige Zuweisung sichern, damit nichts verloren geht
+  withFirebase(async({db,doc,updateDoc})=>{
     try{
-      // Prüfen ob ein Fach mit diesem Namen bereits existiert
-      const snaps=await getDocs(collection(db,'faecher'));
-      let existiert=false;
-      snaps.forEach(s=>{ if((s.data().name||'').toLowerCase()===name.toLowerCase()) existiert=true; });
-      if(existiert){
-        showErr(err,'Ein Fach mit diesem Namen existiert bereits – bitte oben in der Liste auswählen.');
-        editAngeboteAuswahl=editAngeboteAuswahl.filter(a=>a!==name);
-        renderAngeboteCheckboxen();
-        return;
-      }
-
-      const {addDoc,getDoc:getDoc2}=await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
-      const neuerRef=await addDoc(collection(db,'faecher'),{
-        name, icon:'📌', sel,
-        bg:'#FAECE7', color:'#4A1B0C',
-        zeitschiene:zsWert,
-        zeitschieneName:zsNummern.map(z=>({1:'7. Std.',2:'8. Std.',3:'9. Std.',4:'10. Std.'}[z])).join(istEinzeln?' + ':'+'),
-        isDoppelstunde:isDoppel,
-        isEinzelnWaehlbar:istEinzeln,
-        maxTeilnehmer, beschreibung:'', gruppen, wochentage:wochentage.length>0?wochentage:null, aktiv:true,
-        klassen:null,
-        klassenstufen: maStufenArr.length>0?[...maStufenArr]:null,
-        alleLehrer,
-        createdAt:new Date().toISOString()
-      });
-
-      // Kontrolle: tatsächlich gespeicherten Wert zurücklesen und melden
-      let gespeicherteZahl=null;
-      try{
-        const kontrolle=await getDoc2(neuerRef);
-        gespeicherteZahl=kontrolle.exists()?(kontrolle.data().maxTeilnehmer??null):null;
-      }catch(e){}
-
-      const kapText = gespeicherteZahl
-        ? ' · max. '+gespeicherteZahl+' Teilnehmer ✓ gespeichert'
-        : (maxTeilnehmer
-            ? ' · ⚠️ Teilnehmerzahl konnte nicht gespeichert werden'
-            : ' · unbegrenzt');
-      toast('✓ „'+name+'" angelegt'+kapText+' – siehe Reiter „Fächer".');
-
-      // Zuweisung sofort speichern, damit sie nicht verloren geht wenn
-      // das Fenster ohne "Speichern" geschlossen wird
-      if(editAngeboteUid){
-        try{
-          const {doc,updateDoc}=await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
-          await updateDoc(doc(db,'users',editAngeboteUid),{angebote:editAngeboteAuswahl});
-          loadLehrerKlassenListe();
-        }catch(e){console.warn('Zuweisung konnte nicht sofort gespeichert werden:',e);}
-      }
-
-      ladeDynamischeFaecher();
-      renderAngeboteCheckboxen(); // Liste neu aufbauen, damit das Fach regulär erscheint
-      if(typeof loadFaecherListe==='function') loadFaecherListe();
-    }catch(e){
-      console.warn('Fach Firestore-Fehler:',e);
-      showErr(err,'Fehler beim Speichern: '+(e.message||'unbekannt'));
-      return;
-    }
+      await updateDoc(doc(db,'users',uid),{angebote:auswahl});
+    }catch(e){ console.warn('Zuweisung vor Wechsel nicht gespeichert:',e); }
+    weiter();
   });
-
-  input.value='';
-  const zsEl=document.getElementById('ma-neues-zeitschiene');
-  if(zsEl) zsEl.value='';
-  const maxEl=document.getElementById('ma-neues-max');
-  if(maxEl) maxEl.value='';
-  const alEl=document.getElementById('ma-neues-alle-lehrer');
-  if(alEl) alEl.checked=false;
-  maStufenArr=[];
-  _renderMaStufen();
 }
+
+
+
 
 function toggleAngebot(name,checked){
   if(checked){ if(!editAngeboteAuswahl.includes(name))editAngeboteAuswahl.push(name); }
@@ -6754,9 +6755,9 @@ function savePwReset(){
 
 <!-- ═══ MODAL: ANGEBOTE ZUWEISEN (Schulleitung) ═══ -->
 <div id="modal-angebote" class="modal-backdrop hidden">
-  <div class="modal" style="max-width:480px;">
-    <div class="modal-title">🎯 Angebote zuweisen</div>
-    <p class="text-sm text-soft" style="margin-bottom:.875rem;" id="ma-name"></p>
+  <div class="modal" style="max-width:520px;">
+    <div class="modal-title">Lehrkraft einrichten</div>
+    <p class="text-sm text-soft" style="margin-bottom:1rem;" id="ma-name"></p>
 
     <div id="ma-leitung-hinweis" style="display:none;background:#E6F1FB;border:1.5px solid #0C447C;border-radius:10px;padding:10px 14px;margin-bottom:.875rem;">
       <div style="font-size:12px;font-weight:600;color:#0C447C;">ℹ️ Schulleitungsmitglied</div>
@@ -6766,94 +6767,42 @@ function savePwReset(){
       </div>
     </div>
 
-    <div class="form-group" style="background:#FFF7ED;border:1.5px solid #EA580C;border-radius:10px;padding:10px 14px;">
-      <label class="form-label" style="margin-bottom:4px;">🏫 Klassenleitung</label>
-      <p class="text-sm" style="font-size:11px;color:#92400E;margin-bottom:8px;">
-        In welchen Klassen ist diese Lehrkraft Klassenlehrer/in? Nur dann sieht sie Abwesenheits­meldungen
-        ihrer Schüler und darf deren Daten bearbeiten. Nichts gewählt = keine Klassenleitung.
+    <div class="section-label">1 · Klassenleitung</div>
+    <div class="form-group">
+      <p class="text-sm text-soft" style="font-size:11px;margin-bottom:8px;">
+        In welchen Klassen ist diese Lehrkraft Klassenlehrer/in? Nur dann sieht sie
+        Abwesenheitsmeldungen ihrer Schüler und darf deren Daten bearbeiten.
+        Nichts gewählt = keine Klassenleitung.
       </p>
       <div id="ma-klassen-auswahl" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
     </div>
 
+    <div class="section-label" style="margin-top:1.25rem;">2 · Betreute Angebote</div>
     <div class="form-group">
-      <label class="form-label">Welche Angebote betreut diese Lehrkraft?</label>
-      <p class="text-sm text-soft" style="font-size:11px;margin-bottom:6px;">
-        Hier wird nur zugeordnet – Häkchen setzen oder entfernen. Um die Einstellungen eines Fachs
-        selbst zu ändern (Zeitschiene, Teilnehmerzahl, Klassenstufen …), tippe auf das ✏️ daneben.
+      <p class="text-sm text-soft" style="font-size:11px;margin-bottom:8px;">
+        Häkchen setzen oder entfernen. Über das ✏️ öffnest du alle Einstellungen eines Fachs
+        – Zeitschiene, Wochentage, Klassenstufen, Teilnehmerzahl.
       </p>
-      <div id="ma-checkboxen" style="display:flex;flex-direction:column;gap:6px;max-height:220px;overflow-y:auto;"></div>
+      <div id="ma-checkboxen" style="display:flex;flex-direction:column;gap:6px;max-height:240px;overflow-y:auto;padding-right:2px;"></div>
     </div>
 
-    <!-- Neues Angebot direkt hier anlegen -->
+    <div class="section-label" style="margin-top:1.25rem;">3 · Neues Angebot anlegen</div>
     <div style="border-top:0.5px solid var(--gray-border);margin-top:.75rem;padding-top:.75rem;">
-      <div class="form-label" style="margin-bottom:6px;">➕ Neues Angebot anlegen (leeres Formular)</div>
-      <input type="text" id="ma-neues-angebot" class="form-control"
-        placeholder="Name des neuen Angebots (z. B. Sportgeräteausleihe)"
-        style="margin-bottom:8px;" />
-
-      <label class="form-label" style="font-size:12px;">Zeitschiene *</label>
-      <select id="ma-neues-zeitschiene" class="form-control" style="margin-bottom:8px;font-size:13px;">
-        <option value="">– bitte wählen –</option>
-        <option value="1">7. Std. (12:55–13:30)</option>
-        <option value="2">8. Std. (13:30–14:15)</option>
-        <option value="1,2">7.+8. Std. 🔁 Doppelstunde</option>
-        <option value="einzeln:1,2">7. + 8. Std. – einzeln wählbar ✓</option>
-        <option value="3">9. Std. (14:15–15:00)</option>
-        <option value="4">10. Std. (15:00–15:45)</option>
-        <option value="3,4">9.+10. Std. 🔁 Doppelstunde</option>
-        <option value="einzeln:3,4">9. + 10. Std. – einzeln wählbar ✓</option>
-      </select>
-
-      <label class="form-label" style="font-size:12px;">Max. Teilnehmerzahl</label>
-      <input type="number" id="ma-neues-max" class="form-control" min="1" max="200" step="1"
-        placeholder="leer = unbegrenzt"
-        style="margin-bottom:4px;font-size:13px;" />
+      <div class="form-label" style="margin-bottom:6px;">➕ Neues Angebot anlegen</div>
       <p class="text-sm text-soft" style="font-size:11px;margin-bottom:8px;">
-        Schüler sehen am Chip wie viele Plätze frei sind. Ist die Zahl erreicht, ist das Fach nicht mehr wählbar.
+        Öffnet das vollständige Fach-Formular mit allen Einstellungen – Zeitschiene, Wochentage,
+        Stunden-Matrix, Klassenstufen, Farbe und Symbol. Nach dem Speichern wird das Fach
+        dieser Lehrkraft automatisch zugewiesen.
       </p>
-
-      <label style="display:flex;align-items:center;gap:7px;font-size:12px;cursor:pointer;margin-bottom:8px;
-        background:#E1F5EE;border:1.5px solid #1D9E75;border-radius:8px;padding:7px 10px;">
-        <input type="checkbox" id="ma-neues-alle-lehrer" style="accent-color:#1D9E75;width:15px;height:15px;flex-shrink:0;" />
-        <span>👥 <b>Für alle Lehrkräfte sichtbar</b> – jede Lehrkraft sieht die Teilnehmer</span>
-      </label>
-
-      <label class="form-label" style="font-size:12px;">Klassenstufen (leer = alle)</label>
-      <div id="ma-neues-stufen" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;"></div>
-
-      <label class="form-label" style="font-size:12px;">Für welche Gruppen? *</label>
-      <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
-        <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;padding:5px 9px;border:1px solid var(--gray-border);border-radius:7px;">
-          <input type="checkbox" id="ma-neues-fruehstarter" checked style="accent-color:var(--orange);" /> ⭐ Frühstarter
-        </label>
-        <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;padding:5px 9px;border:1px solid var(--gray-border);border-radius:7px;">
-          <input type="checkbox" id="ma-neues-starter" checked style="accent-color:var(--orange);" /> 🔵 Starter
-        </label>
-        <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;padding:5px 9px;border:1px solid var(--gray-border);border-radius:7px;">
-          <input type="checkbox" id="ma-neues-durchstarter" checked style="accent-color:var(--orange);" /> 🟢 Durchstarter
-        </label>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <input type="text" id="ma-neues-angebot" class="form-control"
+          placeholder="Name des Angebots, z. B. Connect and Talk"
+          style="flex:1;min-width:170px;font-size:13px;"
+          onkeydown="if(event.key==='Enter'){event.preventDefault();neuesFachFuerLehrkraft();}" />
+        <button class="btn btn-primary btn-sm" onclick="neuesFachFuerLehrkraft()">
+          <i class="ti ti-settings"></i> Anlegen &amp; einrichten
+        </button>
       </div>
-
-      <label class="form-label" style="font-size:12px;">An welchen Wochentagen? (leer = alle Mo–Do)</label>
-      <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;">
-        <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;padding:5px 9px;border:1px solid var(--gray-border);border-radius:7px;">
-          <input type="checkbox" id="ma-neues-tag-1" style="accent-color:var(--orange);" /> Mo
-        </label>
-        <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;padding:5px 9px;border:1px solid var(--gray-border);border-radius:7px;">
-          <input type="checkbox" id="ma-neues-tag-2" style="accent-color:var(--orange);" /> Di
-        </label>
-        <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;padding:5px 9px;border:1px solid var(--gray-border);border-radius:7px;">
-          <input type="checkbox" id="ma-neues-tag-3" style="accent-color:var(--orange);" /> Mi
-        </label>
-        <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;padding:5px 9px;border:1px solid var(--gray-border);border-radius:7px;">
-          <input type="checkbox" id="ma-neues-tag-4" style="accent-color:var(--orange);" /> Do
-        </label>
-      </div>
-
-      <button class="btn btn-primary btn-sm btn-full" onclick="addNeuesAngebot()">
-        <i class="ti ti-plus"></i> Anlegen und zuweisen
-      </button>
-      <p class="text-sm text-soft" style="margin-top:4px;">Das Angebot erscheint danach sofort als wählbarer Chip bei den passenden Schülern.</p>
     </div>
 
     <div id="ma-error" class="text-sm" style="color:#A32D2D;display:none;margin-bottom:.5rem;margin-top:.5rem;"></div>
