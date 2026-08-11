@@ -114,6 +114,7 @@
     .fach-chip { padding: 8px 15px; border-radius: 99px; border: 1.5px solid var(--gray-border); background: #fff; font-size: 13px; cursor: pointer; color: var(--text-soft); transition: all .15s; display: flex; align-items: center; gap: 6px; font-family: inherit; }
     .fach-chip:hover { border-color: var(--orange); color: var(--orange-dark); background: var(--orange-light); }
     .fach-chip.sel-essen { background: var(--amber-light); border-color: var(--amber); color: #633806; font-weight:600; }
+    .fach-chip.sel-feste-ag { background: #FFF7ED; border-color: #EA580C; color: #7C2D12; font-weight:600; }
     .fach-chip.sel-fruehfrei { background: var(--blue-light); border-color: var(--blue); color: #0C447C; font-weight:600; }
     .fach-chip.sel-fruehag { background: var(--green-light); border-color: var(--green); color: #27500A; font-weight:600; }
     .fach-chip.sel-fruehlearn { background: var(--amber-light); border-color: var(--amber); color: #633806; font-weight:600; }
@@ -386,6 +387,27 @@
           <div class="zs-hint" id="hint-4">Bei Späte AG oder Späte Lernzeit in 9. Std. wird 10. Std. automatisch mitgesetzt.</div>
         </div>
       </div>
+
+      <!-- Feste AG der 9./10. Stunde – einmalig vom Schüler einzutragen -->
+      <div id="s-feste-ag-eingabe" style="display:none;background:#FFF7ED;border:1.5px solid #EA580C;border-radius:12px;padding:14px;margin-top:.75rem;">
+        <div style="font-size:14px;font-weight:700;color:#7C2D12;margin-bottom:4px;">⭐ Deine feste AG</div>
+        <p style="font-size:12px;color:#92400E;margin-bottom:10px;line-height:1.5;">
+          Hier trage bitte noch deine feste AG der 9./10. Stunde ein.
+          Sie wird dann jede Woche automatisch an diesem Tag für dich eingetragen.
+        </p>
+        <label style="font-size:12px;font-weight:600;color:#7C2D12;display:block;margin-bottom:3px;">Name der AG</label>
+        <input type="text" id="s-feste-ag-name" class="form-control" placeholder="z. B. Schulband, Fußball, Schulgarten"
+          style="margin-bottom:10px;font-size:13px;" />
+        <label style="font-size:12px;font-weight:600;color:#7C2D12;display:block;margin-bottom:3px;">An welchem Tag?</label>
+        <div id="s-feste-ag-tage" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;"></div>
+        <div id="s-feste-ag-fehler" style="display:none;font-size:12px;color:#A32D2D;margin-bottom:8px;"></div>
+        <button class="btn btn-primary btn-full" onclick="speichereFesteAG()">
+          <i class="ti ti-device-floppy"></i> Feste AG speichern
+        </button>
+      </div>
+
+      <!-- Anzeige der bereits eingetragenen AG -->
+      <div id="s-feste-ag-info" style="display:none;background:#FFF7ED;border:1.5px solid #EA580C;border-radius:10px;padding:9px 14px;margin-top:.75rem;font-size:12px;color:#7C2D12;"></div>
 
       <div class="sum-bar">
         <div class="sum-title">Mein heutiger Plan</div>
@@ -888,6 +910,19 @@
       </div>
       <p class="text-sm text-soft" style="margin-top:4px;">Automatisch generiertes Tier-Passwort · klicke 🎲 für ein anderes.</p>
     </div>
+    <div class="form-group" id="ms-feste-ag-group" style="display:none;background:#FFF7ED;border:1.5px solid #EA580C;border-radius:10px;padding:10px 14px;">
+      <label class="form-label" style="margin-bottom:4px;">⭐ Feste AG (9./10. Stunde)</label>
+      <p class="text-sm" style="font-size:11px;color:#92400E;margin-bottom:8px;">
+        Vom Schüler selbst eingetragen. Hier korrigierbar, falls die Angabe nicht stimmt.
+      </p>
+      <input type="text" id="ms-feste-ag" class="form-control" placeholder="Name der AG (leer = keine)"
+        style="margin-bottom:8px;font-size:13px;" />
+      <div id="ms-feste-ag-tage" style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px;"></div>
+      <button type="button" class="btn btn-secondary btn-sm" onclick="msFesteAGLoeschen()" style="font-size:11px;">
+        🗑️ Feste AG entfernen
+      </button>
+    </div>
+
     <div id="ms-error" class="text-sm" style="color:#A32D2D;display:none;margin-bottom:.5rem;"></div>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeSchuelerModal()">Abbrechen</button>
@@ -1575,6 +1610,8 @@ function loadPlanFuerTag(tag){
     try{renderGewahlt();}catch(e){console.warn('renderGewahlt:',e);}
     // Dynamische Chips neu rendern (Wochentag-Filter anwenden)
     renderDynamischeChips();
+    // Feste AG des Schülers berücksichtigen
+    _wendeFesteAGAn(tag);
     // Ausfälle für diesen Tag laden (blendet betroffene Angebote aus)
     ladeAusfallFuerTag(tag);
     // Ausleihe-Chips auf Verfügbarkeit prüfen (ausblenden wenn voll)
@@ -1638,6 +1675,11 @@ const DOPPELSTUNDEN_FRUEH = ['Freizeit mit Nico']; // Doppelstunde 7. Std.+2
 const AUSLEIHE_FAECHER = ['Spielausleihe','Sportgeräteausleihe'];
 
 function waehlen(zs,name,sel,icon,bg,color,fachId,maxTeilnehmer){
+  // Feste AG belegt an ihrem Tag die 9. und 10. Stunde
+  if((zs===3||zs===4) && festeAGGiltAm(activeTag)){
+    toast('⭐ In der 9. und 10. Stunde hast du heute deine feste AG. Änderungen nur über die Klassenlehrkraft.',true);
+    return;
+  }
   // Angebot fällt heute aus (Lehrkraft abwesend)
   if(_ausgefalleneFaecher.includes(name)){
     toast('⛔ '+name+' fällt heute aus – die Lehrkraft ist abwesend.',true);
@@ -2533,7 +2575,11 @@ function renderSchuelerListe(containerId,liste){
     const volleRechte=lehrerDarfBearbeiten(s.klasse);
     html+=`<tr>
       <td><span class="klasse-badge">${s.klasse}</span></td>
-      <td>${s.vorname} ${s.nachname}</td>
+      <td>${s.vorname} ${s.nachname}
+        ${s.festeAG
+          ? `<span style="display:block;font-size:11px;color:#7C2D12;margin-top:2px;">⭐ ${s.festeAG}${s.festeAGTag?' · '+FESTE_AG_TAGE[s.festeAGTag]:' · <span style=\"color:#A32D2D;\">Tag fehlt!</span>'}</span>`
+          : ''}
+      </td>
       <td>${gruppenBadgeHtml(s.gruppe)}</td>
       <td class="text-soft" style="font-size:12px;">${s.email||''}</td>
       <td>
@@ -2548,6 +2594,30 @@ function renderSchuelerListe(containerId,liste){
   html+='</tbody></table>';
   cont.innerHTML=html;
 }
+// ── Feste AG im Schüler-Fenster (Lehrkraft/Schulleitung) ──
+let msFesteAGTag=null;
+
+function _renderMsFesteAGTage(){
+  const box=document.getElementById('ms-feste-ag-tage');
+  if(!box)return;
+  box.innerHTML=[1,2,3,4].map(t=>{
+    const aktiv=msFesteAGTag===t;
+    return `<button type="button" onclick="msFesteAGTag=${t};_renderMsFesteAGTage();"
+      style="padding:4px 11px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;
+      border:1.5px solid ${aktiv?'#EA580C':'var(--gray-border)'};
+      background:${aktiv?'#FED7AA':'#fff'};
+      color:${aktiv?'#7C2D12':'var(--text-soft)'};">${FESTE_AG_TAGE[t].slice(0,2)}</button>`;
+  }).join('');
+}
+
+function msFesteAGLoeschen(){
+  const feld=document.getElementById('ms-feste-ag');
+  if(feld) feld.value='';
+  msFesteAGTag=null;
+  _renderMsFesteAGTage();
+  toast('AG wird beim Speichern entfernt.');
+}
+
 // Klassen-Schnellauswahl im Schüler-Fenster befüllen
 function _renderMsKlassenSchnellauswahl(){
   const klassen=getAlleKlassen();
@@ -2621,6 +2691,9 @@ function openSchuelerModal(uid){
   }else{
     title.textContent='Schüler hinzufügen';
     document.getElementById('ms-pw-group').style.display='';
+    const agGroupNeu=document.getElementById('ms-feste-ag-group');
+    if(agGroupNeu) agGroupNeu.style.display='none';
+    msFesteAGTag=null;
     document.getElementById('ms-email').disabled=false;
     ['ms-vorname','ms-nachname','ms-klasse','ms-email'].forEach(id=>document.getElementById(id).value='');
     document.getElementById('ms-pw').value=genTierPasswort(); // automatisch generieren
@@ -2687,6 +2760,18 @@ function saveSchueler(){
         }
 
         const updateData={vorname,nachname,klasse,gruppe};
+
+        // Feste AG übernehmen, sofern das Feld sichtbar war
+        const agGroupSichtbar=document.getElementById('ms-feste-ag-group')?.style.display!=='none';
+        if(agGroupSichtbar){
+          const agName=(document.getElementById('ms-feste-ag')?.value||'').trim();
+          if(agName && !msFesteAGTag){
+            showErr(err,'Bitte den Wochentag der festen AG auswählen.');
+            return;
+          }
+          updateData.festeAG    = agName || null;
+          updateData.festeAGTag = agName ? msFesteAGTag : null;
+        }
 
         await updateDoc(doc(db,'users',editSchuelerUid),updateData);
         toast('✓ Schüler aktualisiert.');
@@ -5444,6 +5529,117 @@ function _entsperrePlanUI(){
   document.querySelectorAll('.fach-chip').forEach(c=>{c.style.cursor='';});
   const sperrBanner=document.getElementById('s-gesperrt-banner');
   if(sperrBanner) sperrBanner.style.display='none';
+}
+
+// ═══ FESTE AG (9./10. Stunde, einmal pro Woche) ═══
+const FESTE_AG_TAGE={1:'Montag',2:'Dienstag',3:'Mittwoch',4:'Donnerstag'};
+let _festeAGTagAuswahl=null;
+
+// Baut Eingabefeld bzw. Infozeile auf – je nachdem ob schon eingetragen wurde
+function renderFesteAG(){
+  const eingabe=document.getElementById('s-feste-ag-eingabe');
+  const info=document.getElementById('s-feste-ag-info');
+  if(!eingabe||!info)return;
+
+  const ag=currentUserData?.festeAG;
+  const agTag=currentUserData?.festeAGTag;
+
+  if(ag&&agTag){
+    // Bereits eingetragen → Eingabefeld verschwindet
+    eingabe.style.display='none';
+    info.style.display='';
+    info.innerHTML=`⭐ <b>Feste AG:</b> ${ag} · jeden ${FESTE_AG_TAGE[agTag]} in der 9. + 10. Stunde
+      <span style="display:block;font-size:11px;color:#92400E;margin-top:2px;">
+        Wenn das nicht stimmt, wende dich an deine Klassenlehrkraft.
+      </span>`;
+    return;
+  }
+
+  // Noch nicht eingetragen → Eingabefeld zeigen
+  info.style.display='none';
+  eingabe.style.display='';
+  const tageBox=document.getElementById('s-feste-ag-tage');
+  if(tageBox){
+    tageBox.innerHTML=[1,2,3,4].map(t=>{
+      const aktiv=_festeAGTagAuswahl===t;
+      return `<button type="button" onclick="_festeAGTagAuswahl=${t};renderFesteAG();"
+        style="padding:7px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;
+        border:1.5px solid ${aktiv?'#EA580C':'var(--gray-border)'};
+        background:${aktiv?'#FED7AA':'#fff'};
+        color:${aktiv?'#7C2D12':'var(--text-soft)'};">${FESTE_AG_TAGE[t]}</button>`;
+    }).join('');
+  }
+}
+
+function speichereFesteAG(){
+  const name=(document.getElementById('s-feste-ag-name')?.value||'').trim();
+  const fehler=document.getElementById('s-feste-ag-fehler');
+  const zeigeFehler=(txt)=>{ if(fehler){fehler.textContent=txt;fehler.style.display='';} };
+  if(fehler) fehler.style.display='none';
+
+  if(!name){ zeigeFehler('Bitte gib den Namen deiner AG ein.'); return; }
+  if(!_festeAGTagAuswahl){ zeigeFehler('Bitte wähle den Wochentag deiner AG.'); return; }
+
+  const tag=_festeAGTagAuswahl;
+  if(!confirm('Feste AG eintragen:\n\n'+name+'\njeden '+FESTE_AG_TAGE[tag]+', 9. + 10. Stunde\n\n'+
+     'Das kannst du danach nicht mehr selbst ändern – nur deine Klassenlehrkraft.\n\nSpeichern?')) return;
+
+  withFirebase(async({db,doc,updateDoc})=>{
+    try{
+      await updateDoc(doc(db,'users',currentUser.uid),{
+        festeAG:name,
+        festeAGTag:tag,
+        festeAGSeit:isoDate(new Date())
+      });
+      currentUserData.festeAG=name;
+      currentUserData.festeAGTag=tag;
+      renderFesteAG();
+      toast('⭐ Feste AG gespeichert: '+name+' ('+FESTE_AG_TAGE[tag]+')');
+      if(activeTag) loadPlanFuerTag(activeTag); // Plan neu aufbauen
+    }catch(e){
+      zeigeFehler('Speichern fehlgeschlagen: '+(e.message||e));
+    }
+  });
+}
+
+// Gilt die feste AG am angezeigten Tag?
+function festeAGGiltAm(tag){
+  const ag=currentUserData?.festeAG;
+  const agTag=currentUserData?.festeAGTag;
+  if(!ag||!agTag||!tag)return null;
+  const [j,m,t]=tag.split('-').map(Number);
+  return (new Date(j,m-1,t).getDay()===agTag) ? ag : null;
+}
+
+// Trägt die feste AG am passenden Wochentag in die 9. + 10. Stunde ein
+// und sperrt diese beiden Stunden für andere Wahlen
+function _wendeFesteAGAn(tag){
+  renderFesteAG();
+  const ag=festeAGGiltAm(tag);
+
+  [3,4].forEach(zs=>{
+    const wrap=document.getElementById('zs-wrap-'+zs);
+    const chips=document.getElementById('chips-'+zs);
+    const hint=document.getElementById('hint-'+zs);
+    if(!wrap)return;
+
+    if(ag){
+      // Feste AG setzen und Auswahl sperren
+      gewahlt[zs]={name:ag,sel:'sel-feste-ag',icon:'⭐',bg:'#FFF7ED',color:'#7C2D12',fachId:null,festeAG:true};
+      if(chips) chips.innerHTML='';
+      if(hint){
+        hint.innerHTML='⭐ <b>Feste AG:</b> '+ag+' – jede Woche '+FESTE_AG_TAGE[currentUserData.festeAGTag]+
+                       '. Änderungen nur über die Klassenlehrkraft.';
+        hint.style.color='#7C2D12';
+      }
+      wrap.style.background='#FFFBF5';
+    } else {
+      if(hint) hint.style.color='';
+      wrap.style.background='';
+    }
+  });
+
+  if(ag){ try{renderGewahlt();}catch(e){} }
 }
 
 function ladeDynamischeFaecher(){
