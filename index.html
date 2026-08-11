@@ -2071,6 +2071,8 @@ function slShowTab(tab){
     if(navEl)navEl.classList.toggle('active',t===tab);
   });
   if(tab==='einstellungen') loadEinstellungen();
+  if(tab==='lehrer')        loadLehrerKlassenListe();
+  if(tab==='schueler')      loadSchuelerListe('sl-schueler-liste');
   if(tab==='faecher')       loadFaecherListe();
   if(tab==='fehlzeiten')    loadFehlzeitenUebersicht('sl');
   if(tab==='angebot')       initLeitungAngebotTab();
@@ -2945,32 +2947,53 @@ function deleteLehrer(uid, name){
 }
 
 function loadLehrerKlassenListe(){
+  const cont=document.getElementById('sl-lehrer-liste');
+  if(cont && !cont.innerHTML.trim()) cont.innerHTML='<p class="text-sm text-soft">Lade…</p>';
+
   withFirebase(async({db,getDocsFromServer,getDocs,collection})=>{
-    // Beide Collections parallel laden
-    const [lehrerSnaps, faecherSnaps] = await Promise.all([
-      getDocsFromServer(collection(db,'users')),
-      getDocs(collection(db,'faecher'))
-    ]);
+    try{
+      // Vom Server lesen; bei Problemen auf den Zwischenspeicher ausweichen
+      let lehrerSnaps, faecherSnaps;
+      try{
+        [lehrerSnaps,faecherSnaps]=await Promise.all([
+          getDocsFromServer(collection(db,'users')),
+          getDocs(collection(db,'faecher'))
+        ]);
+      }catch(e){
+        console.warn('Serverabruf fehlgeschlagen, nutze Zwischenspeicher:',e);
+        [lehrerSnaps,faecherSnaps]=await Promise.all([
+          getDocs(collection(db,'users')),
+          getDocs(collection(db,'faecher'))
+        ]);
+      }
 
-    // Alle gültigen Fach-Namen aus Firestore sammeln
-    const gueltigeFaecher=new Set();
-    faecherSnaps.forEach(s=>{if(s.data().name)gueltigeFaecher.add(s.data().name);});
+      // Alle gültigen Fach-Namen aus Firestore sammeln
+      const gueltigeFaecher=new Set();
+      faecherSnaps.forEach(s=>{if(s.data().name)gueltigeFaecher.add(s.data().name);});
 
-    const lehrer=[];
-    lehrerSnaps.forEach(s=>{
-      const d=s.data();
-      // Auch Schulleitungsmitglieder aufführen – sie können ebenfalls Angebote betreuen
-      if(d.role==='lehrer'||d.role==='leitung') lehrer.push({uid:s.id,...d});
-    });
-    lehrer.sort((a,b)=>(a.nachname+a.vorname).localeCompare(b.nachname+b.vorname));
-    renderLehrerKlassenListe(lehrer, gueltigeFaecher);
+      const lehrer=[];
+      lehrerSnaps.forEach(s=>{
+        const d=s.data();
+        // Auch Schulleitungsmitglieder aufführen – sie können ebenfalls Angebote betreuen
+        if(d.role==='lehrer'||d.role==='leitung') lehrer.push({uid:s.id,...d});
+      });
+      lehrer.sort((a,b)=>((a.nachname||'')+(a.vorname||'')).localeCompare((b.nachname||'')+(b.vorname||'')));
+      renderLehrerKlassenListe(lehrer, gueltigeFaecher);
+    }catch(e){
+      console.error('loadLehrerKlassenListe:',e);
+      if(cont) cont.innerHTML='<p class="text-sm" style="color:#A32D2D;padding:12px;background:#FCEBEB;border-radius:8px;">'+
+        'Lehrkräfte konnten nicht geladen werden: '+(e.message||e)+
+        '<br><button class="btn btn-secondary btn-sm" style="margin-top:8px;" onclick="loadLehrerKlassenListe()">Erneut versuchen</button></p>';
+    }
   });
 }
 function renderLehrerKlassenListe(lehrer, gueltigeFaecher=null){
   const cont=document.getElementById('sl-lehrer-liste');
+  if(!cont)return;
   if(!lehrer.length){cont.innerHTML='<p class="text-sm text-soft">Keine Lehrkräfte gefunden.</p>';return;}
   let html=`<table class="schueler-table"><thead><tr><th>Name</th><th>Klassenleitung</th><th>Angebote</th><th></th></tr></thead><tbody>`;
   lehrer.forEach(l=>{
+   try{
     // Nur Klassen anzeigen, für die diese Lehrkraft tatsächlich die Klassenleitung hat
     const klassen=(l.istKlassenlehrer===true && Array.isArray(l.klassen))?l.klassen:[];
     const chipsHtml=klassen.length
@@ -3020,6 +3043,11 @@ function renderLehrerKlassenListe(lehrer, gueltigeFaecher=null){
         </div>
       </td>
     </tr>`;
+   }catch(e){
+    console.error('Lehrer-Zeile fehlerhaft:',l,e);
+    html+=`<tr><td colspan="4" style="font-size:12px;color:#A32D2D;">
+      ⚠️ Datensatz „${(l&&l.nachname)||'unbekannt'}" konnte nicht angezeigt werden.</td></tr>`;
+   }
   });
   html+='</tbody></table>';
   cont.innerHTML=html;
