@@ -983,7 +983,7 @@ function doLogin() {
   const errEl=document.getElementById('login-error');
   errEl.style.display='none';
   if(!email||!pw){showErr(errEl,'Bitte E-Mail und Passwort eingeben.');return;}
-  withFirebase(async({auth,signInWithEmailAndPassword,db,doc,getDoc})=>{
+  withFirebase(async({auth,signInWithEmailAndPassword,db,doc,getDoc,getDocs,collection})=>{
     try{
       const cred=await signInWithEmailAndPassword(auth,email,pw);
       const snap=await getDoc(doc(db,'users',cred.user.uid));
@@ -1008,7 +1008,32 @@ function doLogin() {
         enterApp();
       }
     }catch(e){
-      showErr(errEl,loginErrMsg(e.code||e.message));
+      const code=e.code||e.message||'';
+      // Bei ungültigen Zugangsdaten prüfen, ob die E-Mail überhaupt bekannt ist –
+      // das unterscheidet Tippfehler von einem fehlenden Firebase-Konto
+      if(code==='auth/invalid-credential'||code==='auth/wrong-password'||code==='auth/user-not-found'){
+        try{
+          const snaps=await getDocs(collection(db,'users'));
+          let treffer=null;
+          snaps.forEach(s=>{
+            const d=s.data();
+            if((d.email||'').trim().toLowerCase()===email) treffer={id:s.id,...d};
+          });
+          if(treffer){
+            if(treffer.role!==selectedLoginRole){
+              showErr(errEl,`Diese E-Mail gehört zu einem ${roleLabel(treffer.role)}-Konto – bitte oben die richtige Rolle wählen.`);
+              return;
+            }
+            showErr(errEl,'Passwort stimmt nicht. Hinterlegtes Startpasswort: '+
+              (treffer.passwort?('„'+treffer.passwort+'"'):'unbekannt – bitte zurücksetzen lassen')+
+              '. Achte auf Groß-/Kleinschreibung.');
+            return;
+          }
+          showErr(errEl,'Diese E-Mail ist im Programm nicht hinterlegt. Bitte bei der Schulleitung prüfen lassen, ob das Konto angelegt wurde.');
+          return;
+        }catch(e2){ /* Fällt auf die allgemeine Meldung zurück */ }
+      }
+      showErr(errEl,loginErrMsg(code));
     }
   });
 }
@@ -2557,6 +2582,44 @@ function filterSchuelerListe(praefix){
 
 // Rückwärtskompatibilität für die Lehreransicht
 function lFilterSchuelerListe(){ filterSchuelerListe('l'); }
+// Prüft, warum sich ein Schüler möglicherweise nicht anmelden kann
+function pruefeSchuelerKonto(uid){
+  withFirebase(async({db,doc,getDoc})=>{
+    try{
+      const snap=await getDoc(doc(db,'users',uid));
+      if(!snap.exists()){ alert('❌ Kein Profil gefunden.'); return; }
+      const d=snap.data();
+      const zeilen=[];
+      const email=(d.email||'').trim();
+
+      zeilen.push('Name: '+(d.vorname||'?')+' '+(d.nachname||'?'));
+      zeilen.push('Klasse: '+(d.klasse||'– fehlt!'));
+      zeilen.push('');
+      zeilen.push('E-Mail zum Anmelden:');
+      zeilen.push('   '+(email||'– FEHLT!'));
+      if(email!==email.toLowerCase()){
+        zeilen.push('   ⚠️ Enthält Großbuchstaben – in Firebase Auth steht');
+        zeilen.push('   möglicherweise eine andere Schreibweise.');
+      }
+      zeilen.push('');
+      zeilen.push('Passwort: '+(d.passwort?('„'+d.passwort+'"'):'– nicht hinterlegt'));
+      if(d.passwort && d.passwort.length<6){
+        zeilen.push('   ⚠️ Kürzer als 6 Zeichen – Firebase lehnt das ab.');
+      }
+      zeilen.push('');
+      zeilen.push('Rolle: '+(d.role||'– fehlt!')+(d.role!=='schueler'?'  ⚠️ sollte „schueler" sein':''));
+      zeilen.push('Gruppe: '+(d.gruppe||'– fehlt, wird als Durchstarter behandelt'));
+      zeilen.push('');
+      zeilen.push('Beim Anmelden muss oben „Schüler" gewählt sein.');
+      zeilen.push('Falls es weiterhin klemmt: Passwort über 🔑 neu setzen.');
+
+      alert('🔎 Anmeldedaten prüfen\n\n'+zeilen.join('\n'));
+    }catch(e){
+      alert('Prüfung fehlgeschlagen: '+(e.message||e));
+    }
+  });
+}
+
 function renderSchuelerListe(containerId,liste){
   const cont=document.getElementById(containerId);
   if(!cont)return;
@@ -2587,6 +2650,7 @@ function renderSchuelerListe(containerId,liste){
           ${volleRechte?'':'<span style="font-size:11px;color:var(--text-lighter);margin-right:4px;" title="Nicht deine Klasse – nur Ansicht"><i class="ti ti-lock" style="font-size:12px;"></i></span>'}
           <button class="btn btn-secondary btn-sm" title="${volleRechte?'Bearbeiten':'Nur Ansicht – nicht deine Klasse'}" onclick="openSchuelerModal('${s.uid}')"><i class="ti ti-edit"></i></button>
           <button class="btn btn-secondary btn-sm" title="Passwort zurücksetzen" onclick="openPwResetModal('${s.uid}','${s.vorname} ${s.nachname}','schueler')"><i class="ti ti-key"></i></button>
+          ${volleRechte?`<button class="btn btn-secondary btn-sm" title="Anmeldung prüfen" onclick="pruefeSchuelerKonto('${s.uid}')"><i class="ti ti-help-circle"></i></button>`:''}
           ${volleRechte?`<button class="btn btn-danger btn-sm" title="Löschen" onclick="deleteSchueler('${s.uid}','${s.vorname} ${s.nachname}')"><i class="ti ti-trash"></i></button>`:''}
         </div>
       </td></tr>`;
