@@ -905,10 +905,15 @@
     <div class="form-group" id="ms-pw-group">
       <label class="form-label">Startpasswort</label>
       <div style="display:flex;gap:8px;">
-        <input type="text" id="ms-pw" class="form-control" readonly style="font-family:monospace;background:var(--gray-bg);" />
-        <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('ms-pw').value=genTierPasswort()" title="Neues Passwort würfeln">🎲</button>
+        <input type="text" id="ms-pw" class="form-control" style="font-family:monospace;"
+          oninput="pruefePasswortFeld()" />
+        <button type="button" class="btn btn-secondary btn-sm"
+          onclick="document.getElementById('ms-pw').value=genTierPasswort();pruefePasswortFeld();"
+          title="Neues Passwort würfeln">🎲</button>
       </div>
-      <p class="text-sm text-soft" style="margin-top:4px;">Automatisch generiertes Tier-Passwort · klicke 🎲 für ein anderes.</p>
+      <p class="text-sm" id="ms-pw-hinweis" style="margin-top:4px;color:var(--text-soft);">
+        Automatisch erzeugt · 🎲 für ein anderes · frei überschreibbar
+      </p>
     </div>
     <div class="form-group" id="ms-feste-ag-group" style="display:none;background:#FFF7ED;border:1.5px solid #EA580C;border-radius:10px;padding:10px 14px;">
       <label class="form-label" style="margin-bottom:4px;">⭐ Feste AG (9./10. Stunde)</label>
@@ -2583,6 +2588,37 @@ function filterSchuelerListe(praefix){
 // Rückwärtskompatibilität für die Lehreransicht
 function lFilterSchuelerListe(){ filterSchuelerListe('l'); }
 // Prüft, warum sich ein Schüler möglicherweise nicht anmelden kann
+// Prüft das Passwortfeld beim Tippen und meldet Probleme sofort
+function pruefePasswortFeld(){
+  const feld=document.getElementById('ms-pw');
+  const hinweis=document.getElementById('ms-pw-hinweis');
+  const speichern=document.getElementById('ms-save-btn');
+  if(!feld||!hinweis)return;
+  const pw=feld.value.trim();
+
+  let text, farbe, ok=true;
+  if(!pw){
+    text='Bitte ein Passwort eingeben oder 🎲 klicken.'; farbe='#A32D2D'; ok=false;
+  } else if(pw.length<6){
+    text='❌ Zu kurz ('+pw.length+' Zeichen) – mindestens 6 nötig.'; farbe='#A32D2D'; ok=false;
+  } else if(/[äöüßÄÖÜ]/.test(pw)){
+    text='⚠️ Enthält Umlaute – die vertippen sich leicht. Trotzdem möglich.'; farbe='#92400E';
+  } else if(/\s/.test(pw)){
+    text='❌ Leerzeichen sind nicht erlaubt.'; farbe='#A32D2D'; ok=false;
+  } else {
+    text='✓ Passwort in Ordnung ('+pw.length+' Zeichen).'; farbe='#085041';
+  }
+
+  hinweis.textContent=text;
+  hinweis.style.color=farbe;
+  feld.style.borderColor=ok?'':'#A32D2D';
+  if(speichern && document.getElementById('ms-pw-group')?.style.display!=='none'){
+    speichern.disabled=!ok;
+    speichern.style.opacity=ok?'':'0.4';
+    speichern.style.cursor=ok?'':'not-allowed';
+  }
+}
+
 function pruefeSchuelerKonto(uid){
   withFirebase(async({db,doc,getDoc})=>{
     try{
@@ -2604,7 +2640,11 @@ function pruefeSchuelerKonto(uid){
       zeilen.push('');
       zeilen.push('Passwort: '+(d.passwort?('„'+d.passwort+'"'):'– nicht hinterlegt'));
       if(d.passwort && d.passwort.length<6){
-        zeilen.push('   ⚠️ Kürzer als 6 Zeichen – Firebase lehnt das ab.');
+        zeilen.push('   ❌ ZU KURZ ('+d.passwort.length+' Zeichen) – Firebase verlangt 6.');
+        zeilen.push('   Das Konto konnte so nicht angelegt werden.');
+        zeilen.push('   → Bitte über 🔑 ein neues Passwort setzen.');
+      } else if(d.passwort && /[äöüßÄÖÜ]/.test(d.passwort)){
+        zeilen.push('   ⚠️ Enthält Umlaute – beim Tippen leicht falsch.');
       }
       zeilen.push('');
       zeilen.push('Rolle: '+(d.role||'– fehlt!')+(d.role!=='schueler'?'  ⚠️ sollte „schueler" sein':''));
@@ -2761,6 +2801,7 @@ function openSchuelerModal(uid){
     document.getElementById('ms-email').disabled=false;
     ['ms-vorname','ms-nachname','ms-klasse','ms-email'].forEach(id=>document.getElementById(id).value='');
     document.getElementById('ms-pw').value=genTierPasswort(); // automatisch generieren
+    pruefePasswortFeld();
     document.getElementById('ms-gruppe').value='durchstarter';
   }
   _renderMsKlassenSchnellauswahl();
@@ -2771,6 +2812,13 @@ function openSchuelerModal(uid){
   });
   const sBtnReset=document.getElementById('ms-save-btn');
   if(sBtnReset){sBtnReset.disabled=false;sBtnReset.style.opacity='';sBtnReset.style.cursor='';}
+  const pwHinweis=document.getElementById('ms-pw-hinweis');
+  if(pwHinweis){
+    pwHinweis.textContent='Automatisch erzeugt · 🎲 für ein anderes · frei überschreibbar';
+    pwHinweis.style.color='var(--text-soft)';
+  }
+  const pwFeld=document.getElementById('ms-pw');
+  if(pwFeld) pwFeld.style.borderColor='';
   const schnellReset=document.getElementById('ms-klassen-schnell');
   if(schnellReset){schnellReset.style.pointerEvents='';schnellReset.style.opacity='';}
   document.getElementById('modal-schueler').classList.remove('hidden');
@@ -2850,7 +2898,17 @@ function saveSchueler(){
     }
 
     // NEU ANLEGEN: Secondary Auth damit Admin/Lehrer eingeloggt bleibt
-    if(!pw||pw.length<6){showErr(err,'Passwort muss mindestens 6 Zeichen haben.');return;}
+    if(!pw||pw.length<6){
+      showErr(err,'❌ Das Passwort muss mindestens 6 Zeichen haben (aktuell: '+(pw?pw.length:0)+
+        '). Klicke 🎲 für ein sicheres Passwort.');
+      document.getElementById('ms-pw')?.focus();
+      return;
+    }
+    if(/\s/.test(pw)){
+      showErr(err,'❌ Das Passwort darf keine Leerzeichen enthalten.');
+      document.getElementById('ms-pw')?.focus();
+      return;
+    }
     const saveBtn=document.getElementById('ms-save-btn');
     if(saveBtn){saveBtn.disabled=true;saveBtn.textContent='Wird angelegt...';}
 
@@ -5901,33 +5959,51 @@ async function _ladeKapazitaeten(){
 }
 
 // ═══ TIER-PASSWORT-GENERATOR ═══
-const TIERE=['Adler','Affe','Ameise','Bär','Biber','Biene','Büffel','Dachs','Delfin',
-  'Eichhorn','Elch','Elefant','Ente','Falke','Fisch','Flamingo','Fuchs',
-  'Giraffe','Hamster','Hase','Igel','Jaguar','Kamel','Katze','Koala',
-  'Krokodil','Kuh','Leopard','Löwe','Luchs','Marder','Maus','Möwe',
-  'Nashorn','Otter','Panda','Papagei','Pferd','Pinguin','Rabe','Reh',
-  'Salamander','Schaf','Schildkröte','Seehund','Specht','Storch',
-  'Tiger','Vogel','Waschbär','Wolf','Zebra','Ziege'];
-function genTierPasswort(){
-  return TIERE[Math.floor(Math.random()*TIERE.length)]+Math.floor(Math.random()*90+10);
+// ═══ PASSWORT-ERZEUGUNG ═══
+// Wichtig: Firebase verlangt mindestens 6 Zeichen. Deshalb nur Wörter ab 5 Buchstaben
+// und eine dreistellige Zahl – damit sind es immer mindestens 8 Zeichen.
+// Umlaute und ß sind bewusst ausgeschlossen: Sie führen auf manchen Tastaturen
+// und Geräten zu Tippfehlern beim Anmelden.
+const TIERE=['Adler','Ameise','Biber','Biene','Dachs','Delfin',
+  'Eichhorn','Elefant','Falke','Fisch','Flamingo','Fuchs',
+  'Giraffe','Hamster','Jaguar','Kamel','Katze','Koala',
+  'Krokodil','Leopard','Luchs','Marder','Nashorn','Otter',
+  'Panda','Papagei','Pferd','Pinguin','Rabenvogel','Robbe',
+  'Salamander','Schaf','Seehund','Specht','Storch',
+  'Tiger','Vogel','Wolfshund','Zebra','Ziege','Delphin','Kranich',
+  'Murmeltier','Eisbaer','Seestern','Krebs','Hummel','Libelle'];
+
+// Erzeugt ein Passwort und stellt sicher, dass es lang genug ist
+function _bauePasswort(woerter){
+  const MINDESTLAENGE=8;
+  let versuch=0;
+  while(versuch<50){
+    const wort=woerter[Math.floor(Math.random()*woerter.length)];
+    const zahl=Math.floor(Math.random()*900+100); // immer dreistellig: 100–999
+    const pw=wort+zahl;
+    if(pw.length>=MINDESTLAENGE && !/[äöüßÄÖÜ]/.test(pw)) return pw;
+    versuch++;
+  }
+  // Notfalls auffüllen, damit nie ein zu kurzes Passwort entsteht
+  return 'Schule'+Math.floor(Math.random()*9000+1000);
 }
+
+function genTierPasswort(){ return _bauePasswort(TIERE); }
 
 // Berühmtheiten-Passwörter für Lehrkräfte
 const BERUEHMTHEITEN=[
-  'Einstein','Mozart','Beethoven','Schiller','Goethe','Bach','Brecht',
-  'Kafka','Hesse','Mann','Rilke','Böll','Grass','Dürer','Cranach',
-  'Kepler','Humboldt','Gauss','Planck','Heisenberg','Röntgen','Koch',
-  'Gutenberg','Zeppelin','Diesel','Benz','Siemens','Bosch','Porsche',
+  'Einstein','Mozart','Beethoven','Schiller','Goethe','Brecht',
+  'Kafka','Hesse','Rilke','Duerer','Cranach',
+  'Kepler','Humboldt','Gauss','Planck','Heisenberg','Roentgen',
+  'Gutenberg','Zeppelin','Diesel','Siemens','Bosch','Porsche',
   'Luther','Bismarck','Friedrich','Adenauer','Brandt','Schmidt',
   'Newton','Darwin','Curie','Pasteur','Edison','Tesla','Faraday',
-  'Shakespeare','Dickens','Hugo','Voltaire','Rousseau','Descartes',
+  'Shakespeare','Dickens','Voltaire','Rousseau','Descartes',
   'Sokrates','Aristoteles','Platon','Archimedes','Pythagoras',
   'Leonardo','Michelangelo','Raffael','Rembrandt','Monet','Picasso',
-  'Chaplin','Hitchcock','Mozart','Schubert','Brahms','Wagner','Liszt'
+  'Chaplin','Hitchcock','Schubert','Brahms','Wagner','Liszt'
 ];
-function genBeruehmtheitPasswort(){
-  return BERUEHMTHEITEN[Math.floor(Math.random()*BERUEHMTHEITEN.length)]+Math.floor(Math.random()*90+10);
-}
+function genBeruehmtheitPasswort(){ return _bauePasswort(BERUEHMTHEITEN); }
 
 function showErr(el,msg){el.textContent=msg;el.style.display='block';}
 
