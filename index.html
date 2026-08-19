@@ -1705,6 +1705,19 @@ const DOPPELSTUNDEN_FRUEH = ['Freizeit mit Nico']; // Doppelstunde 7. Std.+2
 const AUSLEIHE_FAECHER = ['Spielausleihe','Sportgeräteausleihe'];
 
 function waehlen(zs,name,sel,icon,bg,color,fachId,maxTeilnehmer){
+  // Zeitraum des Fachs prüfen (Fach startet später oder ist bereits beendet)
+  const fachDef=(dynamischeFaecher||[]).find(x=>(fachId&&x.id===fachId)||x.name===name);
+  if(fachDef&&activeTag){
+    const fmtD=(d)=>{const [j,m,t]=d.split('-');return t+'.'+m+'.'+j;};
+    if(fachDef.gueltigVon && activeTag < fachDef.gueltigVon){
+      toast('📅 '+name+' startet erst am '+fmtD(fachDef.gueltigVon)+'.',true);
+      return;
+    }
+    if(fachDef.gueltigBis && activeTag > fachDef.gueltigBis){
+      toast('📅 '+name+' wurde am '+fmtD(fachDef.gueltigBis)+' beendet.',true);
+      return;
+    }
+  }
   // Feste AG belegt an ihrem Tag die 9. und 10. Stunde
   if((zs===3||zs===4) && festeAGGiltAm(activeTag)){
     toast('⭐ In der 9. und 10. Stunde hast du heute deine feste AG. Änderungen nur über die Klassenlehrkraft.',true);
@@ -2589,6 +2602,37 @@ function filterSchuelerListe(praefix){
 function lFilterSchuelerListe(){ filterSchuelerListe('l'); }
 // Prüft, warum sich ein Schüler möglicherweise nicht anmelden kann
 // Prüft das Passwortfeld beim Tippen und meldet Probleme sofort
+// Zeigt an, wie sich der eingestellte Zeitraum auswirkt
+function _pruefeFachZeitraum(){
+  const von=document.getElementById('fm-gueltig-von')?.value||'';
+  const bis=document.getElementById('fm-gueltig-bis')?.value||'';
+  const el=document.getElementById('fm-zeitraum-hinweis');
+  if(!el)return true;
+
+  if(!von&&!bis){ el.style.display='none'; return true; }
+
+  if(von&&bis&&von>bis){
+    el.style.display='';
+    el.style.color='#A32D2D';
+    el.textContent='❌ Das Startdatum liegt nach dem Enddatum.';
+    return false;
+  }
+
+  const fmt=(d)=>{const [j,m,t]=d.split('-');return t+'.'+m+'.'+j;};
+  const sjB=schuljahrConfig.sjBeginn, sjE=schuljahrConfig.sjEnde;
+  const warnungen=[];
+  if(von&&sjB&&von<sjB) warnungen.push('Start liegt vor Schuljahresbeginn');
+  if(bis&&sjE&&bis>sjE) warnungen.push('Ende liegt nach Schuljahresende');
+
+  el.style.display='';
+  el.style.color=warnungen.length?'#92400E':'#085041';
+  el.textContent=(warnungen.length?'⚠️ ':'✓ ')+
+    'Wählbar '+(von?'ab '+fmt(von):'ab Schuljahresbeginn')+
+    (bis?' bis '+fmt(bis):' bis Schuljahresende')+
+    (warnungen.length?' · '+warnungen.join(', '):'');
+  return true;
+}
+
 function pruefePasswortFeld(){
   const feld=document.getElementById('ms-pw');
   const hinweis=document.getElementById('ms-pw-hinweis');
@@ -4252,7 +4296,7 @@ function renderFaecherListe(liste, unvollstaendig=[]){
         ${f.icon||'📌'} ${f.name}
         ${isSystem?'<span style="font-size:10px;font-weight:600;color:#085041;background:#E1F5EE;padding:1px 6px;border-radius:99px;margin-left:4px;">System</span>':''}
       </td>
-      <td style="font-size:12px;color:var(--text-soft);">${f.zeitschieneName||f.zeitschiene||'–'}${f.isDoppelstunde?' 🔁':''}${f.isEinzelnWaehlbar?' <span style="color:var(--orange);font-weight:600;">(einzeln)</span>':''}${f.wochentage&&f.wochentage.length?' · <span style="color:#085041;font-size:11px;">'+f.wochentage.map(t=>(['','Mo','Di','Mi','Do'][t])).join(', ')+'</span>':''}</td>
+      <td style="font-size:12px;color:var(--text-soft);">${f.zeitschieneName||f.zeitschiene||'–'}${f.isDoppelstunde?' 🔁':''}${f.isEinzelnWaehlbar?' <span style="color:var(--orange);font-weight:600;">(einzeln)</span>':''}${f.wochentage&&f.wochentage.length?' · <span style="color:#085041;font-size:11px;">'+f.wochentage.map(t=>(['','Mo','Di','Mi','Do'][t])).join(', ')+'</span>':''}${(f.gueltigVon||f.gueltigBis)?'<div style="font-size:10px;font-weight:600;color:#7C2D12;background:#FFF7ED;padding:1px 6px;border-radius:99px;display:inline-block;margin-top:3px;">📅 '+(f.gueltigVon?('ab '+f.gueltigVon.split('-').reverse().join('.')+' '):'')+(f.gueltigBis?('bis '+f.gueltigBis.split('-').reverse().join('.')):'')+'</div>':''}</td>
       <td><span title="${f.maxTeilnehmer?'Maximal '+f.maxTeilnehmer+' Schüler pro Tag':'Unbegrenzt – keine Teilnehmerzahl hinterlegt'}"
         style="background:${f.maxTeilnehmer?'var(--orange-light)':'var(--gray-bg)'};color:${f.maxTeilnehmer?'var(--orange-dark)':'var(--text-lighter)'};font-size:12px;font-weight:600;padding:2px 8px;border-radius:99px;">${f.maxTeilnehmer||'∞'}</span></td>
       <td style="font-size:13px;">
@@ -4337,6 +4381,9 @@ function openFachModal(id){
         }));
       }
       document.getElementById('fm-max').value=d.maxTeilnehmer||'';
+      document.getElementById('fm-gueltig-von').value=d.gueltigVon||'';
+      document.getElementById('fm-gueltig-bis').value=d.gueltigBis||'';
+      _pruefeFachZeitraum();
       document.getElementById('fm-beschreibung').value=d.beschreibung||'';
       if(document.getElementById('fm-aktiv'))
         document.getElementById('fm-aktiv').checked=d.aktiv!==false;
@@ -4383,6 +4430,9 @@ function openFachModal(id){
       if(cb) cb.checked=false;
     }));
     document.getElementById('fm-max').value='';
+    document.getElementById('fm-gueltig-von').value='';
+    document.getElementById('fm-gueltig-bis').value='';
+    _pruefeFachZeitraum();
     document.getElementById('fm-beschreibung').value='';
     if(document.getElementById('fm-aktiv')) document.getElementById('fm-aktiv').checked=true;
     if(document.getElementById('fm-alle-lehrer')) document.getElementById('fm-alle-lehrer').checked=false;
@@ -4989,6 +5039,12 @@ function saveFach(){
   const name=document.getElementById('fm-name').value.trim();
   const icon=document.getElementById('fm-icon').value.trim()||'📌';
   const maxTeilnehmer=parseInt(document.getElementById('fm-max').value)||null;
+  const gueltigVon=document.getElementById('fm-gueltig-von')?.value||null;
+  const gueltigBis=document.getElementById('fm-gueltig-bis')?.value||null;
+  if(gueltigVon&&gueltigBis&&gueltigVon>gueltigBis){
+    showErr(document.getElementById('fm-error'),'Das Startdatum des Zeitraums liegt nach dem Enddatum.');
+    return;
+  }
   const beschreibung=document.getElementById('fm-beschreibung').value.trim();
   const gruppen=['fruehstarter','starter','durchstarter'].filter(g=>document.getElementById('fm-gruppe-'+g)?.checked);
   const aktiv=document.getElementById('fm-aktiv')?.checked||false;
@@ -5045,6 +5101,8 @@ function saveFach(){
         alleLehrer: alleLehrer, // alle Lehrkräfte können Belegung sehen
         klassen: klassen, // null = alle Klassen, sonst Array
         klassenstufen: klassenstufen, // null = alle Stufen, sonst z.B. [5,6]
+        gueltigVon, // null = ab Schuljahresbeginn
+        gueltigBis, // null = bis Schuljahresende
         aktiv,
         updatedAt:new Date().toISOString()
       };
@@ -5798,6 +5856,11 @@ function renderDynamischeChips(){
   dynamischeFaecher.forEach(f=>{
     // Fach fällt heute aus (Lehrkraft abwesend) → nicht anbieten
     if(_ausgefalleneFaecher.includes(f.name)) return;
+    // Zeitraum beachten: Fach startet später bzw. endet früher als das Schuljahr
+    if(activeTag){
+      if(f.gueltigVon && activeTag < f.gueltigVon) return;
+      if(f.gueltigBis && activeTag > f.gueltigBis) return;
+    }
     if(f.gruppen && !f.gruppen.includes(gruppe)) return;
 
     const schuelerKlasse=currentUserData?.klasse||'';
@@ -6099,6 +6162,8 @@ function renderAngeboteCheckboxen(){
           icon:d.icon||'📌',
           maxTeilnehmer:d.maxTeilnehmer||null,
           zeitschieneName:d.zeitschieneName||'',
+          gueltigVon:d.gueltigVon||null,
+          gueltigBis:d.gueltigBis||null,
           zeitschiene:d.zeitschiene||'',
           tagStunden:Array.isArray(d.tagStunden)?d.tagStunden:null,
           wochentage:Array.isArray(d.wochentage)?d.wochentage:null,
@@ -6170,6 +6235,12 @@ function renderAngeboteCheckboxen(){
               ? f.wochentage.map(t=>TAGK[t]).join(', ')
               : 'Mo–Do';
             wann=(f.zeitschieneName||'ohne Zeitschiene')+' · '+tage;
+          }
+          if(f.gueltigVon||f.gueltigBis){
+            const fd=(d)=>d.split('-').reverse().join('.');
+            wann+=' · 📅 '+(f.gueltigVon?'ab '+fd(f.gueltigVon):'')+
+                  (f.gueltigVon&&f.gueltigBis?' ':'')+
+                  (f.gueltigBis?'bis '+fd(f.gueltigBis):'');
           }
           const gruppenKurz={fruehstarter:'Früh',starter:'Start',durchstarter:'Durch'};
           const wer=[
@@ -7265,6 +7336,25 @@ function savePwReset(){
     <div class="form-group">
       <label class="form-label">Max. Teilnehmer pro Tag (leer = unbegrenzt)</label>
       <input type="number" id="fm-max" class="form-control" placeholder="z. B. 15" min="1" />
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Zeitraum <span class="text-soft" style="font-weight:400;">(optional)</span></label>
+      <p class="text-sm text-soft" style="margin-bottom:6px;">
+        Leer = ganzes Schuljahr. Nutze das, wenn ein Angebot später startet oder
+        vorher endet – z.&nbsp;B. eine AG, die erst ab dem 9.&nbsp;September läuft.
+      </p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div>
+          <label class="form-label" style="font-size:11px;">Startet am</label>
+          <input type="date" id="fm-gueltig-von" class="form-control" style="font-size:13px;padding:6px 10px;" onchange="_pruefeFachZeitraum()" />
+        </div>
+        <div>
+          <label class="form-label" style="font-size:11px;">Endet am</label>
+          <input type="date" id="fm-gueltig-bis" class="form-control" style="font-size:13px;padding:6px 10px;" onchange="_pruefeFachZeitraum()" />
+        </div>
+      </div>
+      <div id="fm-zeitraum-hinweis" style="display:none;font-size:11px;margin-top:5px;"></div>
     </div>
 
     <div class="form-group">
