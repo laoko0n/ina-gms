@@ -1912,14 +1912,16 @@ function _waehlenAusfuehren(zs,name,sel,icon,bg,color,fachId){
   } else {
     // Allgemeine Doppelstunde: gilt für jedes Fach, das in den Fächer-Einstellungen
     // als Doppelstunde angelegt wurde – nicht nur für fest hinterlegte Namen
-    const partner=_doppelstundenPartner(zs,fachId,name);
-    if(partner && (GRUPPEN[g]?.freiZS||[]).includes(partner)){
-      gewahlt[partner]={name,sel,icon,bg,color,fachId};
-      const wp=document.getElementById('zs-wrap-'+partner);
-      if(wp){wp.classList.add('zs-doppel');setTimeout(()=>wp.classList.remove('zs-doppel'),2000);}
-      const stdA={1:'7.',2:'8.',3:'9.',4:'10.'}[zs];
-      const stdB={1:'7.',2:'8.',3:'9.',4:'10.'}[partner];
-      toast('🔁 '+name+' ist eine Doppelstunde: '+stdA+' + '+stdB+' Std. gewählt.');
+    const weitere=_blockPartner(zs,fachId,name).filter(p=>(GRUPPEN[g]?.freiZS||[]).includes(p));
+    if(weitere.length){
+      const STD={1:'7.',2:'8.',3:'9.',4:'10.'};
+      weitere.forEach(p=>{
+        gewahlt[p]={name,sel,icon,bg,color,fachId};
+        const wp=document.getElementById('zs-wrap-'+p);
+        if(wp){wp.classList.add('zs-doppel');setTimeout(()=>wp.classList.remove('zs-doppel'),2000);}
+      });
+      const alle=[zs,...weitere].sort((a,b)=>a-b).map(n=>STD[n]).join(' + ');
+      toast('🔁 '+name+' belegt '+alle+' Std. gemeinsam.');
     } else if(zs===3 && !DOPPELSTUNDEN.includes(name)){
       // Kein Doppelstunden-Angebot gewählt → 10. Std. zurücksetzen (wenn frei)
       if((GRUPPEN[g]?.freiZS||[]).includes(4) && gewahlt[4] && gewahlt[4].name!==name){
@@ -1933,15 +1935,18 @@ function _waehlenAusfuehren(zs,name,sel,icon,bg,color,fachId){
 }
 
 // Ermittelt die Partnerstunde, wenn ein Fach als Doppelstunde angelegt ist
+// Liefert alle weiteren Stunden eines Blocks (bei Doppelstunde eine, bei 7.–10. drei)
 function _doppelstundenPartner(zs,fachId,name){
+  const weitere=_blockPartner(zs,fachId,name);
+  return weitere.length?weitere[0]:null;
+}
+
+function _blockPartner(zs,fachId,name){
   const f=(dynamischeFaecher||[]).find(x=>(fachId&&x.id===fachId)||x.name===name);
-  if(!f||!f.isDoppelstunde) return null;
+  if(!f||!f.isDoppelstunde) return [];
   const nums=String(f.zeitschiene||'').split(',').map(Number).filter(n=>!isNaN(n));
-  if(nums.length<2) return null;
-  const pos=nums.indexOf(zs);
-  if(pos<0) return null;
-  // Partner ist die jeweils andere Stunde des Blocks
-  return nums.find(n=>n!==zs)||null;
+  if(nums.length<2||nums.indexOf(zs)<0) return [];
+  return nums.filter(n=>n!==zs);
 }
 
 function _istDoppelstundenFach(fachId,name){
@@ -5909,7 +5914,7 @@ function renderDynamischeChips(){
       // Chip-Inhalt mit Kapazitäts-Badge wenn maxTeilnehmer gesetzt
       const stdKurz={1:'7.',2:'8.',3:'9.',4:'10.'};
       const doppelHinweis=isDoppel
-        ? ' 🔁 '+stdKurz[zsNummern[0]]+'+'+stdKurz[zsNummern[1]]
+        ? ' 🔁 '+zsNummern.map(n=>stdKurz[n]).join('+')
         : '';
       const labelText=(f.icon||'📌')+' '+f.name+doppelHinweis;
       if(f.maxTeilnehmer){
@@ -7324,6 +7329,12 @@ function savePwReset(){
       </label>
       <label style="display:flex;align-items:center;gap:8px;padding:8px 12px;border:1.5px solid var(--gray-border);border-radius:8px;cursor:pointer;font-size:13px;">
         <input type="radio" name="fm-zs" value="einzeln:3,4" style="accent-color:var(--orange);" /> 9. + 10. Std. – einzeln wählbar
+      </label>
+      <label style="grid-column:1 / -1;display:flex;align-items:center;gap:8px;padding:8px 12px;border:1.5px solid var(--orange-dark);background:var(--orange-light);border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;color:var(--orange-dark);">
+        <input type="radio" name="fm-zs" value="einzeln:1,2,3,4" style="accent-color:var(--orange);" /> 7. bis 10. Std. – jede Stunde einzeln wählbar
+      </label>
+      <label style="grid-column:1 / -1;display:flex;align-items:center;gap:8px;padding:8px 12px;border:1.5px solid var(--gray-border);border-radius:8px;cursor:pointer;font-size:13px;">
+        <input type="radio" name="fm-zs" value="1,2,3,4" style="accent-color:var(--orange);" /> 7. bis 10. Std. 🔁 als Block (alle vier Stunden gemeinsam)
       </label>
     </div>
     <p class="text-sm text-soft" style="background:var(--gray-bg);border-radius:8px;padding:8px 12px;margin-bottom:1rem;font-size:11px;line-height:1.5;">
