@@ -719,6 +719,8 @@
           </label>
         </div>
 
+        <div id="einst-hauptadmin-box" style="display:none;background:#FFF7ED;border:1.5px solid #EA580C;border-radius:10px;padding:12px 14px;margin-bottom:1rem;"></div>
+
         <div class="section-label" style="margin-top:.5rem;">Klassen der Schule</div>
         <p class="text-sm text-soft" style="margin-bottom:.75rem;">
           Hier legst du zentral fest, welche Klassen es gibt. Sie stehen dann überall zur Auswahl –
@@ -857,6 +859,20 @@
         Schulleitung sieht alle Klassen, verwaltet Fächer, Lehrkräfte und Rahmenbedingungen.
         Die Änderung greift beim nächsten Anmelden.
       </p>
+      <p id="ml-rolle-hinweis" style="display:none;font-size:11px;color:#7C2D12;background:#FFF7ED;border-radius:6px;padding:5px 8px;margin-top:6px;"></p>
+    </div>
+
+    <div class="form-group" id="ml-hauptadmin-group" style="display:none;background:#FCEBEB;border:1.5px solid #A32D2D;border-radius:10px;padding:10px 14px;">
+      <label style="display:flex;align-items:flex-start;gap:8px;font-size:13px;cursor:pointer;">
+        <input type="checkbox" id="ml-hauptadmin" style="accent-color:#A32D2D;width:16px;height:16px;margin-top:2px;flex-shrink:0;" />
+        <span>
+          <b>🔒 Geschützter Hauptzugang</b><br>
+          <span style="font-size:11px;color:#7C2D12;">
+            Dieses Konto kann von anderen Schulleitungsmitgliedern weder herabgestuft
+            noch gelöscht werden. Nur andere Hauptzugänge dürfen das ändern.
+          </span>
+        </span>
+      </label>
     </div>
     <div id="ml-error" class="text-sm" style="color:#A32D2D;display:none;margin-bottom:.5rem;"></div>
     <div style="display:flex;gap:8px;">
@@ -2643,6 +2659,19 @@ function _pruefeFachZeitraum(){
   return true;
 }
 
+// ═══ HAUPTADMINISTRATOR ═══
+// Ein als Hauptadmin markiertes Konto kann von niemand anderem herabgestuft
+// oder gelöscht werden. Nur der Hauptadmin selbst darf diese Kennzeichnung vergeben.
+function istHauptadmin(daten){ return daten?.hauptadmin===true; }
+function binIchHauptadmin(){ return currentUserData?.hauptadmin===true; }
+
+// Darf das aktuelle Konto die Rolle des angegebenen Nutzers ändern?
+function darfRolleAendern(zielDaten, zielUid){
+  if(zielUid===currentUser?.uid) return false;              // eigenes Konto nie
+  if(istHauptadmin(zielDaten) && !binIchHauptadmin()) return false; // Hauptadmin geschützt
+  return currentRole==='leitung';
+}
+
 function pruefePasswortFeld(){
   const feld=document.getElementById('ms-pw');
   const hinweis=document.getElementById('ms-pw-hinweis');
@@ -3079,16 +3108,39 @@ function openLehrerModal(uid){
         const rg=document.getElementById('ml-rolle-group');
         const rs=document.getElementById('ml-rolle');
         const selbst=(uid===currentUser?.uid);
+        const zielIstHauptadmin=istHauptadmin(d);
         title.textContent=selbst
           ? 'Eigenes Konto bearbeiten'
           : (d.role==='leitung'?'Schulleitung bearbeiten':'Lehrkraft bearbeiten');
         if(rg&&rs){
           rg.style.display='';
           rs.value=(d.role==='leitung')?'leitung':'lehrer';
-          // Eigenes Konto nicht herabstufen können – sonst sperrt man sich aus
-          rs.disabled=selbst;
-          if(selbst) rg.style.opacity='0.6';
-          else rg.style.opacity='';
+          const darf=darfRolleAendern(d,uid);
+          rs.disabled=!darf;
+          rg.style.opacity=darf?'':'0.6';
+
+          // Erklärung, warum die Auswahl gesperrt ist
+          const hinweis=document.getElementById('ml-rolle-hinweis');
+          if(hinweis){
+            if(selbst){
+              hinweis.textContent='Die eigene Rolle lässt sich hier nicht ändern.';
+              hinweis.style.display='';
+            } else if(zielIstHauptadmin && !binIchHauptadmin()){
+              hinweis.textContent='🔒 Geschützter Hauptzugang – kann nur vom Hauptadministrator selbst geändert werden.';
+              hinweis.style.display='';
+            } else {
+              hinweis.style.display='none';
+            }
+          }
+
+          // Kennzeichnung als Hauptadmin – nur für den Hauptadmin sichtbar
+          const haGroup=document.getElementById('ml-hauptadmin-group');
+          const haCb=document.getElementById('ml-hauptadmin');
+          if(haGroup&&haCb){
+            haGroup.style.display=binIchHauptadmin()?'':'none';
+            haCb.checked=zielIstHauptadmin;
+            haCb.disabled=selbst; // eigene Kennzeichnung nicht entfernen
+          }
         }
       }
       document.getElementById('modal-lehrer').classList.remove('hidden');
@@ -3134,10 +3186,26 @@ function saveLehrer(){
         const rolleSel=document.getElementById('ml-rolle');
         const daten={vorname,nachname};
 
+        const snapAlt=await getDoc(doc(db,'users',editLehrerModalUid));
+        const altDaten=snapAlt.exists()?snapAlt.data():{};
+
+        // Hauptadmin-Kennzeichnung – nur ein Hauptadmin darf sie vergeben
+        const haCb=document.getElementById('ml-hauptadmin');
+        if(binIchHauptadmin() && haCb && !haCb.disabled){
+          daten.hauptadmin=haCb.checked;
+        }
+
         if(rolleSel && !rolleSel.disabled){
           const neueRolle=rolleSel.value==='leitung'?'leitung':'lehrer';
-          const snapAlt=await getDoc(doc(db,'users',editLehrerModalUid));
-          const alteRolle=snapAlt.exists()?(snapAlt.data().role||'lehrer'):'lehrer';
+          const alteRolle=altDaten.role||'lehrer';
+
+          // Serverseitige Absicherung: geschützten Hauptzugang niemals herabstufen
+          if(neueRolle!==alteRolle && !darfRolleAendern(altDaten,editLehrerModalUid)){
+            showErr(err,'🔒 Dieses Konto ist als geschützter Hauptzugang markiert und kann von dir nicht geändert werden.');
+            saveBtn.disabled=false;saveBtn.innerHTML='<i class="ti ti-check"></i> Speichern';
+            return;
+          }
+
           if(neueRolle!==alteRolle){
             const frage=neueRolle==='leitung'
               ? vorname+' '+nachname+' erhält volle Schulleitungsrechte:\n\n'+
@@ -3234,6 +3302,19 @@ function deleteLehrer(uid, name){
     toast('⛔ Das eigene Konto kann nicht gelöscht werden – sonst sperrst du dich aus.',true);
     return;
   }
+  withFirebase(async({db,doc,getDoc})=>{
+    try{
+      const snap=await getDoc(doc(db,'users',uid));
+      if(snap.exists() && istHauptadmin(snap.data()) && !binIchHauptadmin()){
+        toast('🔒 „'+name+'" ist ein geschützter Hauptzugang und kann von dir nicht gelöscht werden.',true);
+        return;
+      }
+    }catch(e){}
+    _deleteLehrerAusfuehren(uid,name);
+  });
+}
+
+function _deleteLehrerAusfuehren(uid, name){
   if(!confirm('Lehrkraft „'+name+'" wirklich vollständig löschen?\n\nEs werden gelöscht:\n• Firestore-Profil\n• Firebase Auth-Konto (Login)\n\nDieser Vorgang kann nicht rückgängig gemacht werden.'))return;
 
   withFirebase(async({db,doc,deleteDoc,getDoc,auth})=>{
@@ -3363,6 +3444,7 @@ function renderLehrerKlassenListe(lehrer, gueltigeFaecher=null){
       <td>
         <div style="font-weight:500;font-size:13px;">${anzeigeName}
           ${istSelbst?'<span style="font-size:10px;font-weight:700;color:#085041;background:var(--teal-light);padding:1px 7px;border-radius:99px;margin-left:5px;">du</span>':''}
+          ${l.hauptadmin?'<span style="font-size:10px;font-weight:700;color:#7C2D12;background:#FCEBEB;padding:1px 7px;border-radius:99px;margin-left:5px;border:1px solid #A32D2D;" title="Geschützter Hauptzugang">🔒 Hauptzugang</span>':''}
           ${l.role==='leitung'?'<span style="font-size:10px;font-weight:700;color:#0C447C;background:#E6F1FB;padding:1px 7px;border-radius:99px;margin-left:5px;border:1px solid #0C447C;">Schulleitung</span>':''}
         </div>
         ${!hatNamen?'<div style="font-size:11px;color:#A32D2D;margin-top:2px;">Bitte über ✏️ einen Namen eintragen.</div>':''}
@@ -3379,8 +3461,8 @@ function renderLehrerKlassenListe(lehrer, gueltigeFaecher=null){
           <button class="btn btn-secondary btn-sm" title="Name bearbeiten" onclick="openLehrerModal('${l.uid}')"><i class="ti ti-edit"></i></button>
           <button class="btn btn-secondary btn-sm" title="Angebote & Klassenleitung" onclick="openAngeboteModal('${l.uid}')"><i class="ti ti-target"></i></button>
           <button class="btn btn-secondary btn-sm" title="Passwort" onclick="openPwResetModal('${l.uid}','${(l.vorname||'')+' '+(l.nachname||'')}','lehrer')"><i class="ti ti-key"></i></button>
-          ${istSelbst
-            ? '<button class="btn btn-secondary btn-sm" disabled title="Das eigene Konto kann hier nicht gelöscht werden" style="opacity:.4;cursor:not-allowed;"><i class="ti ti-trash"></i></button>'
+          ${(istSelbst || (l.hauptadmin && !binIchHauptadmin()))
+            ? '<button class="btn btn-secondary btn-sm" disabled title="'+(istSelbst?'Das eigene Konto kann hier nicht gelöscht werden':'Geschützter Hauptzugang')+'" style="opacity:.4;cursor:not-allowed;"><i class="ti ti-trash"></i></button>'
             : `<button class="btn btn-danger btn-sm" title="Löschen" onclick="deleteLehrer('${l.uid}','${(l.vorname||'')+' '+(l.nachname||'')}')"><i class="ti ti-trash"></i></button>`}
         </div>
       </td>
@@ -3630,7 +3712,83 @@ function speichereKlassen(){
   });
 }
 
+// Prüft, ob bereits ein geschützter Hauptzugang existiert, und bietet die
+// Einrichtung an, solange keiner vergeben ist
+function _pruefeHauptadminEinrichtung(){
+  const box=document.getElementById('einst-hauptadmin-box');
+  if(!box)return;
+  if(currentRole!=='leitung'){ box.style.display='none'; return; }
+
+  withFirebase(async({db,getDocs,collection})=>{
+    try{
+      const snaps=await getDocs(collection(db,'users'));
+      const admins=[];
+      snaps.forEach(s=>{
+        const d=s.data();
+        if(d.hauptadmin===true) admins.push({uid:s.id,name:((d.vorname||'')+' '+(d.nachname||'')).trim()||'Ohne Namen'});
+      });
+
+      if(!admins.length){
+        box.style.display='';
+        box.innerHTML=`
+          <div style="font-size:13px;font-weight:700;color:#7C2D12;margin-bottom:4px;">🔒 Hauptzugang noch nicht eingerichtet</div>
+          <p style="font-size:11px;color:#92400E;margin-bottom:8px;line-height:1.5;">
+            Zurzeit kann jedes Schulleitungsmitglied jedes andere herabstufen oder löschen –
+            auch dich. Markiere dein Konto als geschützten Hauptzugang, damit das nicht möglich ist.
+          </p>
+          <button class="btn btn-primary btn-sm" onclick="setzeMichAlsHauptadmin()">
+            🔒 Mein Konto schützen
+          </button>`;
+      } else {
+        const ichDabei=admins.some(a=>a.uid===currentUser?.uid);
+        box.style.display='';
+        box.innerHTML=`
+          <div style="font-size:13px;font-weight:700;color:#085041;margin-bottom:3px;">🔒 Geschützte Hauptzugänge</div>
+          <p style="font-size:11px;color:var(--text-soft);">
+            ${admins.map(a=>a.name).join(' · ')}
+            ${ichDabei?' <b>(du bist dabei)</b>':''}
+          </p>
+          <p style="font-size:11px;color:var(--text-soft);margin-top:4px;">
+            Diese Konten können von anderen weder herabgestuft noch gelöscht werden.
+            ${ichDabei?'Weitere Hauptzugänge vergibst du unter Lehrkräfte → ✏️.':''}
+          </p>`;
+        box.style.background=ichDabei?'#E1F5EE':'var(--gray-bg)';
+        box.style.borderColor=ichDabei?'#1D9E75':'var(--gray-border)';
+      }
+    }catch(e){ box.style.display='none'; }
+  });
+}
+
+// Markiert das eigene Konto als geschützten Hauptzugang (nur wenn noch keiner existiert)
+function setzeMichAlsHauptadmin(){
+  if(!confirm('Dein Konto als geschützten Hauptzugang markieren?\n\n'+
+     'Danach kann dich kein anderes Schulleitungsmitglied mehr herabstufen oder löschen.\n\n'+
+     'Weitere Hauptzugänge kannst du anschließend selbst vergeben.')) return;
+
+  withFirebase(async({db,doc,updateDoc,getDocs,collection})=>{
+    try{
+      // Nochmals prüfen, damit nicht zwei gleichzeitig zugreifen
+      const snaps=await getDocs(collection(db,'users'));
+      let existiert=false;
+      snaps.forEach(s=>{ if(s.data().hauptadmin===true) existiert=true; });
+      if(existiert){
+        toast('Es gibt bereits einen Hauptzugang – bitte dort vergeben lassen.',true);
+        _pruefeHauptadminEinrichtung();
+        return;
+      }
+      await updateDoc(doc(db,'users',currentUser.uid),{hauptadmin:true});
+      currentUserData.hauptadmin=true;
+      toast('🔒 Dein Konto ist jetzt geschützt.');
+      _pruefeHauptadminEinrichtung();
+    }catch(e){
+      toast('❌ Fehlgeschlagen: '+(e.message||e),true);
+    }
+  });
+}
+
 function loadEinstellungen(){
+  // Einmalige Einrichtung des geschützten Hauptzugangs anbieten
+  _pruefeHauptadminEinrichtung();
   ladeSchuljahrConfig();
   setTimeout(()=>{
     document.getElementById('einst-schulname').value=schuljahrConfig.schulname||'';
