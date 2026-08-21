@@ -4427,7 +4427,7 @@ function renderFaecherListe(liste, unvollstaendig=[]){
   const cont=document.getElementById('sl-faecher-liste');
   if(!liste.length){cont.innerHTML='<p class="text-sm text-soft">Noch keine Fächer angelegt. Klicke auf „Neues Fach" um loszulegen.</p>';return;}
   let html=`<table class="schueler-table"><thead><tr>
-    <th>Fach / Angebot</th><th>Zeitschiene</th><th>Max./Tag</th><th>Wer darf teilnehmen?</th><th>Status</th><th></th>
+    <th>Fach / Angebot</th><th>Zeitschiene</th><th>Max./Tag</th><th>Wer darf teilnehmen?</th><th>Sichtbarkeit</th><th></th>
   </tr></thead><tbody>`;
   liste.forEach(f=>{
     const aktiv=f.aktiv!==false;
@@ -4471,8 +4471,17 @@ function renderFaecherListe(liste, unvollstaendig=[]){
         ${klassenAnzeige}
         <div style="font-size:11px;color:var(--text-lighter);margin-top:3px;">${gruppenAnzeige}</div>
       </td>
-      <td>${aktiv?'<span style="color:#1D9E75;font-size:12px;font-weight:600;">● aktiv</span>':'<span style="color:var(--text-lighter);font-size:12px;">○ inaktiv</span>'}
-        ${f.alleLehrer?'<br><span style="font-size:10px;font-weight:600;color:#085041;background:#E1F5EE;padding:1px 6px;border-radius:99px;">👥 Alle Lehrkräfte</span>':''}
+      <td>
+        <button onclick="toggleFachSichtbar('${f.id}',${aktiv})"
+          title="${aktiv?'Fach ausblenden – Schüler können es dann nicht mehr wählen':'Fach wieder für Schüler sichtbar machen'}"
+          style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:99px;cursor:pointer;
+          font-family:inherit;font-size:12px;font-weight:600;transition:all .15s;
+          border:1.5px solid ${aktiv?'#1D9E75':'var(--gray-border)'};
+          background:${aktiv?'#E1F5EE':'var(--gray-bg)'};
+          color:${aktiv?'#085041':'var(--text-lighter)'};">
+          ${aktiv?'👁 sichtbar':'🚫 ausgeblendet'}
+        </button>
+        ${f.alleLehrer?'<br><span style="font-size:10px;font-weight:600;color:#085041;background:#E1F5EE;padding:1px 6px;border-radius:99px;margin-top:3px;display:inline-block;">👥 Alle Lehrkräfte</span>':''}
       </td>
       <td>
         <div class="flex-row" style="gap:6px;justify-content:flex-end;">
@@ -5299,6 +5308,29 @@ function saveFach(){
       // Dynamische Fächer neu laden
       ladeDynamischeFaecher();
     }catch(e){showErr(err,'Fehler: '+e.message);toast('❌ Fach konnte nicht gespeichert werden: '+e.message, true);}
+  });
+}
+
+// Blendet ein Fach für Schüler aus bzw. wieder ein
+function toggleFachSichtbar(fachId, istAktiv){
+  withFirebase(async({db,doc,updateDoc,getDoc})=>{
+    try{
+      const snap=await getDoc(doc(db,'faecher',fachId));
+      const name=snap.exists()?(snap.data().name||'Fach'):'Fach';
+
+      if(istAktiv && !confirm('„'+name+'" für Schüler ausblenden?\n\n'+
+        'Das Angebot verschwindet aus der Auswahl. Bereits gespeicherte Wahlen\n'+
+        'bleiben erhalten und werden den Lehrkräften weiterhin angezeigt.')) return;
+
+      await updateDoc(doc(db,'faecher',fachId),{aktiv:!istAktiv});
+      toast(istAktiv
+        ? '🚫 „'+name+'" ist jetzt ausgeblendet.'
+        : '👁 „'+name+'" ist wieder für Schüler sichtbar.');
+      loadFaecherListe();
+      ladeDynamischeFaecher();
+    }catch(e){
+      toast('❌ Änderung fehlgeschlagen: '+(e.message||e),true);
+    }
   });
 }
 
@@ -6385,7 +6417,7 @@ function renderAngeboteCheckboxen(){
           const warnung=!f.vollstaendig
             ? '<span style="font-size:10px;font-weight:600;background:#FEF3C7;color:#92400E;padding:1px 7px;border-radius:99px;margin-left:6px;">unvollständig</span>'
             : (!f.aktiv
-              ? '<span style="font-size:10px;font-weight:600;background:var(--gray-bg);color:var(--text-soft);padding:1px 7px;border-radius:99px;margin-left:6px;">inaktiv</span>'
+              ? '<span style="font-size:10px;font-weight:600;background:var(--gray-bg);color:var(--text-soft);padding:1px 7px;border-radius:99px;margin-left:6px;">🚫 ausgeblendet</span>'
               : '');
           const kapBadge=f.maxTeilnehmer
             ? `<span style="font-size:10px;font-weight:600;background:#E6F1FB;color:#0C447C;padding:1px 7px;border-radius:99px;margin-left:6px;">max. ${f.maxTeilnehmer}</span>`
