@@ -1839,43 +1839,48 @@ function _waehlenAusfuehren(zs,name,sel,icon,bg,color,fachId){
   const g=currentUserData?(currentUserData.gruppe||'durchstarter'):'durchstarter';
   if(!GRUPPEN[g].freiZS.includes(zs))return;
 
-  // 8. Std. ist nicht manuell wählbar wenn Freizeit mit Nico in 7. Std. gewählt
+  // Stunden, die durch eine Doppelstunde aus der Vorstunde belegt sind, bleiben gesperrt –
+  // außer man wählt dasselbe Fach erneut (Chip erscheint jetzt in allen Stunden des Blocks)
   if(zs===2){
     const zs1=gewahlt[1];
-    if(zs1 && DOPPELSTUNDEN_FRUEH.includes(zs1.name)){
-      toast('8. Std. ist durch die Doppelstunde (Freizeit mit Nico) aus der 7. Std. bereits belegt.');
+    if(zs1 && zs1.name!==name && DOPPELSTUNDEN_FRUEH.includes(zs1.name)){
+      toast('8. Std. ist durch die Doppelstunde („'+zs1.name+'") aus der 7. Std. bereits belegt.');
       return;
     }
   }
-  // 10. Std. ist nur bei Doppelstunden-Angeboten (Späte AG / Späte Lernzeit) nicht manuell wählbar
   if(zs===4){
     const zs3=gewahlt[3];
-    if(zs3 && DOPPELSTUNDEN.includes(zs3.name)){
-      toast('10. Std. ist durch die Doppelstunde in der 9. Std. bereits belegt.');
+    if(zs3 && zs3.name!==name && DOPPELSTUNDEN.includes(zs3.name)){
+      toast('10. Std. ist durch die Doppelstunde („'+zs3.name+'") aus der 9. Std. bereits belegt.');
       return;
     }
   }
 
-  // ── Doppelstunde würde die Nachbarstunde überschreiben → vorher nachfragen ──
-  const partnerZS=(zs===1 && DOPPELSTUNDEN_FRUEH.includes(name)) ? 2
-                : (zs===3 && DOPPELSTUNDEN.includes(name))       ? 4 : null;
-  if(partnerZS){
-    const bisher=gewahlt[partnerZS];
-    if(bisher && bisher.name && bisher.name!==name){
-      const partnerLabel=partnerZS===2?'8.':'10.';
-      const beideLabel  =zs===1?'7. + 8.':'9. + 10.';
+  // ── Block-/Doppelstunde würde Nachbarstunden überschreiben → vorher nachfragen ──
+  const STDLBL={1:'7.',2:'8.',3:'9.',4:'10.'};
+  let betroffeneZS=_blockPartner(zs,fachId,name);
+  // Zusätzlich die fest hinterlegten Doppelstunden berücksichtigen
+  if(!betroffeneZS.length){
+    if(zs===1 && DOPPELSTUNDEN_FRUEH.includes(name)) betroffeneZS=[2];
+    else if(zs===3 && DOPPELSTUNDEN.includes(name))  betroffeneZS=[4];
+  }
+  if(betroffeneZS.length){
+    const konflikte=betroffeneZS.filter(p=>gewahlt[p]&&gewahlt[p].name&&gewahlt[p].name!==name);
 
-      // Ausleihe ist eine feste Buchung – die muss erst storniert werden
-      if(AUSLEIHE_FAECHER.includes(bisher.name)){
-        toast('⛔ In der '+partnerLabel+' Std. hast du '+bisher.name+' fest gebucht. '+
-              'Storniere die Buchung zuerst über den '+bisher.name+'-Chip, dann kannst du '+name+' wählen.',true);
-        return;
-      }
+    // Ausleihe ist eine feste Buchung – die muss erst storniert werden
+    const ausleihe=konflikte.find(p=>AUSLEIHE_FAECHER.includes(gewahlt[p].name));
+    if(ausleihe!==undefined){
+      toast('⛔ In der '+STDLBL[ausleihe]+' Std. hast du '+gewahlt[ausleihe].name+' fest gebucht. '+
+            'Storniere die Buchung zuerst, dann kannst du '+name+' wählen.',true);
+      return;
+    }
 
+    if(konflikte.length){
+      const alleStd=[zs,...betroffeneZS].sort((a,b)=>a-b).map(n=>STDLBL[n]).join(' + ');
+      const bisherTxt=konflikte.map(p=>STDLBL[p]+' Std.: '+gewahlt[p].name).join('\n');
       const weiter=confirm(
-        name+' ist eine Doppelstunde und belegt die '+beideLabel+' Stunde.\n\n'+
-        'Deine bisherige Wahl "'+bisher.name+'" in der '+partnerLabel+' Std. wird dabei überschrieben.\n\n'+
-        'Möchtest du fortfahren?'
+        name+' belegt die '+alleStd+' Stunde gemeinsam.\n\n'+
+        'Diese Wahl wird dabei überschrieben:\n'+bisherTxt+'\n\nMöchtest du fortfahren?'
       );
       if(!weiter) return;
     }
@@ -5891,7 +5896,6 @@ function renderDynamischeChips(){
     const isDoppel=f.isDoppelstunde && zsNummern.length>1;
 
     zsNummern.forEach((zs,idx)=>{
-      if(isDoppel && idx>0) return;
 
       if(f.tagStunden && f.tagStunden.length>0 && aktiverWochentag!==null){
         const erlaubt=f.tagStunden.some(ts=>ts.tag===aktiverWochentag && ts.zs===zs);
@@ -5917,6 +5921,8 @@ function renderDynamischeChips(){
         ? ' 🔁 '+zsNummern.map(n=>stdKurz[n]).join('+')
         : '';
       const labelText=(f.icon||'📌')+' '+f.name+doppelHinweis;
+      // Bei Blöcken in den Folgestunden kenntlich machen, dass beide zusammengehören
+      const istFolgestunde=isDoppel && idx>0;
       if(f.maxTeilnehmer){
         btn.innerHTML=`<span class="chip-label">${labelText}</span><span class="chip-kap-badge" id="kap-${chipKey.replace(/[^a-z0-9]/gi,'_')}">… / ${f.maxTeilnehmer}</span>`;
       } else {
